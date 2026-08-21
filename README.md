@@ -42,49 +42,34 @@ npm --version
 
 > **命令窗口是什么？** 这是一个可以输入文字命令的窗口。Windows 中叫 PowerShell；macOS 和 Linux 中通常叫终端（Terminal）。下面会分别给出操作方法。
 
-### 第 2 步：下载项目
+### 第 2 步：安装 Git
 
-在 GitHub 项目页面点击绿色的 **Code** 按钮，再点击 **Download ZIP**。
+Git 用来通过命令行把项目复制到电脑上。只需安装一次。
 
-下载后：
+- **Windows**：打开 <https://git-scm.com/download/win>，下载后保持默认选项完成安装。
+- **macOS**：打开终端，执行 `git --version`。如果系统提示安装开发者命令行工具，请按提示安装。
+- **Linux（Ubuntu/Debian）**：打开终端，执行 `sudo apt update && sudo apt install git -y`。
 
-1. 解压 ZIP 文件。
-2. 找到解压后的项目文件夹。
-3. 记住这个文件夹的位置，下一步会用到。
+安装完成后，关闭并重新打开 PowerShell 或终端，再检查：
 
-如果您已经用 Git 下载了项目，可以直接使用下载好的项目文件夹。
-
-### 第 3 步：打开项目文件夹中的命令窗口
-
-#### Windows
-
-1. 用文件资源管理器打开项目文件夹。
-2. 点击窗口上方的地址栏。
-3. 输入 `powershell`，然后按回车键。
-4. 出现蓝色或黑色的 PowerShell 窗口后，继续下一步。
-
-#### macOS
-
-1. 打开“终端（Terminal）”。
-2. 输入 `cd` 和一个空格。
-3. 把项目文件夹直接拖到终端窗口中。
-4. 按回车键。
-
-示例：
-
-```bash
-cd /Users/yourname/Downloads/hr-personnel-demo
+```text
+git --version
 ```
 
-#### Linux
+显示版本号就说明安装成功。
 
-打开终端，使用 `cd` 进入项目文件夹。例如：
+### 第 3 步：用命令行获取项目
+
+不需要在网页中下载 ZIP，也不需要手动解压。打开命令窗口并执行下面两条命令：
 
 ```bash
-cd ~/Downloads/hr-personnel-demo
+git clone https://github.com/Sincere-68/HR_System.git
+cd HR_System
 ```
 
-> `cd` 的作用是让命令窗口进入指定文件夹。示例中的路径需要换成您自己电脑上的实际位置。
+第一条命令会把项目复制到当前目录下的新文件夹中；第二条命令会进入该文件夹。命令执行完成后，后续操作都在这个命令窗口中进行。
+
+> 如果提示 `git` 不是命令或 `command not found`，请返回第 2 步安装 Git，然后关闭并重新打开命令窗口。
 
 ### 第 4 步：安装项目所需内容
 
