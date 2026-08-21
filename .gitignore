@@ -1,0 +1,25 @@
+# 安装的第三方程序包（可用 npm install 重新生成）
+node_modules/
+
+# 编译和测试生成的文件
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+
+# 本机配置和密码
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# 编辑器和操作系统临时文件
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+
+# 本地数据库文件
+backend/prisma/dev.db
+backend/prisma/dev.db-journal

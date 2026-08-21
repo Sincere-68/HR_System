@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>人员管理系统 - 人员预览</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-width:1180px;background:#f4f7f7;color:#27313d;font:16px "Microsoft YaHei","PingFang SC",Arial,sans-serif}.app{display:flex;min-height:100vh}.side{width:300px;background:#fff;box-shadow:2px 0 14px rgba(47,62,73,.035);padding:4px 24px;position:relative}.group,.item{width:252px;height:60px;display:flex;align-items:center;gap:20px;border:0;background:transparent;border-radius:10px;color:#414a52;font-size:20px;transition:background .24s ease,color .24s ease,box-shadow .24s ease,transform .24s ease}.group{margin:0;padding:0 20px}.group:not(:first-child){margin-top:16px}.group:hover,.item:hover{background:#f0fbfb}.sub{margin-left:0;padding-left:61px;justify-content:flex-start;gap:0}.item.selected{margin:0;background:#05aaaf;color:#fff;box-shadow:0 13px 25px rgba(0,170,175,.19)}.item.selected:hover{background:#05aaaf}.icon{width:21px;text-align:center;color:#151b1f;font-size:21px}.arrow{margin-left:auto;color:#7c878e;font-size:13px}.collapse{position:absolute;right:28px;bottom:24px;color:#879198;font-size:20px}.main{flex:1;min-width:0;padding:0 20px 0 13px}.header{height:63px;display:flex;justify-content:space-between;align-items:center;padding:0 10px}.title{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:700}.title-icon{display:grid;place-items:center;width:33px;height:33px;border-radius:5px;background:#03aab1;color:#fff;font-size:21px}.actions{display:flex;gap:12px}.btn{height:39px;padding:0 18px;border:0;border-radius:6px;background:#03aab1;color:#fff;font-size:16px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:0 7px 14px}.card{height:87px;padding:17px 30px;background:#fff;border:1px solid #f4f6f7;border-radius:9px;font-size:16px;position:relative}.card strong{display:block;margin-top:4px;font-size:31px;line-height:1}.card.active{border-color:#6be0e3;color:#008c96}.card.active:after{content:"";position:absolute;left:30px;bottom:-1px;width:21px;height:4px;background:#08abb0}.surface{margin:0 7px;padding:13px 24px 0;background:#fff;min-height:calc(100vh - 178px);border-radius:10px 10px 0 0;overflow:hidden}.filters{height:49px;display:flex;gap:27px;align-items:flex-start}.filter{border:0;background:transparent;color:#3d4853;font-size:16px;height:34px;padding:0}.filter b{font-size:11px;color:#929da4;margin-left:6px}.filter.select{height:38px;margin-top:-4px;padding:0 12px;border:1px solid #c6eff0;border-radius:6px;background:#f5ffff}.link{color:#009ca4}.table-wrap{overflow:auto;max-height:calc(100vh - 340px)}table{width:1800px;border-collapse:collapse;font-size:14px}thead th{height:48px;padding:0 12px;background:#f6f8f8;color:#24313e;text-align:left;font-size:15px;white-space:nowrap}tbody td{height:48px;padding:0 12px;border-bottom:1px solid #e8eef0;white-space:nowrap;color:#33404c}.check{width:46px;text-align:center}.box{display:inline-block;width:20px;height:20px;border:1px solid #ccd5da;border-radius:4px;background:#fff;vertical-align:middle}.name,.edit{color:#009ba3}.edit{font-size:15px}.footer{height:61px;display:flex;align-items:center;color:#83919b;padding:0 6px}.pager{margin-left:auto;display:flex;align-items:center;gap:8px}.page-btn{height:34px;padding:0 13px;border:1px solid #e2e8eb;border-radius:6px;background:#fff;color:#44515b;font-size:15px}.page-btn.current{border-color:#d5eeee;background:#e9ffff;color:#009ca4}.help{position:fixed;right:55px;bottom:88px;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:#05aaaf;color:#fff;font-weight:700;font-size:25px;box-shadow:0 0 0 10px rgba(255,255,255,.55)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="group"><span class="icon">♙</span>人员信息 <span class="arrow">⌃</span></div>
+      <div class="item selected">人员</div><div class="item sub">黑名单管理</div><div class="item sub">员工信息审批</div>
+      <div class="group"><span class="icon">♧</span>录用入职 <span class="arrow">⌄</span></div><div class="group"><span class="icon">▣</span>任职管理 <span class="arrow">⌄</span></div><div class="group"><span class="icon">▤</span>合同协议</div><div class="group"><span class="icon">♙</span>人员子集 <span class="arrow">⌄</span></div><div class="group"><span class="icon">▧</span>编制管理 <span class="arrow">⌄</span></div><div class="group"><span class="icon">↪</span>职责转交</div><div class="group"><span class="icon">⌁</span>数据分析 <span class="arrow">⌄</span></div><div class="group"><span class="icon">◉</span>设置</div>
+      <div class="collapse">‹|</div>
+    </aside>
+    <main class="main">
+      <header class="header"><div class="title"><span class="title-icon">♧</span>人员</div><div class="actions"><button class="btn">批量下载附件</button><button class="btn">发起信息采集⌄</button><button class="btn">批量编辑</button><button class="btn">新增员工</button><button class="btn">更多操作⌄</button></div></header>
+      <section class="cards"><div class="card active">全部在职<strong>197</strong></div><div class="card">正式人员<strong>190</strong></div><div class="card">实习生<strong>6</strong></div><div class="card">劳务人员<strong>0</strong></div><div class="card">离职人员<strong>1,093</strong></div></section>
+      <section class="surface"><div class="filters"><button class="filter">人员 <b>▼</b></button><button class="filter">电子邮件 <b>▼</b></button><button class="filter">部门 <b>▼</b></button><button class="filter">职位 <b>▼</b></button><button class="filter select">雇佣关系：内部员工, 实习生 <b>▼</b></button><button class="filter link">高级筛选</button><button class="filter link">清空已选</button></div>
+        <div class="table-wrap"><table><thead><tr><th class="check"><span class="box"></span></th><th>工号</th><th>姓名</th><th>部门</th><th>入职日期</th><th>职位</th><th>性别</th><th>人员类型</th><th>职级</th><th>员工层级</th><th>工作地点</th><th>企业邮箱</th><th>个人邮箱</th><th>手机号</th><th>操作</th></tr></thead><tbody>
+          <tr><td class="check"><span class="box"></span></td><td>E10001</td><td class="name">张晨</td><td>产品研发部</td><td>2025-01-01</td><td>前端工程师</td><td>男</td><td>内部员工</td><td>-</td><td>-</td><td>-</td><td>zhangchen@example.test</td><td>-</td><td>138****8000</td><td class="edit">编辑人员</td></tr>
+          <tr><td class="check"><span class="box"></span></td><td>E10002</td><td class="name">李敏</td><td>产品研发部</td><td>2025-01-01</td><td>产品经理</td><td>女</td><td>实习生</td><td>-</td><td>-</td><td>-</td><td>limin@example.test</td><td>-</td><td>139****9000</td><td class="edit">编辑人员</td></tr>
+          <tr><td class="check"><span class="box"></span></td><td>E20001</td><td class="name">王磊</td><td>销售部</td><td>2025-01-01</td><td>销售顾问</td><td>男</td><td>内部员工</td><td>-</td><td>-</td><td>-</td><td>wanglei@example.test</td><td>-</td><td>137****7000</td><td class="edit">编辑人员</td></tr>
+          <tr><td class="check"><span class="box"></span></td><td>E10003</td><td class="name">赵琳</td><td>产品研发部</td><td>2025-03-08</td><td>测试工程师</td><td>女</td><td>内部员工</td><td>-</td><td>-</td><td>-</td><td>zhaolin@example.test</td><td>-</td><td>136****6000</td><td class="edit">编辑人员</td></tr>
+          <tr><td class="check"><span class="box"></span></td><td>E20002</td><td class="name">陈浩</td><td>销售部</td><td>2025-04-16</td><td>销售顾问</td><td>男</td><td>内部员工</td><td>-</td><td>-</td><td>-</td><td>chenhao@example.test</td><td>-</td><td>135****5000</td><td class="edit">编辑人员</td></tr>
+          <tr><td class="check"><span class="box"></span></td><td>E10004</td><td class="name">周宁</td><td>产品研发部</td><td>2025-05-21</td><td>后端工程师</td><td>女</td><td>内部员工</td><td>-</td><td>-</td><td>-</td><td>zhouning@example.test</td><td>-</td><td>134****4000</td><td class="edit">编辑人员</td></tr>
+          <tr><td class="check"><span class="box"></span></td><td>E10005</td><td class="name">刘凯</td><td>产品研发部</td><td>2025-06-18</td><td>设计师</td><td>男</td><td>内部员工</td><td>-</td><td>-</td><td>-</td><td>liukai@example.test</td><td>-</td><td>133****3000</td><td class="edit">编辑人员</td></tr>
+          <tr><td class="check"><span class="box"></span></td><td>E20003</td><td class="name">孙悦</td><td>销售部</td><td>2025-07-11</td><td>销售顾问</td><td>女</td><td>内部员工</td><td>-</td><td>-</td><td>-</td><td>sunyue@example.test</td><td>-</td><td>132****2000</td><td class="edit">编辑人员</td></tr>
+        </tbody></table></div><footer class="footer">共197条<div class="pager">共2页 <button class="page-btn">100条/页⌄</button><button class="page-btn">上一页</button><button class="page-btn current">1</button><button class="page-btn">2</button><button class="page-btn">下一页</button></div></footer>
+      </section>
+    </main><div class="help">?</div>
+  </div>
+  <script>
+    const groups = [
+      ['personnel', '♙', '人员信息', [['/personnel/employees', '人员'], ['/personnel/blacklist', '黑名单管理'], ['/personnel/approval', '员工信息审批']]],
+      ['onboarding', '♧', '录用入职', [['/onboarding/offers', 'Offer管理'], ['/onboarding/entries', '入职管理'], ['/onboarding/integration', '新员工融入'], ['/onboarding/introduction', '新员工入职介绍'], ['/onboarding/id-card-reader', '读取身份证']]],
+      ['employment', '▣', '任职管理', [['/employment/probation', '试用管理'], ['/employment/changes', '异动管理'], ['/employment/trial-post', '试岗期管理'], ['/employment/interns', '实习生管理'], ['/employment/labor', '劳务人员管理'], ['/employment/termination', '离职管理'], ['/employment/retirement', '退休管理'], ['/employment/part-time', '兼职管理'], ['/employment/records', '任职记录'], ['/employment/reporting-lines', '汇报关系']]],
+      ['contracts', '▤', '合同协议', [['/contracts', '合同协议']]],
+      ['subsets', '♙', '人员子集', [['/subsets/education', '教育经历'], ['/subsets/work-history', '工作履历'], ['/subsets/family', '家庭成员'], ['/subsets/appraisals', '考核结果'], ['/subsets/training', '培训经历'], ['/subsets/awards', '表彰与奖励'], ['/subsets/certificates', '证书执照'], ['/subsets/projects', '项目经历'], ['/subsets/skills', '专业技能'], ['/subsets/languages', '语言能力'], ['/subsets/materials', '材料管理']]],
+      ['staffing', '▧', '编制管理', [['/staffing/transfer-types', '调动类型']]],
+      ['handover', '↪', '职责转交', [['/handover', '职责转交']]],
+      ['analytics', '⌁', '数据分析', [['/analytics/dashboard', '人事看板'], ['/analytics/roster', '员工名册'], ['/analytics/structure', '员工结构'], ['/analytics/mobility', '流动情况'], ['/analytics/contracts', '合同情况'], ['/analytics/reports', '报表设计']]],
+      ['settings', '◉', '设置', [['/settings', '设置']]],
+    ];
+    const side = document.querySelector('.side');
+    const main = document.querySelector('.main');
+    const personnelMarkup = main.innerHTML;
+    let opened = 'personnel';
+    let selected = '/personnel/employees';
+    const labelFor = (route) => groups.flatMap((group) => group[3]).find((item) => item[0] === route)?.[1] || '人员管理系统';
+    function drawNav() {
+      side.innerHTML = groups.map(([key, icon, label, children]) => `
+        <button class="group" data-group="${key}" style="border:0;background:transparent;width:100%;cursor:pointer"><span class="icon">${icon}</span>${label}<span class="arrow">${opened === key ? '⌃' : '⌄'}</span></button>
+        ${opened === key ? children.map(([route, childLabel]) => `<button class="item sub ${selected === route ? 'selected' : ''}" data-route="${route}" style="border:0;width:100%;cursor:pointer">${childLabel}</button>`).join('') : ''}
+      `).join('') + '<button class="collapse" type="button" aria-label="折叠菜单">‹|</button>';
+    }
+    function showPage(route) {
+      selected = route;
+      if (route === '/personnel/employees') main.innerHTML = personnelMarkup;
+      else main.innerHTML = `<header class="header"><div class="title"><span class="title-icon">♧</span>${labelFor(route)}</div><div class="actions"><button class="btn">更多操作⌄</button></div></header><section class="surface" style="display:grid;place-items:center"><div style="text-align:center;color:#7b888f"><div style="font-size:24px;color:#27313d;margin-bottom:14px">${labelFor(route)}</div><div>该功能模块已建立导航和路由，等待后续确认页面字段与业务流程。</div></div></section>`;
+      drawNav();
+    }
+    side.addEventListener('click', (event) => {
+      const route = event.target.closest('[data-route]')?.dataset.route;
+      const group = event.target.closest('[data-group]')?.dataset.group;
+      if (route) showPage(route);
+      else if (group) { opened = opened === group ? '' : group; drawNav(); }
+    });
+    drawNav();
+  </script>
+</body>
+</html>

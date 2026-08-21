@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AuditAction {
+  DETAIL_VIEW
+  CREATE
+  UPDATE
+  EXPORT
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String           @id @default(cuid())
+  code      String           @unique
+  name      String
+  roles     RolePermission[]
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           String          @id @default(cuid())
+  username     String          @unique
+  passwordHash String          @map("password_hash")
+  displayName  String          @map("display_name")
+  roleId       String          @map("role_id")
+  role         Role            @relation(fields: [roleId], references: [id])
+  dataScopes   UserDataScope[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Organization {
+  id        String          @id @default(cuid())
+  code      String          @unique
+  name      String
+  parentId  String?         @map("parent_id")
+  parent    Organization?   @relation("OrganizationTree", fields: [parentId], references: [id])
+  children  Organization[]  @relation("OrganizationTree")
+  employees Employee[]
+  scopes    UserDataScope[]
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("organizations")
+}
+
+model UserDataScope {
+  id             String       @id @default(cuid())
+  userId         String       @map("user_id")
+  organizationId String       @map("organization_id")
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("user_data_scopes")
+}
+
+model Employee {
+  id                String             @id @default(cuid())
+  employeeNo        String             @unique @map("employee_no")
+  name              String
+  mobile            String
+  idCardNo          String             @unique @map("id_card_no")
+  organizationId    String             @map("organization_id")
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  employmentRecords EmploymentRecord[]
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([organizationId])
+  @@map("employees")
+}
+
+model EmploymentRecord {
+  id          String           @id @default(cuid())
+  employeeId  String           @map("employee_id")
+  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  status      EmploymentStatus
+  effectiveAt DateTime         @map("effective_at")
+  endedAt     DateTime?        @map("ended_at")
+  currentFlag Boolean?         @default(true) @map("current_flag")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@unique([employeeId, currentFlag])
+  @@index([employeeId, endedAt])
+  @@index([status, currentFlag])
+  @@map("employment_records")
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  userId       String?     @map("user_id")
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action       AuditAction
+  resourceType String      @map("resource_type")
+  resourceId   String?     @map("resource_id")
+  metadata     Json?
+  ipAddress    String?     @map("ip_address")
+  userAgent    String?     @map("user_agent")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}
