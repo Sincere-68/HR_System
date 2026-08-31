@@ -40,7 +40,9 @@ export function AppLayout() {
   const menuItems = useMemo(() => navigationItems as MenuProps['items'], []);
   const selectedKey = location.pathname.startsWith('/personnel/employees')
     ? '/personnel/employees'
-    : location.pathname;
+    : location.pathname.startsWith('/personnel/blacklist-removals')
+      ? '/personnel/blacklist'
+      : location.pathname;
   const primaryKeys = useMemo(
     () => navigationItems.filter((item) => item.children).map((item) => item.key),
     [],

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "binary"
 }
 
 datasource db {
@@ -8,8 +9,14 @@ datasource db {
 }
 
 enum EmploymentStatus {
-  ACTIVE
-  INACTIVE
+  PROBATION
+  REGULAR
+  PENDING_ENTRY
+  TRANSFERRED_OUT
+  PENDING_TRANSFER_IN
+  RETIRED
+  RESIGNED
+  NON_REGULAR
 }
 
 enum AuditAction {
@@ -17,6 +24,288 @@ enum AuditAction {
   CREATE
   UPDATE
   EXPORT
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+  CANCELLED
+}
+
+enum PersonnelCategory {
+  TALENT_PROGRAM
+  NON_TALENT_PROGRAM
+}
+
+enum EmploymentRelationship {
+  INTERNAL_EMPLOYEE
+  INTERN
+  LABOR_WORKER
+}
+
+enum PersonnelSource {
+  SOCIAL_RECRUITMENT
+  INTERNAL_REFERRAL
+  HEADHUNTER_REFERRAL
+  OTHER
+}
+
+enum PersonnelPosition {
+  FRONT_OFFICE
+  MIDDLE_OFFICE
+  BACK_OFFICE
+}
+
+enum EmployeeLevel {
+  STAFF
+  SUPERVISOR
+  MANAGER
+  DIRECTOR
+  PRESIDENT
+  EXPERT
+}
+
+enum JobLevelCode {
+  S1
+  S2
+  S3
+  S4
+  S5
+  S6
+  S7
+  E1
+  E2
+  E3
+  E4
+  E5
+  E6
+  E7
+  T1
+  T2
+  T3
+  T4
+  T5
+  T6
+  T7
+  M1
+  M2
+  M3
+  M4
+  M5
+  M6
+  M7
+}
+
+enum HouseholdType {
+  LOCAL_RURAL
+  LOCAL_URBAN
+  NONLOCAL_RURAL
+  NONLOCAL_URBAN
+}
+
+enum BankName {
+  ICBC
+}
+
+enum EducationLevel {
+  DOCTORAL
+  MASTER
+  MBA
+  BACHELOR
+  DUAL_BACHELOR
+  ASSOCIATE_DEGREE
+  OVERSEAS_HIGHER_EDUCATION
+  SECONDARY_TECHNICAL
+  HIGH_SCHOOL
+  JUNIOR_HIGH_OR_BELOW
+}
+
+enum InstitutionType {
+  RANK_985
+  RANK_211
+  OVERSEAS_TOP_200
+  OVERSEAS_BEYOND_TOP_100
+  NATIONAL_UNIFIED_BACHELOR
+  THIRD_TIER_OR_PRIVATE_BACHELOR
+  NON_UNIFIED_BACHELOR
+}
+
+enum MaritalStatus {
+  UNMARRIED
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum PoliticalStatus {
+  NON_PARTY
+  CPC_MEMBER
+  CPC_PROBATIONARY_MEMBER
+  CYL_MEMBER
+  CDF_MEMBER
+  CDL_MEMBER
+  CDCA_MEMBER
+  CAPD_MEMBER
+  CPWDP_MEMBER
+  ZGD_MEMBER
+  JDS_MEMBER
+  TML_MEMBER
+  NONPARTISAN
+  OTHER
+}
+
+enum Ethnicity {
+  HAN
+  HUI
+  SHE
+  TATAR
+  ACHANG
+  KAZAKH
+  TUJIA
+  JINGPO
+  HANI
+  TU
+  BAI
+  UYGHUR
+  BONAN
+  HEZHEN
+  UZBEK
+  JINO
+  BUYI
+  LAHU
+  XIBE
+  LI
+  DONGXIANG
+  MONGOL
+  MULAO
+  DAUR
+  TIBETAN
+  MAONAN
+  YUGUR
+  RUSSIAN
+  DEANG
+  LISU
+  YAO
+  KOREAN
+  BLANG
+  MANCHU
+  YI
+  MONBA
+  DONG
+  MIAO
+  WA
+  QIANG
+  DERUNG
+  NU
+  LHOBA
+  PUMI
+  DAI
+  NAXI
+  GAOSHAN
+  ZHUANG
+  OROQEN
+  TAJIK
+  JING
+  GELAO
+  EVENKI
+  SALAR
+  KYRGYZ
+  SHUI
+  CHUANQING
+  OTHER
+  GE
+  GEJIA
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  UNDISCLOSED
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  ENDED
+}
+
+enum AssignmentType {
+  PRIMARY
+  ADDITIONAL
+  TEMPORARY
+}
+
+enum WorkArrangement {
+  PART_TIME
+  LABOR_DISPATCH
+  CONTRACT_EMPLOYMENT
+  LABOR_EMPLOYMENT
+  INTERN
+  RETIREE_REEMPLOYMENT
+}
+
+enum ReportingRelationshipType {
+  ADMINISTRATIVE
+  BUSINESS
+  PROJECT
+  FUNCTIONAL
+  OTHER
+}
+
+enum IdentityDocumentType {
+  NATIONAL_ID
+  PASSPORT
+  HK_MACAO_PERMIT
+  TAIWAN_PERMIT
+  RESIDENCE_PERMIT
+  OTHER
+}
+
+enum ProcessStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ApprovalDecision {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+enum AgreementType {
+  LABOR_CONTRACT
+  LABOR_SERVICE_CONTRACT
+  INTERNSHIP_AGREEMENT
+  OTHER
+  NON_COMPETE_AGREEMENT
+  RETIREE_REEMPLOYMENT_AGREEMENT
+  NON_FULL_TIME_EMPLOYMENT_CONTRACT
+  SPECIAL_AGREEMENT
+  PART_TIME_SERVICE_AGREEMENT
+}
+
+enum AgreementStatus {
+  DRAFT
+  PENDING_SIGNATURE
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  CANCELLED
+  ARCHIVED
 }
 
 model Role {
@@ -53,33 +342,69 @@ model RolePermission {
 }
 
 model User {
-  id           String          @id @default(cuid())
-  username     String          @unique
-  passwordHash String          @map("password_hash")
-  displayName  String          @map("display_name")
-  roleId       String          @map("role_id")
-  role         Role            @relation(fields: [roleId], references: [id])
-  dataScopes   UserDataScope[]
-  auditLogs    AuditLog[]
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
+  id                         String                    @id @default(cuid())
+  username                   String                    @unique
+  passwordHash               String                    @map("password_hash")
+  displayName                String                    @map("display_name")
+  roleId                     String                    @map("role_id")
+  employeeId                 String?                   @unique @map("employee_id")
+  status                     RecordStatus              @default(ACTIVE)
+  archivedAt                 DateTime?                 @map("archived_at")
+  role                       Role                      @relation(fields: [roleId], references: [id])
+  employee                   Employee?                 @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  dataScopes                 UserDataScope[]
+  auditLogs                  AuditLog[]
+  uploadedFiles              FileAttachment[]          @relation("FileUploader")
+  approvalRequests           ApprovalRequest[]         @relation("ApprovalApplicant")
+  approvalSteps              ApprovalStep[]            @relation("ApprovalApprover")
+  reportDefinitions          ReportDefinition[]        @relation("ReportCreator")
+  archivedOrganizations      Organization[]            @relation("OrganizationArchivedBy")
+  archivedEmployees          Employee[]                @relation("EmployeeArchivedBy")
+  evaluatedAppraisals        EmployeeAppraisal[]       @relation("AppraisalEvaluator")
+  createdBlacklistRecords    EmployeeBlacklistRecord[] @relation("BlacklistCreator")
+  ownedOnboardingCases       OnboardingCase[]          @relation("OnboardingOwner")
+  responsibleOnboardingTasks OnboardingTask[]          @relation("OnboardingTaskResponsible")
+  evaluatedTrialPosts        TrialPostRecord[]         @relation("TrialPostEvaluator")
+  ownedHandoverCases         HandoverCase[]            @relation("HandoverOwner")
+  employeeFieldChangeLogs    EmployeeFieldChangeLog[]
+  createdAt                  DateTime                  @default(now()) @map("created_at")
+  updatedAt                  DateTime                  @updatedAt @map("updated_at")
 
+  @@index([status, archivedAt])
   @@map("users")
 }
 
 model Organization {
-  id        String          @id @default(cuid())
-  code      String          @unique
-  name      String
-  parentId  String?         @map("parent_id")
-  parent    Organization?   @relation("OrganizationTree", fields: [parentId], references: [id])
-  children  Organization[]  @relation("OrganizationTree")
-  employees Employee[]
-  scopes    UserDataScope[]
-  createdAt DateTime        @default(now()) @map("created_at")
-  updatedAt DateTime        @updatedAt @map("updated_at")
+  id               String               @id @default(cuid())
+  code             String               @unique
+  name             String
+  parentId         String?              @map("parent_id")
+  sortOrder        Int                  @default(0) @map("sort_order")
+  status           RecordStatus         @default(ACTIVE)
+  effectiveDate    DateTime?            @map("effective_date") @db.Date
+  expiryDate       DateTime?            @map("expiry_date") @db.Date
+  description      String?              @db.Text
+  archivedAt       DateTime?            @map("archived_at")
+  archivedById     String?              @map("archived_by_id")
+  archiveReason    String?              @map("archive_reason") @db.Text
+  archivedBy       User?                @relation("OrganizationArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  parent           Organization?        @relation("OrganizationTree", fields: [parentId], references: [id])
+  children         Organization[]       @relation("OrganizationTree")
+  legacyEmployees  Employee[]           @relation("LegacyEmployeeOrganization")
+  assignments      EmployeeAssignment[]
+  positions        Position[]
+  jobTitles        JobTitle[]
+  scopes           UserDataScope[]
+  offers           Offer[]
+  movementFrom     EmployeeMovement[]   @relation("MovementFromOrganization")
+  movementTo       EmployeeMovement[]   @relation("MovementToOrganization")
+  staffingPlans    StaffingPlan[]
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
 
   @@index([parentId])
+  @@index([archivedById])
+  @@index([status, archivedAt])
   @@map("organizations")
 }
 
@@ -97,37 +422,1080 @@ model UserDataScope {
 }
 
 model Employee {
-  id                String             @id @default(cuid())
-  employeeNo        String             @unique @map("employee_no")
-  name              String
-  mobile            String
-  idCardNo          String             @unique @map("id_card_no")
-  organizationId    String             @map("organization_id")
-  organization      Organization       @relation(fields: [organizationId], references: [id])
-  employmentRecords EmploymentRecord[]
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
+  id                 String        @id @default(cuid())
+  employeeNo         String        @unique @map("employee_no")
+  name               String
+  formerName         String?       @map("former_name")
+  englishName        String?       @map("english_name")
+  gender             Gender?
+  birthDate          DateTime?     @map("birth_date") @db.Date
+  nationality        String?
+  ethnicity          Ethnicity?
+  nativePlace        String?       @map("native_place")
+  politicalStatus    PoliticalStatus? @map("political_status")
+  maritalStatus      MaritalStatus? @map("marital_status")
+  mobile             String
+  personalEmail      String?       @map("personal_email")
+  workEmail          String?       @map("work_email")
+  householdType      HouseholdType? @map("household_type")
+  householdAddress   String?       @map("household_address") @db.Text
+  residentialAddress String?       @map("residential_address") @db.Text
+  bankName           BankName?     @map("bank_name")
+  bankBranchName     String?       @map("bank_branch_name")
+  bankAccountNumber  String?       @map("bank_account_number") @db.VarChar(19)
+  profilePhotoId     String?       @unique @map("profile_photo_id")
+  recordStatus       RecordStatus  @default(ACTIVE) @map("record_status")
+  archivedAt         DateTime?     @map("archived_at")
+  archivedById       String?       @map("archived_by_id")
+  archiveReason      String?       @map("archive_reason") @db.Text
+  archivedBy         User?         @relation("EmployeeArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+
+  // Compatibility fields used by the current employee API. New modules use
+  // EmployeeAssignment and EmployeeIdentityDocument instead.
+  idCardNo       String?      @unique @map("id_card_no")
+  organizationId String       @map("organization_id")
+  organization   Organization @relation("LegacyEmployeeOrganization", fields: [organizationId], references: [id])
+
+  profilePhoto         FileAttachment?               @relation("EmployeeProfilePhoto", fields: [profilePhotoId], references: [id], onDelete: SetNull)
+  user                 User?
+  employmentRecords    EmploymentRecord[]
+  employmentPeriods    EmploymentPeriod[]
+  assignments          EmployeeAssignment[]
+  assignmentChangeLogs EmployeeFieldChangeLog[]
+  reportingAsEmployee  ReportingRelationship[]       @relation("ReportingEmployee")
+  reportingAsManager   ReportingRelationship[]       @relation("ReportingManager")
+  identityDocuments    EmployeeIdentityDocument[]
+  familyMembers        EmployeeFamilyMember[]
+  educationExperiences EmployeeEducationExperience[]
+  workExperiences      EmployeeWorkExperience[]
+  appraisals           EmployeeAppraisal[]
+  trainingRecords      EmployeeTrainingRecord[]
+  awards               EmployeeAward[]
+  certificates         EmployeeCertificate[]
+  projects             EmployeeProjectExperience[]
+  skills               EmployeeSkill[]
+  languages            EmployeeLanguageAbility[]
+  documents            EmployeeDocument[]
+  blacklistRecords     EmployeeBlacklistRecord[]
+  changeRequests       EmployeeChangeRequest[]
+  onboardingCases      OnboardingCase[]
+  integrationRecords   OnboardingIntegrationRecord[]
+  introductions        EmployeeIntroduction[]
+  probationRecords     ProbationRecord[]
+  movements            EmployeeMovement[]
+  trialPostRecords     TrialPostRecord[]
+  terminationRecords   TerminationRecord[]
+  retirementRecords    RetirementRecord[]
+  agreements           EmployeeAgreement[]
+  acceptedOffers       Offer[]
+  convertedCandidates  Candidate[]                   @relation("ConvertedCandidate")
+  outgoingHandovers    HandoverCase[]                @relation("HandoverSource")
+  incomingHandovers    HandoverCase[]                @relation("HandoverTarget")
+  createdAt            DateTime                      @default(now()) @map("created_at")
+  updatedAt            DateTime                      @updatedAt @map("updated_at")
 
   @@index([name])
   @@index([organizationId])
+  @@index([archivedById])
+  @@index([recordStatus, archivedAt])
   @@map("employees")
 }
 
+model EmployingCompany {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  name        String
+  sortOrder   Int          @default(0) @map("sort_order")
+  description String?      @db.Text
+  status      RecordStatus @default(ACTIVE)
+  archivedAt  DateTime?    @map("archived_at")
+  agreements  EmployeeAgreement[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@index([status, sortOrder])
+  @@map("employing_companies")
+}
+
+model Position {
+  id               String               @id @default(cuid())
+  code             String               @unique
+  name             String
+  organizationId   String?              @map("organization_id")
+  category         String?
+  description      String?              @db.Text
+  status           RecordStatus         @default(ACTIVE)
+  archivedAt       DateTime?            @map("archived_at")
+  organization     Organization?        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  assignments      EmployeeAssignment[]
+  offers           Offer[]
+  movementFrom     EmployeeMovement[]   @relation("MovementFromPosition")
+  movementTo       EmployeeMovement[]   @relation("MovementToPosition")
+  trialPostRecords TrialPostRecord[]
+  staffingPlans    StaffingPlan[]
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@index([organizationId, status])
+  @@map("positions")
+}
+
+model JobTitle {
+  id             String               @id @default(cuid())
+  code           String               @unique
+  name           String
+  organizationId String?              @map("organization_id")
+  description    String?              @db.Text
+  status         RecordStatus         @default(ACTIVE)
+  archivedAt     DateTime?            @map("archived_at")
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  assignments    EmployeeAssignment[]
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  @@index([organizationId, status])
+  @@map("job_titles")
+}
+
+model Workplace {
+  id          String               @id @default(cuid())
+  code        String               @unique
+  name        String
+  address     String?              @db.Text
+  status      RecordStatus         @default(ACTIVE)
+  archivedAt  DateTime?            @map("archived_at")
+  assignments EmployeeAssignment[]
+  offers      Offer[]
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  @@index([status, archivedAt])
+  @@map("workplaces")
+}
+
+model EmploymentPeriod {
+  id                 String               @id @default(cuid())
+  employeeId         String               @map("employee_id")
+  sequenceNo         Int                  @map("sequence_no")
+  personnelCategory     PersonnelCategory?      @map("personnel_category")
+  personnelSource       PersonnelSource?        @map("personnel_source")
+  employmentRelationship EmploymentRelationship @map("employment_relationship")
+  entryDate          DateTime             @map("entry_date") @db.Date
+  plannedExitDate    DateTime?            @map("planned_exit_date") @db.Date
+  actualExitDate     DateTime?            @map("actual_exit_date") @db.Date
+  employmentStatus   EmploymentStatus     @default(REGULAR) @map("employment_status")
+  isRehire           Boolean              @default(false) @map("is_rehire")
+  previousPeriodId   String?              @map("previous_period_id")
+  exitReason         String?              @map("exit_reason") @db.Text
+  status             RecordStatus         @default(ACTIVE)
+  archivedAt         DateTime?            @map("archived_at")
+  employee           Employee             @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  previousPeriod     EmploymentPeriod?    @relation("EmploymentPeriodHistory", fields: [previousPeriodId], references: [id], onDelete: Restrict)
+  nextPeriods        EmploymentPeriod[]   @relation("EmploymentPeriodHistory")
+  assignments        EmployeeAssignment[]
+  employmentRecords  EmploymentRecord[]
+  probationRecords   ProbationRecord[]
+  terminationRecords TerminationRecord[]
+  retirementRecords  RetirementRecord[]
+  agreements         EmployeeAgreement[]
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  @@unique([employeeId, sequenceNo])
+  @@index([employeeId, employmentStatus, actualExitDate])
+  @@index([personnelCategory, employmentStatus])
+  @@index([personnelSource, employmentStatus])
+  @@index([employmentRelationship, employmentStatus])
+  @@map("employment_periods")
+}
+
+model EmployeeAssignment {
+  id                 String            @id @default(cuid())
+  employeeId         String            @map("employee_id")
+  employmentPeriodId String?           @map("employment_period_id")
+  organizationId     String            @map("organization_id")
+  positionId         String?           @map("position_id")
+  jobLevel           JobLevelCode?     @map("job_level")
+  jobTitleId         String?           @map("job_title_id")
+  workplaceId             String?                @map("workplace_id")
+  personnelPosition       PersonnelPosition?     @map("personnel_position")
+  employeeLevel           EmployeeLevel?         @map("employee_level")
+  personnelCategory       PersonnelCategory?      @map("personnel_category")
+  personnelSource         PersonnelSource?        @map("personnel_source")
+  employmentRelationship  EmploymentRelationship? @map("employment_relationship")
+  assignmentType          AssignmentType         @default(PRIMARY) @map("assignment_type")
+  workArrangement         WorkArrangement        @map("work_arrangement")
+  isPrimary          Boolean           @default(false) @map("is_primary")
+  startDate          DateTime          @map("start_date") @db.Date
+  endDate            DateTime?         @map("end_date") @db.Date
+  status             AssignmentStatus  @default(ACTIVE)
+  changeReason       String?           @map("change_reason") @db.Text
+  archivedAt         DateTime?         @map("archived_at")
+  employee           Employee          @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employmentPeriod   EmploymentPeriod? @relation(fields: [employmentPeriodId], references: [id], onDelete: Restrict)
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  position           Position?         @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  jobTitle           JobTitle?         @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  workplace          Workplace?        @relation(fields: [workplaceId], references: [id], onDelete: Restrict)
+  fieldChangeLogs    EmployeeFieldChangeLog[]
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, endDate])
+  @@index([organizationId, status, endDate])
+  @@index([personnelCategory, status])
+  @@index([employmentRelationship, status])
+  @@index([employmentPeriodId])
+  @@index([jobLevel, status])
+  @@index([personnelPosition, status])
+  @@index([employeeLevel, status])
+  @@index([isPrimary, status])
+  @@map("employee_assignments")
+}
+
+model ReportingRelationship {
+  id                String                    @id @default(cuid())
+  employeeId        String                    @map("employee_id")
+  managerEmployeeId String                    @map("manager_employee_id")
+  relationshipType  ReportingRelationshipType @map("relationship_type")
+  isPrimary         Boolean                   @default(false) @map("is_primary")
+  startDate         DateTime                  @map("start_date") @db.Date
+  endDate           DateTime?                 @map("end_date") @db.Date
+  status            RecordStatus              @default(ACTIVE)
+  archivedAt        DateTime?                 @map("archived_at")
+  employee          Employee                  @relation("ReportingEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  manager           Employee                  @relation("ReportingManager", fields: [managerEmployeeId], references: [id], onDelete: Restrict)
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, endDate])
+  @@index([managerEmployeeId, status, endDate])
+  @@map("reporting_relationships")
+}
+
+model EmployeeIdentityDocument {
+  id                String               @id @default(cuid())
+  employeeId        String               @map("employee_id")
+  documentType      IdentityDocumentType @map("document_type")
+  documentNumber    String               @map("document_number")
+  isPrimary         Boolean              @default(false) @map("is_primary")
+  issuingCountry    String?              @map("issuing_country")
+  issuingAuthority  String?              @map("issuing_authority")
+  issueDate         DateTime?            @map("issue_date") @db.Date
+  expiryDate        DateTime?            @map("expiry_date") @db.Date
+  frontAttachmentId String?              @map("front_attachment_id")
+  backAttachmentId  String?              @map("back_attachment_id")
+  status            RecordStatus         @default(ACTIVE)
+  archivedAt        DateTime?            @map("archived_at")
+  employee          Employee             @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  frontAttachment   FileAttachment?      @relation("IdentityDocumentFront", fields: [frontAttachmentId], references: [id], onDelete: SetNull)
+  backAttachment    FileAttachment?      @relation("IdentityDocumentBack", fields: [backAttachmentId], references: [id], onDelete: SetNull)
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@unique([documentType, documentNumber])
+  @@index([employeeId, status])
+  @@index([expiryDate, status])
+  @@map("employee_identity_documents")
+}
+
 model EmploymentRecord {
-  id          String           @id @default(cuid())
-  employeeId  String           @map("employee_id")
-  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  status      EmploymentStatus
-  effectiveAt DateTime         @map("effective_at")
-  endedAt     DateTime?        @map("ended_at")
-  currentFlag Boolean?         @default(true) @map("current_flag")
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+  id                 String            @id @default(cuid())
+  employeeId         String            @map("employee_id")
+  employmentPeriodId String?           @map("employment_period_id")
+  employee           Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employmentPeriod   EmploymentPeriod? @relation(fields: [employmentPeriodId], references: [id], onDelete: Restrict)
+  status             EmploymentStatus
+  effectiveAt        DateTime          @map("effective_at")
+  endedAt            DateTime?         @map("ended_at")
+  currentFlag        Boolean?          @default(true) @map("current_flag")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
 
   @@unique([employeeId, currentFlag])
   @@index([employeeId, endedAt])
   @@index([status, currentFlag])
+  @@index([employmentPeriodId])
   @@map("employment_records")
+}
+
+model FileAttachment {
+  id                String                     @id @default(cuid())
+  originalName      String                     @map("original_name")
+  storageKey        String                     @unique @map("storage_key")
+  mimeType          String                     @map("mime_type")
+  fileSize          BigInt                     @map("file_size")
+  checksum          String?
+  uploadedById      String?                    @map("uploaded_by_id")
+  status            RecordStatus               @default(ACTIVE)
+  archivedAt        DateTime?                  @map("archived_at")
+  uploader          User?                      @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  profilePhotoFor   Employee?                  @relation("EmployeeProfilePhoto")
+  identityFrontFor  EmployeeIdentityDocument[] @relation("IdentityDocumentFront")
+  identityBackFor   EmployeeIdentityDocument[] @relation("IdentityDocumentBack")
+  employeeDocuments EmployeeDocument[]
+  certificates      EmployeeCertificate[]
+  agreements        EmployeeAgreement[]
+  handoverItems     HandoverItem[]
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+
+  @@index([uploadedById, status])
+  @@map("file_attachments")
+}
+
+model EmployeeFamilyMember {
+  id                 String       @id @default(cuid())
+  employeeId         String       @map("employee_id")
+  relationship       String
+  name               String
+  gender             Gender?
+  birthDate          DateTime?    @map("birth_date") @db.Date
+  identityDocumentNo String?      @map("identity_document_no")
+  mobile             String?
+  workOrganization   String?      @map("work_organization")
+  positionName       String?      @map("position_name")
+  address            String?      @db.Text
+  isEmergencyContact Boolean      @default(false) @map("is_emergency_contact")
+  isDependent        Boolean      @default(false) @map("is_dependent")
+  remark             String?      @db.Text
+  status             RecordStatus @default(ACTIVE)
+  archivedAt         DateTime?    @map("archived_at")
+  employee           Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@map("employee_family_members")
+}
+
+model EmployeeEducationExperience {
+  id                 String       @id @default(cuid())
+  employeeId         String       @map("employee_id")
+  schoolName         String          @map("school_name")
+  institutionType    InstitutionType? @map("institution_type")
+  educationLevel     EducationLevel  @map("education_level")
+  degree             String?
+  major              String?
+  studyType          String?      @map("study_type")
+  startDate          DateTime?    @map("start_date") @db.Date
+  endDate            DateTime?    @map("end_date") @db.Date
+  graduationDate     DateTime?    @map("graduation_date") @db.Date
+  certificateNo      String?      @map("certificate_no")
+  isHighestEducation Boolean      @default(false) @map("is_highest_education")
+  isFirstEducation   Boolean      @default(false) @map("is_first_education")
+  remark             String?      @db.Text
+  status             RecordStatus @default(ACTIVE)
+  archivedAt         DateTime?    @map("archived_at")
+  employee           Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, endDate])
+  @@map("employee_education_experiences")
+}
+
+model EmployeeWorkExperience {
+  id              String       @id @default(cuid())
+  employeeId      String       @map("employee_id")
+  companyName     String       @map("company_name")
+  departmentName  String?      @map("department_name")
+  positionName    String?      @map("position_name")
+  startDate       DateTime     @map("start_date") @db.Date
+  endDate         DateTime?    @map("end_date") @db.Date
+  jobDescription  String?      @map("job_description") @db.Text
+  leavingReason   String?      @map("leaving_reason") @db.Text
+  referenceName   String?      @map("reference_name")
+  referenceMobile String?      @map("reference_mobile")
+  remark          String?      @db.Text
+  status          RecordStatus @default(ACTIVE)
+  archivedAt      DateTime?    @map("archived_at")
+  employee        Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, startDate])
+  @@map("employee_work_experiences")
+}
+
+model EmployeeAppraisal {
+  id              String       @id @default(cuid())
+  employeeId      String       @map("employee_id")
+  appraisalPeriod String       @map("appraisal_period")
+  appraisalType   String       @map("appraisal_type")
+  score           Decimal?     @db.Decimal(8, 2)
+  grade           String?
+  result          String?
+  evaluatorUserId String?      @map("evaluator_user_id")
+  evaluator       User?        @relation("AppraisalEvaluator", fields: [evaluatorUserId], references: [id], onDelete: SetNull)
+  appraisalDate   DateTime?    @map("appraisal_date") @db.Date
+  comment         String?      @db.Text
+  status          RecordStatus @default(ACTIVE)
+  archivedAt      DateTime?    @map("archived_at")
+  employee        Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, appraisalDate])
+  @@index([evaluatorUserId, status])
+  @@map("employee_appraisals")
+}
+
+model EmployeeTrainingRecord {
+  id               String       @id @default(cuid())
+  employeeId       String       @map("employee_id")
+  trainingName     String       @map("training_name")
+  trainingProvider String?      @map("training_provider")
+  trainingType     String?      @map("training_type")
+  startDate        DateTime?    @map("start_date") @db.Date
+  endDate          DateTime?    @map("end_date") @db.Date
+  hours            Decimal?     @db.Decimal(8, 2)
+  result           String?
+  cost             Decimal?     @db.Decimal(12, 2)
+  remark           String?      @db.Text
+  status           RecordStatus @default(ACTIVE)
+  archivedAt       DateTime?    @map("archived_at")
+  employee         Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, startDate])
+  @@map("employee_training_records")
+}
+
+model EmployeeAward {
+  id                   String       @id @default(cuid())
+  employeeId           String       @map("employee_id")
+  awardName            String       @map("award_name")
+  awardLevel           String?      @map("award_level")
+  awardingOrganization String?      @map("awarding_organization")
+  awardDate            DateTime?    @map("award_date") @db.Date
+  reason               String?      @db.Text
+  remark               String?      @db.Text
+  status               RecordStatus @default(ACTIVE)
+  archivedAt           DateTime?    @map("archived_at")
+  employee             Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, awardDate])
+  @@map("employee_awards")
+}
+
+model EmployeeCertificate {
+  id               String          @id @default(cuid())
+  employeeId       String          @map("employee_id")
+  certificateType  String          @map("certificate_type")
+  certificateName  String          @map("certificate_name")
+  certificateNo    String?         @map("certificate_no")
+  issuingAuthority String?         @map("issuing_authority")
+  issueDate        DateTime?       @map("issue_date") @db.Date
+  expiryDate       DateTime?       @map("expiry_date") @db.Date
+  attachmentId     String?         @map("attachment_id")
+  remark           String?         @db.Text
+  status           RecordStatus    @default(ACTIVE)
+  archivedAt       DateTime?       @map("archived_at")
+  employee         Employee        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  attachment       FileAttachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, expiryDate])
+  @@index([certificateNo])
+  @@map("employee_certificates")
+}
+
+model EmployeeProjectExperience {
+  id                 String       @id @default(cuid())
+  employeeId         String       @map("employee_id")
+  projectName        String       @map("project_name")
+  companyName        String?      @map("company_name")
+  projectRole        String?      @map("project_role")
+  startDate          DateTime?    @map("start_date") @db.Date
+  endDate            DateTime?    @map("end_date") @db.Date
+  projectDescription String?      @map("project_description") @db.Text
+  responsibilities   String?      @db.Text
+  projectResult      String?      @map("project_result") @db.Text
+  status             RecordStatus @default(ACTIVE)
+  archivedAt         DateTime?    @map("archived_at")
+  employee           Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, startDate])
+  @@map("employee_project_experiences")
+}
+
+model EmployeeSkill {
+  id                String       @id @default(cuid())
+  employeeId        String       @map("employee_id")
+  skillName         String       @map("skill_name")
+  skillCategory     String?      @map("skill_category")
+  proficiencyLevel  String?      @map("proficiency_level")
+  yearsOfExperience Decimal?     @map("years_of_experience") @db.Decimal(5, 2)
+  isCertified       Boolean      @default(false) @map("is_certified")
+  remark            String?      @db.Text
+  status            RecordStatus @default(ACTIVE)
+  archivedAt        DateTime?    @map("archived_at")
+  employee          Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@map("employee_skills")
+}
+
+model EmployeeLanguageAbility {
+  id               String       @id @default(cuid())
+  employeeId       String       @map("employee_id")
+  language         String
+  listeningLevel   String?      @map("listening_level")
+  speakingLevel    String?      @map("speaking_level")
+  readingLevel     String?      @map("reading_level")
+  writingLevel     String?      @map("writing_level")
+  certificateName  String?      @map("certificate_name")
+  certificateScore String?      @map("certificate_score")
+  status           RecordStatus @default(ACTIVE)
+  archivedAt       DateTime?    @map("archived_at")
+  employee         Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@map("employee_language_abilities")
+}
+
+model EmployeeDocument {
+  id           String         @id @default(cuid())
+  employeeId   String         @map("employee_id")
+  documentType String         @map("document_type")
+  documentName String         @map("document_name")
+  attachmentId String         @map("attachment_id")
+  expiryDate   DateTime?      @map("expiry_date") @db.Date
+  remark       String?        @db.Text
+  status       RecordStatus   @default(ACTIVE)
+  archivedAt   DateTime?      @map("archived_at")
+  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  attachment   FileAttachment @relation(fields: [attachmentId], references: [id], onDelete: Restrict)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@index([employeeId, documentType, status])
+  @@map("employee_documents")
+}
+
+model EmployeeBlacklistRecord {
+  id             String                @id @default(cuid())
+  employeeId     String?               @map("employee_id")
+  name           String
+  documentType   IdentityDocumentType? @map("document_type")
+  documentNumber String?               @map("document_number")
+  mobile         String?
+  reason         String                @db.Text
+  effectiveDate  DateTime              @map("effective_date") @db.Date
+  expiryDate     DateTime?             @map("expiry_date") @db.Date
+  createdById    String?               @map("created_by_id")
+  createdBy      User?                 @relation("BlacklistCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  status         RecordStatus          @default(ACTIVE)
+  archivedAt     DateTime?             @map("archived_at")
+  employee       Employee?             @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@index([documentNumber, status])
+  @@index([createdById, status])
+  @@map("employee_blacklist_records")
+}
+
+model Candidate {
+  id                  String        @id @default(cuid())
+  name                String
+  mobile              String?
+  email               String?
+  source              String?
+  resumeAttachmentId  String?       @map("resume_attachment_id")
+  convertedEmployeeId String?       @map("converted_employee_id")
+  status              ProcessStatus @default(DRAFT)
+  archivedAt          DateTime?     @map("archived_at")
+  convertedEmployee   Employee?     @relation("ConvertedCandidate", fields: [convertedEmployeeId], references: [id], onDelete: SetNull)
+  offers              Offer[]
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  @@index([mobile])
+  @@index([status, archivedAt])
+  @@map("candidates")
+}
+
+model Offer {
+  id                   String          @id @default(cuid())
+  offerNo              String          @unique @map("offer_no")
+  candidateId          String          @map("candidate_id")
+  acceptedEmployeeId   String?         @map("accepted_employee_id")
+  organizationId       String?         @map("organization_id")
+  positionId           String?         @map("position_id")
+  workplaceId          String?         @map("workplace_id")
+  employmentRelationship EmploymentRelationship @map("employment_relationship")
+  proposedEntryDate    DateTime?       @map("proposed_entry_date") @db.Date
+  probationMonths      Int?            @map("probation_months")
+  offeredMonthlySalary Decimal?        @map("offered_monthly_salary") @db.Decimal(12, 2)
+  issueDate            DateTime?       @map("issue_date") @db.Date
+  expiryDate           DateTime?       @map("expiry_date") @db.Date
+  acceptedAt           DateTime?       @map("accepted_at")
+  rejectedReason       String?         @map("rejected_reason") @db.Text
+  status               ProcessStatus   @default(DRAFT)
+  archivedAt           DateTime?       @map("archived_at")
+  candidate            Candidate       @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  acceptedEmployee     Employee?       @relation(fields: [acceptedEmployeeId], references: [id], onDelete: SetNull)
+  organization         Organization?   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  position             Position?       @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  workplace            Workplace?      @relation(fields: [workplaceId], references: [id], onDelete: Restrict)
+  onboardingCase       OnboardingCase?
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  @@index([candidateId, status])
+  @@index([organizationId, proposedEntryDate])
+  @@map("offers")
+}
+
+model OnboardingCase {
+  id               String           @id @default(cuid())
+  employeeId       String           @map("employee_id")
+  offerId          String?          @unique @map("offer_id")
+  plannedEntryDate DateTime         @map("planned_entry_date") @db.Date
+  actualEntryDate  DateTime?        @map("actual_entry_date") @db.Date
+  ownerUserId      String?          @map("owner_user_id")
+  status           ProcessStatus    @default(DRAFT)
+  completedAt      DateTime?        @map("completed_at")
+  remark           String?          @db.Text
+  archivedAt       DateTime?        @map("archived_at")
+  employee         Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  offer            Offer?           @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  ownerUser        User?            @relation("OnboardingOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  tasks            OnboardingTask[]
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@index([plannedEntryDate, status])
+  @@index([ownerUserId, status])
+  @@map("onboarding_cases")
+}
+
+model OnboardingTask {
+  id                String         @id @default(cuid())
+  onboardingCaseId  String         @map("onboarding_case_id")
+  taskType          String         @map("task_type")
+  taskName          String         @map("task_name")
+  responsibleUserId String?        @map("responsible_user_id")
+  dueDate           DateTime?      @map("due_date")
+  completedAt       DateTime?      @map("completed_at")
+  status            TaskStatus     @default(PENDING)
+  remark            String?        @db.Text
+  onboardingCase    OnboardingCase @relation(fields: [onboardingCaseId], references: [id], onDelete: Cascade)
+  responsibleUser   User?          @relation("OnboardingTaskResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  @@index([onboardingCaseId, status])
+  @@index([responsibleUserId, dueDate, status])
+  @@map("onboarding_tasks")
+}
+
+model OnboardingIntegrationRecord {
+  id               String        @id @default(cuid())
+  employeeId       String        @map("employee_id")
+  planName         String        @map("plan_name")
+  mentorEmployeeId String?       @map("mentor_employee_id")
+  startDate        DateTime?     @map("start_date") @db.Date
+  endDate          DateTime?     @map("end_date") @db.Date
+  feedback         String?       @db.Text
+  status           ProcessStatus @default(DRAFT)
+  archivedAt       DateTime?     @map("archived_at")
+  employee         Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@map("onboarding_integration_records")
+}
+
+model EmployeeIntroduction {
+  id          String        @id @default(cuid())
+  employeeId  String        @map("employee_id")
+  title       String
+  content     String        @db.Text
+  publishedAt DateTime?     @map("published_at")
+  status      ProcessStatus @default(DRAFT)
+  archivedAt  DateTime?     @map("archived_at")
+  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@map("employee_introductions")
+}
+
+model ProbationRecord {
+  id                 String            @id @default(cuid())
+  employeeId         String            @map("employee_id")
+  employmentPeriodId String?           @map("employment_period_id")
+  startDate          DateTime          @map("start_date") @db.Date
+  plannedEndDate     DateTime          @map("planned_end_date") @db.Date
+  probationMonths    Int?              @map("probation_months")
+  actualEndDate      DateTime?         @map("actual_end_date") @db.Date
+  result             String?
+  evaluation         String?           @db.Text
+  confirmedDate      DateTime?         @map("confirmed_date") @db.Date
+  extensionCount     Int               @default(0) @map("extension_count")
+  status             ProcessStatus     @default(DRAFT)
+  archivedAt         DateTime?         @map("archived_at")
+  employee           Employee          @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employmentPeriod   EmploymentPeriod? @relation(fields: [employmentPeriodId], references: [id], onDelete: Restrict)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, plannedEndDate])
+  @@map("probation_records")
+}
+
+model MovementType {
+  id          String             @id @default(cuid())
+  code        String             @unique
+  name        String
+  description String?            @db.Text
+  status      RecordStatus       @default(ACTIVE)
+  archivedAt  DateTime?          @map("archived_at")
+  movements   EmployeeMovement[]
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  @@map("movement_types")
+}
+
+model EmployeeMovement {
+  id                 String           @id @default(cuid())
+  employeeId         String           @map("employee_id")
+  movementTypeId     String           @map("movement_type_id")
+  fromOrganizationId String?          @map("from_organization_id")
+  toOrganizationId   String?          @map("to_organization_id")
+  fromPositionId     String?          @map("from_position_id")
+  toPositionId       String?          @map("to_position_id")
+  fromJobLevel       JobLevelCode?    @map("from_job_level")
+  toJobLevel         JobLevelCode?    @map("to_job_level")
+  effectiveDate      DateTime         @map("effective_date") @db.Date
+  reason             String?          @db.Text
+  approvalRequestId  String?          @unique @map("approval_request_id")
+  status             ProcessStatus    @default(DRAFT)
+  archivedAt         DateTime?        @map("archived_at")
+  employee           Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  movementType       MovementType     @relation(fields: [movementTypeId], references: [id], onDelete: Restrict)
+  fromOrganization   Organization?    @relation("MovementFromOrganization", fields: [fromOrganizationId], references: [id], onDelete: Restrict)
+  toOrganization     Organization?    @relation("MovementToOrganization", fields: [toOrganizationId], references: [id], onDelete: Restrict)
+  fromPosition       Position?        @relation("MovementFromPosition", fields: [fromPositionId], references: [id], onDelete: Restrict)
+  toPosition         Position?        @relation("MovementToPosition", fields: [toPositionId], references: [id], onDelete: Restrict)
+  approvalRequest    ApprovalRequest? @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, effectiveDate])
+  @@index([movementTypeId, effectiveDate])
+  @@map("employee_movements")
+}
+
+model TrialPostRecord {
+  id               String        @id @default(cuid())
+  employeeId       String        @map("employee_id")
+  targetPositionId String        @map("target_position_id")
+  startDate        DateTime      @map("start_date") @db.Date
+  endDate          DateTime?     @map("end_date") @db.Date
+  result           String?
+  evaluatorUserId  String?       @map("evaluator_user_id")
+  comment          String?       @db.Text
+  status           ProcessStatus @default(DRAFT)
+  archivedAt       DateTime?     @map("archived_at")
+  employee         Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  targetPosition   Position      @relation(fields: [targetPositionId], references: [id], onDelete: Restrict)
+  evaluator        User?         @relation("TrialPostEvaluator", fields: [evaluatorUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, startDate])
+  @@index([evaluatorUserId, status])
+  @@map("trial_post_records")
+}
+
+model TerminationRecord {
+  id                     String            @id @default(cuid())
+  employeeId             String            @map("employee_id")
+  employmentPeriodId     String?           @map("employment_period_id")
+  applicationDate        DateTime?         @map("application_date") @db.Date
+  plannedLastWorkingDate DateTime          @map("planned_last_working_date") @db.Date
+  actualLastWorkingDate  DateTime?         @map("actual_last_working_date") @db.Date
+  terminationType        String            @map("termination_type")
+  reason                 String?           @db.Text
+  rehireEligible         Boolean?          @map("rehire_eligible")
+  handoverCaseId         String?           @unique @map("handover_case_id")
+  approvalRequestId      String?           @unique @map("approval_request_id")
+  status                 ProcessStatus     @default(DRAFT)
+  archivedAt             DateTime?         @map("archived_at")
+  employee               Employee          @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employmentPeriod       EmploymentPeriod? @relation(fields: [employmentPeriodId], references: [id], onDelete: Restrict)
+  handoverCase           HandoverCase?     @relation(fields: [handoverCaseId], references: [id], onDelete: SetNull)
+  approvalRequest        ApprovalRequest?  @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, plannedLastWorkingDate])
+  @@map("termination_records")
+}
+
+model RetirementRecord {
+  id                    String            @id @default(cuid())
+  employeeId            String            @map("employee_id")
+  employmentPeriodId    String?           @map("employment_period_id")
+  plannedRetirementDate DateTime          @map("planned_retirement_date") @db.Date
+  actualRetirementDate  DateTime?         @map("actual_retirement_date") @db.Date
+  retirementType        String            @map("retirement_type")
+  pensionHandlingStatus String?           @map("pension_handling_status")
+  remark                String?           @db.Text
+  status                ProcessStatus     @default(DRAFT)
+  archivedAt            DateTime?         @map("archived_at")
+  employee              Employee          @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employmentPeriod      EmploymentPeriod? @relation(fields: [employmentPeriodId], references: [id], onDelete: Restrict)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, plannedRetirementDate])
+  @@map("retirement_records")
+}
+
+model EmployeeAgreement {
+  id                    String              @id @default(cuid())
+  employeeId            String              @map("employee_id")
+  employmentPeriodId    String?             @map("employment_period_id")
+  agreementNo           String              @unique @map("agreement_no")
+  agreementType         AgreementType       @map("agreement_type")
+  employingCompanyId    String?             @map("employing_company_id")
+  previousAgreementId   String?             @map("previous_agreement_id")
+  signingDate           DateTime?           @map("signing_date") @db.Date
+  startDate             DateTime            @map("start_date") @db.Date
+  endDate               DateTime?           @map("end_date") @db.Date
+  probationEndDate      DateTime?           @map("probation_end_date") @db.Date
+  workLocation          String?             @map("work_location")
+  renewalSequence       Int                 @default(0) @map("renewal_sequence")
+  terminationDate       DateTime?           @map("termination_date") @db.Date
+  terminationReason     String?             @map("termination_reason") @db.Text
+  attachmentId          String?             @map("attachment_id")
+  status                AgreementStatus     @default(DRAFT)
+  archivedAt            DateTime?           @map("archived_at")
+  employee              Employee            @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employmentPeriod      EmploymentPeriod?   @relation(fields: [employmentPeriodId], references: [id], onDelete: Restrict)
+  employingCompany      EmployingCompany?   @relation(fields: [employingCompanyId], references: [id], onDelete: Restrict)
+  previousAgreement     EmployeeAgreement?  @relation("AgreementRenewals", fields: [previousAgreementId], references: [id], onDelete: Restrict)
+  renewalAgreements     EmployeeAgreement[] @relation("AgreementRenewals")
+  attachment            FileAttachment?     @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  @@index([employeeId, status, endDate])
+  @@index([employingCompanyId, status])
+  @@map("employee_agreements")
+}
+
+model EmployeeFieldChangeLog {
+  id           String              @id @default(cuid())
+  employeeId   String              @map("employee_id")
+  assignmentId String?             @map("assignment_id")
+  changedField String              @map("changed_field")
+  oldValue     Json?               @map("old_value")
+  newValue     Json?               @map("new_value")
+  changedById  String?             @map("changed_by_id")
+  changedAt    DateTime            @default(now()) @map("changed_at")
+  employee     Employee            @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  assignment   EmployeeAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  changedBy    User?               @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, changedAt])
+  @@index([assignmentId, changedAt])
+  @@index([changedById, changedAt])
+  @@map("employee_field_change_logs")
+}
+
+model ApprovalRequest {
+  id                    String                 @id @default(cuid())
+  businessType          String                 @map("business_type")
+  businessId            String?                @map("business_id")
+  applicantUserId       String                 @map("applicant_user_id")
+  title                 String
+  currentStep           Int                    @default(1) @map("current_step")
+  status                ProcessStatus          @default(DRAFT)
+  submittedAt           DateTime?              @map("submitted_at")
+  completedAt           DateTime?              @map("completed_at")
+  archivedAt            DateTime?              @map("archived_at")
+  applicant             User                   @relation("ApprovalApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
+  steps                 ApprovalStep[]
+  employeeChangeRequest EmployeeChangeRequest?
+  employeeMovement      EmployeeMovement?
+  terminationRecord     TerminationRecord?
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+
+  @@index([businessType, businessId])
+  @@index([applicantUserId, status])
+  @@index([status, submittedAt])
+  @@map("approval_requests")
+}
+
+model ApprovalStep {
+  id                String           @id @default(cuid())
+  approvalRequestId String           @map("approval_request_id")
+  stepOrder         Int              @map("step_order")
+  approverUserId    String           @map("approver_user_id")
+  decision          ApprovalDecision @default(PENDING)
+  comment           String?          @db.Text
+  operatedAt        DateTime?        @map("operated_at")
+  approvalRequest   ApprovalRequest  @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  approver          User             @relation("ApprovalApprover", fields: [approverUserId], references: [id], onDelete: Restrict)
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@unique([approvalRequestId, stepOrder])
+  @@index([approverUserId, decision])
+  @@map("approval_steps")
+}
+
+model EmployeeChangeRequest {
+  id                String           @id @default(cuid())
+  employeeId        String           @map("employee_id")
+  approvalRequestId String?          @unique @map("approval_request_id")
+  changedFields     Json             @map("changed_fields")
+  oldValues         Json?            @map("old_values")
+  newValues         Json             @map("new_values")
+  status            ProcessStatus    @default(DRAFT)
+  archivedAt        DateTime?        @map("archived_at")
+  employee          Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  approvalRequest   ApprovalRequest? @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([employeeId, status])
+  @@map("employee_change_requests")
+}
+
+model StaffingPlan {
+  id                String        @id @default(cuid())
+  organizationId    String        @map("organization_id")
+  positionId        String?       @map("position_id")
+  planYear          Int           @map("plan_year")
+  approvedHeadcount Int           @map("approved_headcount")
+  frozenHeadcount   Int           @default(0) @map("frozen_headcount")
+  status            ProcessStatus @default(DRAFT)
+  archivedAt        DateTime?     @map("archived_at")
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  position          Position?     @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@unique([organizationId, positionId, planYear])
+  @@index([planYear, status])
+  @@map("staffing_plans")
+}
+
+model HandoverCase {
+  id                String             @id @default(cuid())
+  sourceEmployeeId  String             @map("source_employee_id")
+  targetEmployeeId  String?            @map("target_employee_id")
+  reason            String?            @db.Text
+  plannedDate       DateTime?          @map("planned_date") @db.Date
+  completedDate     DateTime?          @map("completed_date") @db.Date
+  ownerUserId       String?            @map("owner_user_id")
+  status            ProcessStatus      @default(DRAFT)
+  archivedAt        DateTime?          @map("archived_at")
+  sourceEmployee    Employee           @relation("HandoverSource", fields: [sourceEmployeeId], references: [id], onDelete: Restrict)
+  targetEmployee    Employee?          @relation("HandoverTarget", fields: [targetEmployeeId], references: [id], onDelete: Restrict)
+  ownerUser         User?              @relation("HandoverOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  items             HandoverItem[]
+  terminationRecord TerminationRecord?
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@index([sourceEmployeeId, status])
+  @@index([targetEmployeeId, status])
+  @@index([ownerUserId, status])
+  @@map("handover_cases")
+}
+
+model HandoverItem {
+  id                 String          @id @default(cuid())
+  handoverCaseId     String          @map("handover_case_id")
+  itemType           String          @map("item_type")
+  itemName           String          @map("item_name")
+  description        String?         @db.Text
+  attachmentId       String?         @map("attachment_id")
+  confirmationStatus TaskStatus      @default(PENDING) @map("confirmation_status")
+  confirmedAt        DateTime?       @map("confirmed_at")
+  remark             String?         @db.Text
+  handoverCase       HandoverCase    @relation(fields: [handoverCaseId], references: [id], onDelete: Cascade)
+  attachment         FileAttachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@index([handoverCaseId, confirmationStatus])
+  @@map("handover_items")
+}
+
+model DictionaryType {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  description String?          @db.Text
+  status      RecordStatus     @default(ACTIVE)
+  items       DictionaryItem[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("dictionary_types")
+}
+
+model DictionaryItem {
+  id               String         @id @default(cuid())
+  dictionaryTypeId String         @map("dictionary_type_id")
+  code             String
+  name             String
+  sortOrder        Int            @default(0) @map("sort_order")
+  extraData        Json?          @map("extra_data")
+  status           RecordStatus   @default(ACTIVE)
+  archivedAt       DateTime?      @map("archived_at")
+  dictionaryType   DictionaryType @relation(fields: [dictionaryTypeId], references: [id], onDelete: Restrict)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@unique([dictionaryTypeId, code])
+  @@index([dictionaryTypeId, status, sortOrder])
+  @@map("dictionary_items")
+}
+
+model ReportDefinition {
+  id             String       @id @default(cuid())
+  name           String
+  dataSource     String       @map("data_source")
+  selectedFields Json         @map("selected_fields")
+  filters        Json?
+  grouping       Json?
+  sorting        Json?
+  creatorUserId  String       @map("creator_user_id")
+  visibility     String       @default("PRIVATE")
+  status         RecordStatus @default(ACTIVE)
+  archivedAt     DateTime?    @map("archived_at")
+  creator        User         @relation("ReportCreator", fields: [creatorUserId], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([creatorUserId, status])
+  @@map("report_definitions")
 }
 
 model AuditLog {

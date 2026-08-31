@@ -1,4 +1,3 @@
-import { DownOutlined } from '@ant-design/icons';
 import { Button, Checkbox, Dropdown } from 'antd';
 
 export interface CheckboxFilterOption {
@@ -28,7 +27,7 @@ export function CheckboxFilterDropdown({ label, options, value, onChange }: Chec
       )}
     >
       <Button className="checkbox-filter-trigger" type="text">
-        {label}<DownOutlined />
+        <span>{label}</span><i className="checkbox-filter-caret" aria-hidden="true" />
       </Button>
     </Dropdown>
   );

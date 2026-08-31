@@ -4,7 +4,6 @@ import { AuditAction, EmploymentStatus } from '@prisma/client';
 import {
   PERMISSIONS,
   type AuthUser,
-  type CreateEmployeeInput,
   type Organization,
   type UpdateEmployeeInput,
 } from '@hr-demo/shared';
@@ -15,7 +14,8 @@ export interface DemoEmployeeRecord {
   employeeNo: string;
   name: string;
   mobile: string;
-  idCardNo: string;
+  /** Demo compatibility value for its fictional national-ID-only records. */
+  idCardNo: string | null;
   organizationId: string;
   organization: { name: string };
   employmentRecords: { status: EmploymentStatus }[];
@@ -88,7 +88,7 @@ const initialEmployees = [
     mobile: '13800001001',
     idCardNo: '110101199203181021',
     organizationId: 'demo-org-product',
-    status: EmploymentStatus.ACTIVE,
+    status: EmploymentStatus.REGULAR,
   },
   {
     id: 'demo-employee-1002',
@@ -97,7 +97,7 @@ const initialEmployees = [
     mobile: '13800001002',
     idCardNo: '310101199507092036',
     organizationId: 'demo-org-product',
-    status: EmploymentStatus.ACTIVE,
+    status: EmploymentStatus.REGULAR,
   },
   {
     id: 'demo-employee-2001',
@@ -106,7 +106,7 @@ const initialEmployees = [
     mobile: '13800002001',
     idCardNo: '440101198911262412',
     organizationId: 'demo-org-operations',
-    status: EmploymentStatus.INACTIVE,
+    status: EmploymentStatus.RESIGNED,
   },
   {
     id: 'demo-employee-3001',
@@ -115,7 +115,7 @@ const initialEmployees = [
     mobile: '13800003001',
     idCardNo: '510101199604112527',
     organizationId: 'demo-org-sales',
-    status: EmploymentStatus.ACTIVE,
+    status: EmploymentStatus.REGULAR,
   },
 ] as const;
 
@@ -168,7 +168,14 @@ export class DemoDataService {
     return this.employees.find((employee) => employee.id === id);
   }
 
-  createEmployee(input: CreateEmployeeInput) {
+  createEmployee(input: {
+    employeeNo: string;
+    name: string;
+    mobile: string;
+    idCardNo: string;
+    organizationId: string;
+    employmentStatus: EmploymentStatus;
+  }) {
     this.assertUnique(input.employeeNo, input.idCardNo);
     const now = new Date();
     const employee: DemoEmployeeRecord = {
@@ -179,7 +186,7 @@ export class DemoDataService {
       idCardNo: input.idCardNo.toUpperCase(),
       organizationId: input.organizationId,
       organization: { name: this.getOrganizationName(input.organizationId) },
-      employmentRecords: [{ status: input.employmentStatus as EmploymentStatus }],
+      employmentRecords: [{ status: input.employmentStatus }],
       createdAt: now,
       updatedAt: now,
     };
@@ -188,22 +195,17 @@ export class DemoDataService {
   }
 
   updateEmployee(employee: DemoEmployeeRecord, input: UpdateEmployeeInput) {
-    this.assertUnique(
-      input.employeeNo ?? employee.employeeNo,
-      input.idCardNo ?? employee.idCardNo,
-      employee.id,
-    );
+    this.assertUnique(input.employeeNo ?? employee.employeeNo, employee.idCardNo, employee.id);
 
     if (input.employeeNo !== undefined) employee.employeeNo = input.employeeNo;
     if (input.name !== undefined) employee.name = input.name;
     if (input.mobile !== undefined) employee.mobile = input.mobile;
-    if (input.idCardNo !== undefined) employee.idCardNo = input.idCardNo.toUpperCase();
     if (input.organizationId !== undefined) {
       employee.organizationId = input.organizationId;
       employee.organization = { name: this.getOrganizationName(input.organizationId) };
     }
     if (input.employmentStatus !== undefined) {
-      employee.employmentRecords = [{ status: input.employmentStatus as EmploymentStatus }];
+      employee.employmentRecords = [{ status: input.employmentStatus }];
     }
     employee.updatedAt = new Date();
     return employee;
@@ -242,16 +244,18 @@ export class DemoDataService {
     return organizations.find((organization) => organization.id === organizationId)?.name ?? '';
   }
 
-  private assertUnique(employeeNo: string, idCardNo: string, exceptId?: string) {
+  private assertUnique(employeeNo: string, idCardNo: string | null | undefined, exceptId?: string) {
     const normalizedEmployeeNo = employeeNo.toLocaleLowerCase();
     const duplicateEmployeeNo = this.employees.some(
       (employee) => employee.id !== exceptId && employee.employeeNo.toLocaleLowerCase() === normalizedEmployeeNo,
     );
     if (duplicateEmployeeNo) throw new ConflictException('工号已存在');
+    if (!idCardNo) return;
 
     const normalizedIdCardNo = idCardNo.toUpperCase();
     const duplicateIdCardNo = this.employees.some(
-      (employee) => employee.id !== exceptId && employee.idCardNo.toUpperCase() === normalizedIdCardNo,
+      (employee) => employee.id !== exceptId
+        && employee.idCardNo?.toUpperCase() === normalizedIdCardNo,
     );
     if (duplicateIdCardNo) throw new ConflictException('身份证号已存在');
   }

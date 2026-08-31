@@ -1,44 +1,364 @@
 import type { EmploymentStatus } from '@prisma/client';
-import { PERMISSIONS } from '@hr-demo/shared';
-import type { AuthenticatedUser } from '../common/types/authenticated-user';
+import {
+  type EmployeeDetail,
+  type EmployeeLevel,
+  type EmployeeListItem,
+  type EmploymentRelationship,
+  type Gender,
+  type IdentityDocumentType,
+  type JobLevel,
+  type PersonnelCategory,
+  type PersonnelPosition,
+  type PersonnelSource,
+  type WorkArrangement,
+} from '@hr-demo/shared';
 
-interface EmployeeWithCurrentRecord {
+export interface EmployeeWithCurrentRecord {
   id: string;
   employeeNo: string;
   name: string;
   mobile: string;
-  idCardNo: string;
+  idCardNo: string | null;
   organizationId: string;
-  organization: { name: string };
+  organization: { id?: string; name: string };
+  assignments?: Array<{
+    id?: string;
+    organization: { id: string; name: string };
+    status?: 'ACTIVE' | 'ENDED';
+    isPrimary: boolean;
+    startDate: Date;
+    endDate: Date | null;
+  }>;
   employmentRecords: { status: EmploymentStatus }[];
   createdAt: Date;
   updatedAt: Date;
 }
 
-export function maskMobile(value: string) {
-  return value.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
+export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
+  gender: Gender | null;
+  workEmail: string | null;
+  personalEmail: string | null;
+  birthDate: Date | null;
+  ethnicity: string | null;
+  maritalStatus: string | null;
+  politicalStatus: string | null;
+  nativePlace: string | null;
+  householdType?: string | null;
+  householdAddress: string | null;
+  residentialAddress: string | null;
+  bankName?: string | null;
+  bankBranchName?: string | null;
+  bankAccountNumber?: string | null;
+  employmentPeriods: Array<{
+    personnelCategory?: PersonnelCategory | null;
+    personnelSource?: PersonnelSource | null;
+    employmentRelationship: EmploymentRelationship;
+    entryDate: Date;
+    actualExitDate: Date | null;
+    agreements?: Array<{
+      employingCompany: { id: string; code: string; name: string } | null;
+    }>;
+  }>;
+  assignments: Array<{
+    id?: string;
+    organization: { id: string; name: string };
+    status: 'ACTIVE' | 'ENDED';
+    positionId?: string | null;
+    jobLevel?: JobLevel | null;
+    workplaceId?: string | null;
+    position: { id: string; name: string } | null;
+    workplace: { id: string; name: string } | null;
+    personnelPosition?: PersonnelPosition | null;
+    employeeLevel?: EmployeeLevel | null;
+    personnelCategory?: PersonnelCategory | null;
+    employmentRelationship?: EmploymentRelationship | null;
+    personnelSource?: PersonnelSource | null;
+    workArrangement: WorkArrangement | string;
+    isPrimary: boolean;
+    startDate: Date;
+    endDate: Date | null;
+  }>;
+  reportingAsEmployee: Array<{
+    manager: { name: string; workEmail: string | null };
+    isPrimary: boolean;
+    startDate: Date;
+    endDate: Date | null;
+  }>;
+  identityDocuments: Array<{
+    id?: string;
+    documentType: IdentityDocumentType;
+    documentNumber: string;
+    expiryDate: Date | null;
+    isPrimary: boolean;
+  }>;
+  familyMembers: Array<{
+    id?: string;
+    name: string;
+    relationship: string;
+    mobile: string | null;
+    isEmergencyContact: boolean;
+  }>;
+  educationExperiences: Array<{
+    id?: string;
+    schoolName: string;
+    educationLevel: string;
+    institutionType?: string | null;
+    major: string | null;
+    graduationDate: Date | null;
+    isHighestEducation: boolean;
+  }>;
+  workExperiences: Array<{
+    startDate: Date;
+    endDate: Date | null;
+  }>;
+  convertedCandidates: Array<{ source: string | null }>;
 }
 
-export function maskIdCard(value: string) {
-  if (value.length <= 10) return '*'.repeat(value.length);
-  return `${value.slice(0, 6)}${'*'.repeat(value.length - 10)}${value.slice(-4)}`;
-}
-
-export function presentEmployee(employee: EmployeeWithCurrentRecord, user: AuthenticatedUser) {
-  const canReadSensitive = user.permissions.includes(PERMISSIONS.EMPLOYEE_SENSITIVE_READ);
+export function presentEmployee(
+  employee: EmployeeWithCurrentRecord,
+  visibleOrganizationIds?: readonly string[],
+) {
   const currentRecord = employee.employmentRecords[0];
   if (!currentRecord) throw new Error(`Employee ${employee.id} has no current employment record`);
+  const assignments = employee.assignments ?? [];
+  const allowedAssignments = visibleOrganizationIds
+    ? assignments.filter((assignment) => visibleOrganizationIds.includes(assignment.organization.id))
+    : assignments;
+  const visibleAssignment = allowedAssignments.find((assignment) => assignment.isPrimary)
+    ?? allowedAssignments[0]
+    ?? null;
+  const mayUseLegacyOrganization = assignments.length === 0
+    && (!visibleOrganizationIds || visibleOrganizationIds.includes(employee.organizationId));
 
   return {
     id: employee.id,
     employeeNo: employee.employeeNo,
     name: employee.name,
-    mobile: canReadSensitive ? employee.mobile : maskMobile(employee.mobile),
-    idCardNo: canReadSensitive ? employee.idCardNo : maskIdCard(employee.idCardNo),
-    organizationId: employee.organizationId,
-    organizationName: employee.organization.name,
+    mobile: employee.mobile,
+    idCardNo: employee.idCardNo,
+    organizationId: visibleAssignment?.organization.id
+      ?? (mayUseLegacyOrganization ? employee.organizationId : ''),
+    organizationName: visibleAssignment?.organization.name
+      ?? (mayUseLegacyOrganization ? employee.organization.name : ''),
     employmentStatus: currentRecord.status,
     createdAt: employee.createdAt.toISOString(),
     updatedAt: employee.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Demo mode has no relation records. Keep its API shape stable while marking
+ * every relationship-backed personnel field as unavailable instead of
+ * inventing MySQL-only data.
+ */
+export function presentDemoEmployeeListItem(
+  employee: EmployeeWithCurrentRecord,
+  visibleOrganizationIds?: readonly string[],
+): EmployeeListItem {
+  const core = presentEmployee(employee, visibleOrganizationIds);
+  const documentNumber = employee.idCardNo;
+  return {
+    ...core,
+    entryDate: null,
+    positionName: null,
+    gender: null,
+    personnelPosition: null,
+    jobLevel: null,
+    employeeLevel: null,
+    workplaceName: null,
+    workEmail: null,
+    personalEmail: null,
+    personnelCategory: null,
+    personnelSource: null,
+    fullTimeCompany: null,
+    employmentRelationship: null,
+    workArrangement: null,
+    managerName: null,
+    managerEmail: null,
+    totalWorkYears: null,
+    totalServiceYears: null,
+    documentType: documentNumber ? 'NATIONAL_ID' : null,
+    documentNumber,
+    documentExpiryDate: null,
+    birthDate: null,
+    age: null,
+    ethnicity: null,
+    maritalStatus: null,
+    politicalStatus: null,
+    nativePlace: null,
+    householdType: null,
+    householdAddress: null,
+    residentialAddress: null,
+    emergencyContactName: null,
+    emergencyContactRelationship: null,
+    emergencyContactMobile: null,
+    bankName: null,
+    bankBranchName: null,
+    bankAccountNumber: null,
+    graduationSchoolName: null,
+    institutionType: null,
+    highestEducation: null,
+    graduationDate: null,
+    major: null,
+  };
+}
+
+export function presentDemoEmployeeDetail(
+  employee: EmployeeWithCurrentRecord,
+  visibleOrganizationIds?: readonly string[],
+): EmployeeDetail {
+  return {
+    ...presentDemoEmployeeListItem(employee, visibleOrganizationIds),
+    assignmentId: null,
+    positionId: null,
+    workplaceId: null,
+    agreementEmployingCompanyId: null,
+    primaryDocumentId: null,
+    emergencyContactId: null,
+    highestEducationId: null,
+  };
+}
+
+function formatDate(value: Date | null | undefined) {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
+function yearsBetween(start: Date, end: Date) {
+  const millisecondsPerYear = 365.2425 * 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.round(((end.getTime() - start.getTime()) / millisecondsPerYear) * 100) / 100);
+}
+
+function sumExperienceYears(
+  records: Array<{ startDate: Date; endDate: Date | null }>,
+  now: Date,
+) {
+  if (records.length === 0) return null;
+  return Math.round(records.reduce(
+    (total, record) => total + yearsBetween(record.startDate, record.endDate ?? now),
+    0,
+  ) * 100) / 100;
+}
+
+function calculateAge(birthDate: Date | null, now: Date) {
+  if (!birthDate) return null;
+  let age = now.getUTCFullYear() - birthDate.getUTCFullYear();
+  const beforeBirthday = now.getUTCMonth() < birthDate.getUTCMonth()
+    || (now.getUTCMonth() === birthDate.getUTCMonth() && now.getUTCDate() < birthDate.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
+export function presentEmployeeListItem(
+  employee: EmployeeListSnapshot,
+  now = new Date(),
+  visibleOrganizationIds?: readonly string[],
+): EmployeeListItem {
+  const currentRecord = employee.employmentRecords[0];
+  if (!currentRecord) throw new Error(`Employee ${employee.id} has no current employment record`);
+
+  const currentPeriod = employee.employmentPeriods[0] ?? null;
+  const currentAgreement = currentPeriod?.agreements?.[0] ?? null;
+  const allowedAssignments = visibleOrganizationIds
+    ? employee.assignments.filter((assignment) => visibleOrganizationIds.includes(assignment.organization.id))
+    : employee.assignments;
+  const currentAssignment = allowedAssignments.find((assignment) => assignment.isPrimary)
+    ?? allowedAssignments[0]
+    ?? null;
+  const currentManager = currentAssignment
+    ? (employee.reportingAsEmployee.find((relationship) => relationship.isPrimary)
+      ?? employee.reportingAsEmployee[0]
+      ?? null)
+    : null;
+  const primaryDocument = employee.identityDocuments.find((document) => document.isPrimary)
+    ?? employee.identityDocuments[0]
+    ?? null;
+  const emergencyContact = employee.familyMembers.find((member) => member.isEmergencyContact) ?? null;
+  const highestEducation = employee.educationExperiences.find((education) => education.isHighestEducation)
+    ?? employee.educationExperiences[0]
+    ?? null;
+
+  return {
+    ...presentEmployee(employee, visibleOrganizationIds),
+    organizationId: currentAssignment?.organization.id ?? '',
+    organizationName: currentAssignment?.organization.name ?? '',
+    entryDate: formatDate(currentPeriod?.entryDate),
+    positionName: currentAssignment?.position?.name ?? null,
+    gender: employee.gender,
+    personnelPosition: currentAssignment?.personnelPosition ?? null,
+    jobLevel: currentAssignment?.jobLevel ?? null,
+    employeeLevel: currentAssignment?.employeeLevel ?? null,
+    workplaceName: currentAssignment?.workplace?.name ?? null,
+    workEmail: employee.workEmail,
+    personalEmail: employee.personalEmail,
+    personnelCategory: currentAssignment?.personnelCategory ?? currentPeriod?.personnelCategory ?? null,
+    personnelSource: currentAssignment?.personnelSource ?? currentPeriod?.personnelSource ?? null,
+    fullTimeCompany: currentAgreement?.employingCompany?.name ?? null,
+    employmentRelationship: currentAssignment?.employmentRelationship ?? currentPeriod?.employmentRelationship ?? null,
+    workArrangement: currentAssignment
+      ? currentAssignment.workArrangement as WorkArrangement
+      : null,
+    managerName: currentManager?.manager.name ?? null,
+    managerEmail: currentManager?.manager.workEmail ?? null,
+    totalWorkYears: sumExperienceYears(employee.workExperiences, now),
+    totalServiceYears: sumExperienceYears(
+      employee.employmentPeriods.map((period) => ({
+        startDate: period.entryDate,
+        endDate: period.actualExitDate,
+      })),
+      now,
+    ),
+    documentType: primaryDocument?.documentType ?? null,
+    documentNumber: primaryDocument?.documentNumber ?? null,
+    documentExpiryDate: formatDate(primaryDocument?.expiryDate),
+    birthDate: formatDate(employee.birthDate),
+    age: calculateAge(employee.birthDate, now),
+    ethnicity: employee.ethnicity as EmployeeListItem['ethnicity'],
+    maritalStatus: employee.maritalStatus as EmployeeListItem['maritalStatus'],
+    politicalStatus: employee.politicalStatus as EmployeeListItem['politicalStatus'],
+    nativePlace: employee.nativePlace,
+    householdType: employee.householdType as EmployeeListItem['householdType'] ?? null,
+    householdAddress: employee.householdAddress,
+    residentialAddress: employee.residentialAddress,
+    emergencyContactName: emergencyContact?.name ?? null,
+    emergencyContactRelationship: emergencyContact?.relationship ?? null,
+    emergencyContactMobile: emergencyContact?.mobile ?? null,
+    bankName: employee.bankName as EmployeeListItem['bankName'] ?? null,
+    bankBranchName: employee.bankBranchName ?? null,
+    bankAccountNumber: employee.bankAccountNumber ?? null,
+    graduationSchoolName: highestEducation?.schoolName ?? null,
+    institutionType: highestEducation?.institutionType as EmployeeListItem['institutionType'] ?? null,
+    highestEducation: highestEducation?.educationLevel as EmployeeListItem['highestEducation'] ?? null,
+    graduationDate: formatDate(highestEducation?.graduationDate),
+    major: highestEducation?.major ?? null,
+  };
+}
+
+export function presentEmployeeDetail(
+  employee: EmployeeListSnapshot,
+  now = new Date(),
+  visibleOrganizationIds?: readonly string[],
+): EmployeeDetail {
+  const item = presentEmployeeListItem(employee, now, visibleOrganizationIds);
+  const allowedAssignments = visibleOrganizationIds
+    ? employee.assignments.filter((assignment) => visibleOrganizationIds.includes(assignment.organization.id))
+    : employee.assignments;
+  const assignment = allowedAssignments.find((candidate) => candidate.isPrimary) ?? allowedAssignments[0] ?? null;
+  const currentPeriod = employee.employmentPeriods[0] ?? null;
+  const currentAgreement = currentPeriod?.agreements?.[0] ?? null;
+  const document = employee.identityDocuments.find((candidate) => candidate.isPrimary) ?? employee.identityDocuments[0] ?? null;
+  const emergencyContact = employee.familyMembers.find((candidate) => candidate.isEmergencyContact) ?? null;
+  const highestEducation = employee.educationExperiences.find((candidate) => candidate.isHighestEducation)
+    ?? employee.educationExperiences[0]
+    ?? null;
+
+  return {
+    ...item,
+    assignmentId: assignment?.id ?? null,
+    positionId: assignment?.position?.id ?? null,
+    workplaceId: assignment?.workplace?.id ?? null,
+    agreementEmployingCompanyId: currentAgreement?.employingCompany?.id ?? null,
+    primaryDocumentId: document?.id ?? null,
+    emergencyContactId: emergencyContact?.id ?? null,
+    highestEducationId: highestEducation?.id ?? null,
   };
 }

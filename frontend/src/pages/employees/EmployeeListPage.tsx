@@ -1,43 +1,328 @@
-import { EditOutlined, EyeOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
-import { PERMISSIONS, type Employee, type EmployeeListQuery, type EmploymentStatus } from '@hr-demo/shared';
-import { Alert, Button, Empty, Space, Table } from 'antd';
+import { EyeOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
+import {
+  PERMISSIONS,
+  type EmployeeListItem,
+  type EmployeeListQuery,
+  type EmploymentStatus,
+  type InternListQuery,
+  type PersonnelLaborWorkerListItem,
+  type PersonnelLaborWorkerListQuery,
+  type PersonnelResignedListItem,
+  type PersonnelResignedListQuery,
+  type RegularEmployeeListItem,
+  type RegularEmployeeListQuery,
+} from '@hr-demo/shared';
+import { Alert, Button, DatePicker, Empty, Input, Table, Typography } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
-import { useMemo, useState } from 'react';
+import dayjs from 'dayjs';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { CheckboxFilterDropdown } from '../../components/CheckboxFilterDropdown';
+import {
+  bankNameLabels,
+  educationLevelLabels,
+  employeeLevelLabels,
+  employmentRelationshipLabels,
+  ethnicityLabels,
+  householdTypeLabels,
+  institutionTypeLabels,
+  maritalStatusLabels,
+  personnelCategoryLabels,
+  personnelPositionLabels,
+  personnelSourceLabels,
+  politicalStatusLabels,
+  workArrangementLabels,
+} from '../../config/personnel-fields';
 import { useAuth } from '../../features/auth/auth-context';
-import { useEmployees, useOrganizations } from '../../features/employees/api';
+import {
+  useEmployees,
+  useOrganizations,
+  usePersonnelLaborWorkers,
+  usePersonnelResigned,
+  useRegularEmployees,
+} from '../../features/employees/api';
 import { employmentStatusLabels, EmploymentStatusTag } from '../../features/employees/status';
-import { CheckboxFilterDropdown, type CheckboxFilterOption } from '../../components/CheckboxFilterDropdown';
+import { useInterns } from '../../features/employment/api';
+import { internColumns } from '../employment/InternManagementPage';
+
+const personnelViews = ['all', 'regular', 'intern', 'labor', 'resigned'] as const;
+type PersonnelView = (typeof personnelViews)[number];
+
+const personnelViewCards: Array<{ view: PersonnelView; label: string }> = [
+  { view: 'all', label: '全部在职' },
+  { view: 'regular', label: '正式人员' },
+  { view: 'intern', label: '实习生' },
+  { view: 'labor', label: '劳务人员' },
+  { view: 'resigned', label: '离职人员' },
+];
 
 function positiveInt(value: string | null, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function isPersonnelView(value: string | null): value is PersonnelView {
+  return Boolean(value && personnelViews.includes(value as PersonnelView));
+}
+
+const genderLabels: Record<string, string> = {
+  MALE: '男',
+  FEMALE: '女',
+  UNDISCLOSED: '保密',
+};
+
+const documentTypeLabels: Record<string, string> = {
+  NATIONAL_ID: '居民身份证',
+  PASSPORT: '护照',
+  HK_MACAO_PERMIT: '港澳通行证',
+  TAIWAN_PERMIT: '台湾通行证',
+  RESIDENCE_PERMIT: '居住证',
+  OTHER: '其他证件',
+};
+
+function displayValue(value: string | number | null | undefined) {
+  return value === null || value === undefined || value === '' ? '--' : value;
+}
+
+function renderEmployeeDetailAction(employeeId: string, canViewEmployeeDetail: boolean) {
+  if (!canViewEmployeeDetail) {
+    return <Button type="link" size="small" disabled>暂无详情</Button>;
+  }
+
+  return (
+    <Link to={`/personnel/employees/${employeeId}`}>
+      <Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
+    </Link>
+  );
+}
+
+const employeeColumns: ColumnsType<EmployeeListItem> = [
+  { title: '工号', dataIndex: 'employeeNo', width: 120, fixed: 'left' },
+  {
+    title: '姓名',
+    dataIndex: 'name',
+    width: 112,
+    fixed: 'left',
+    render: (name: string, employee) => (
+      <Link to={`/personnel/employees/${employee.id}`}>{name}</Link>
+    ),
+  },
+  { title: '部门', dataIndex: 'organizationName', width: 144, render: displayValue },
+  { title: '入职日期', dataIndex: 'entryDate', width: 96, render: displayValue },
+  { title: '职位', dataIndex: 'positionName', width: 120, render: displayValue },
+  { title: '性别', dataIndex: 'gender', width: 90, render: (value) => displayValue(value ? genderLabels[value] : null) },
+  { title: '人员定位', dataIndex: 'personnelPosition', width: 120, render: (value) => displayValue(value ? personnelPositionLabels[value as keyof typeof personnelPositionLabels] ?? value : null) },
+  { title: '职级', dataIndex: 'jobLevel', width: 110, render: displayValue },
+  { title: '员工层级', dataIndex: 'employeeLevel', width: 120, render: (value) => displayValue(value ? employeeLevelLabels[value as keyof typeof employeeLevelLabels] ?? value : null) },
+  { title: '工作地点', dataIndex: 'workplaceName', width: 140, render: displayValue },
+  { title: '企业邮箱', dataIndex: 'workEmail', width: 220, render: displayValue },
+  { title: '个人邮箱', dataIndex: 'personalEmail', width: 220, render: displayValue },
+  { title: '手机号码', dataIndex: 'mobile', width: 150, render: displayValue },
+  {
+    title: '人员类别',
+    dataIndex: 'personnelCategory',
+    width: 120,
+    render: (value) => displayValue(value ? personnelCategoryLabels[value as keyof typeof personnelCategoryLabels] ?? value : null),
+  },
+  { title: '人员来源', dataIndex: 'personnelSource', width: 120, render: (value) => displayValue(value ? personnelSourceLabels[value as keyof typeof personnelSourceLabels] ?? value : null) },
+  {
+    title: '人员状态',
+    dataIndex: 'employmentStatus',
+    width: 120,
+    render: (status: EmploymentStatus) => <EmploymentStatusTag status={status} />,
+  },
+  { title: '全日制公司', dataIndex: 'fullTimeCompany', width: 150, render: displayValue },
+  { title: '雇佣关系', dataIndex: 'employmentRelationship', width: 120, render: (value) => displayValue(value ? employmentRelationshipLabels[value as keyof typeof employmentRelationshipLabels] ?? value : null) },
+  {
+    title: '用工形式',
+    dataIndex: 'workArrangement',
+    width: 110,
+    render: (value) => displayValue(value ? workArrangementLabels[value as keyof typeof workArrangementLabels] ?? value : null),
+  },
+  { title: '直线经理', dataIndex: 'managerName', width: 120, render: displayValue },
+  { title: '直线经理邮箱', dataIndex: 'managerEmail', width: 220, render: displayValue },
+  { title: '累计工龄（年）', dataIndex: 'totalWorkYears', width: 140, render: displayValue },
+  { title: '累计司龄（年）', dataIndex: 'totalServiceYears', width: 140, render: displayValue },
+  {
+    title: '证件类型',
+    dataIndex: 'documentType',
+    width: 130,
+    render: (value) => displayValue(value ? documentTypeLabels[value] : null),
+  },
+  { title: '证件号码', dataIndex: 'documentNumber', width: 200, render: displayValue },
+  { title: '证件截止日期', dataIndex: 'documentExpiryDate', width: 140, render: displayValue },
+  { title: '出生日期', dataIndex: 'birthDate', width: 120, render: displayValue },
+  { title: '年龄', dataIndex: 'age', width: 90, render: displayValue },
+  { title: '民族', dataIndex: 'ethnicity', width: 100, render: (value) => displayValue(value ? ethnicityLabels[value as keyof typeof ethnicityLabels] ?? value : null) },
+  { title: '婚姻状况', dataIndex: 'maritalStatus', width: 110, render: (value) => displayValue(value ? maritalStatusLabels[value as keyof typeof maritalStatusLabels] ?? value : null) },
+  { title: '政治面貌', dataIndex: 'politicalStatus', width: 120, render: (value) => displayValue(value ? politicalStatusLabels[value as keyof typeof politicalStatusLabels] ?? value : null) },
+  { title: '籍贯', dataIndex: 'nativePlace', width: 130, render: displayValue },
+  { title: '户口类别', dataIndex: 'householdType', width: 120, render: (value) => displayValue(value ? householdTypeLabels[value as keyof typeof householdTypeLabels] ?? value : null) },
+  { title: '户籍所在地', dataIndex: 'householdAddress', width: 240, render: displayValue },
+  { title: '联系地址', dataIndex: 'residentialAddress', width: 240, render: displayValue },
+  { title: '紧急联系人', dataIndex: 'emergencyContactName', width: 130, render: displayValue },
+  { title: '与本人关系', dataIndex: 'emergencyContactRelationship', width: 120, render: displayValue },
+  { title: '紧急联系人电话', dataIndex: 'emergencyContactMobile', width: 160, render: displayValue },
+  { title: '银行', dataIndex: 'bankName', width: 150, render: (value) => displayValue(value ? bankNameLabels[value as keyof typeof bankNameLabels] ?? value : null) },
+  { title: '开户行支行', dataIndex: 'bankBranchName', width: 180, render: displayValue },
+  { title: '银行账号', dataIndex: 'bankAccountNumber', width: 200, render: displayValue },
+  { title: '毕业学校名称', dataIndex: 'graduationSchoolName', width: 200, render: displayValue },
+  { title: '院校类型', dataIndex: 'institutionType', width: 120, render: (value) => displayValue(value ? institutionTypeLabels[value as keyof typeof institutionTypeLabels] ?? value : null) },
+  { title: '最高学历', dataIndex: 'highestEducation', width: 110, render: (value) => displayValue(value ? educationLevelLabels[value as keyof typeof educationLevelLabels] ?? value : null) },
+  { title: '毕业时间', dataIndex: 'graduationDate', width: 120, render: displayValue },
+  { title: '专业', dataIndex: 'major', width: 160, render: displayValue },
+  {
+    title: '操作',
+    key: 'actions',
+    fixed: 'right',
+    width: 100,
+    render: (_, employee) => (
+      <Link to={`/personnel/employees/${employee.id}`}>
+        <Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
+      </Link>
+    ),
+  },
+];
+
+const regularEmployeeColumns: ColumnsType<RegularEmployeeListItem> = [
+  { title: '姓名', dataIndex: 'name', width: 120, fixed: 'left', render: displayValue },
+  { title: '工号', dataIndex: 'employeeNo', width: 130, fixed: 'left', render: displayValue },
+  { title: '入职日期', dataIndex: 'entryDate', width: 130, render: displayValue },
+  { title: '部门', dataIndex: 'departmentName', width: 160, render: displayValue },
+  { title: '职位', dataIndex: 'positionName', width: 150, render: displayValue },
+  { title: '职级', dataIndex: 'jobLevel', width: 110, render: displayValue },
+  { title: '性别', dataIndex: 'gender', width: 90, render: (value) => displayValue(value ? genderLabels[value] : null) },
+  { title: '企业邮箱', dataIndex: 'workEmail', width: 220, render: displayValue },
+  {
+    title: '用工形式',
+    dataIndex: 'workArrangement',
+    width: 120,
+    render: (value) => displayValue(workArrangementLabels[value as keyof typeof workArrangementLabels] ?? value),
+  },
+  { title: '直线经理', dataIndex: 'managerName', width: 130, render: displayValue },
+  { title: '简历信息', dataIndex: 'resumeInfo', width: 120, render: displayValue },
+  { title: '面试评价', dataIndex: 'interviewEvaluation', width: 120, render: displayValue },
+  { title: '银行', dataIndex: 'bankName', width: 150, render: (value) => displayValue(value ? bankNameLabels[value as keyof typeof bankNameLabels] ?? value : null) },
+  { title: '银行账号', dataIndex: 'bankAccountNumber', width: 200, render: displayValue },
+  { title: '开户行支行', dataIndex: 'bankBranchName', width: 180, render: displayValue },
+  { title: '全日制公司', dataIndex: 'fullTimeCompany', width: 180, render: displayValue },
+  {
+    title: '操作',
+    key: 'actions',
+    fixed: 'right',
+    width: 100,
+    render: (_, employee) => renderEmployeeDetailAction(employee.employeeId, employee.canViewEmployeeDetail),
+  },
+];
+
+const personnelLaborWorkerColumns: ColumnsType<PersonnelLaborWorkerListItem> = [
+  { title: '姓名', dataIndex: 'name', width: 120, fixed: 'left', render: displayValue },
+  { title: '电子邮箱', dataIndex: 'workEmail', width: 220, render: displayValue },
+  { title: '工号', dataIndex: 'employeeNo', width: 130, render: displayValue },
+  { title: '入职日期', dataIndex: 'entryDate', width: 130, render: displayValue },
+  { title: '部门', dataIndex: 'departmentName', width: 160, render: displayValue },
+  { title: '职务', dataIndex: 'jobTitleName', width: 150, render: displayValue },
+  { title: '职位', dataIndex: 'positionName', width: 150, render: displayValue },
+  {
+    title: '用工形式',
+    dataIndex: 'workArrangement',
+    width: 120,
+    render: (value) => displayValue(workArrangementLabels[value as keyof typeof workArrangementLabels] ?? value),
+  },
+  { title: '直线经理', dataIndex: 'managerName', width: 130, render: displayValue },
+  {
+    title: '操作',
+    key: 'actions',
+    fixed: 'right',
+    width: 100,
+    render: (_, employee) => renderEmployeeDetailAction(employee.employeeId, employee.canViewEmployeeDetail),
+  },
+];
+
+const personnelResignedColumns: ColumnsType<PersonnelResignedListItem> = [
+  { title: '工号', dataIndex: 'employeeNo', width: 130, fixed: 'left', render: displayValue },
+  { title: '姓名', dataIndex: 'name', width: 120, fixed: 'left', render: displayValue },
+  { title: '部门', dataIndex: 'departmentName', width: 160, render: displayValue },
+  { title: '性别', dataIndex: 'gender', width: 90, render: (value) => displayValue(value ? genderLabels[value] : null) },
+  { title: '入职日期', dataIndex: 'entryDate', width: 130, render: displayValue },
+  { title: '离职前职位', dataIndex: 'previousPositionName', width: 150, render: displayValue },
+  { title: '离职原因', dataIndex: 'terminationReason', width: 220, ellipsis: true, render: displayValue },
+  { title: '异动类型', dataIndex: 'movementType', width: 120, render: displayValue },
+  {
+    title: '最后工作日',
+    dataIndex: 'lastWorkingDate',
+    width: 165,
+    render: (date: string, employee) => (
+      <span>
+        {displayValue(date)}
+        <Typography.Text type="secondary">（{employee.lastWorkingDateBasis === 'ACTUAL' ? '实际' : '计划'}）</Typography.Text>
+      </span>
+    ),
+  },
+  { title: '全日制公司', dataIndex: 'fullTimeCompany', width: 180, render: displayValue },
+  { title: '证件号码', dataIndex: 'documentNumber', width: 200, render: displayValue },
+  { title: '手机号码', dataIndex: 'mobile', width: 150, render: displayValue },
+];
+
 export function EmployeeListPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const requestedView = searchParams.get('view');
+  const view: PersonnelView = isPersonnelView(requestedView) ? requestedView : 'all';
+  const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') ?? '');
 
-  const query = useMemo<EmployeeListQuery>(() => ({
+  const employeeQuery = useMemo<EmployeeListQuery>(() => ({
     keyword: searchParams.get('keyword') || undefined,
     organizationId: searchParams.get('organizationId') || undefined,
     status: (searchParams.get('status') as EmploymentStatus | null) ?? undefined,
     page: positiveInt(searchParams.get('page'), 1),
     pageSize: positiveInt(searchParams.get('pageSize'), 10),
   }), [searchParams]);
+  const regularQuery = useMemo<RegularEmployeeListQuery>(() => ({
+    keyword: searchParams.get('keyword') || undefined,
+    organizationId: searchParams.get('organizationId') || undefined,
+    page: positiveInt(searchParams.get('page'), 1),
+    pageSize: positiveInt(searchParams.get('pageSize'), 10),
+  }), [searchParams]);
+  const internQuery = useMemo<InternListQuery>(() => ({
+    keyword: searchParams.get('keyword') || undefined,
+    startDateFrom: searchParams.get('startDateFrom') || undefined,
+    startDateTo: searchParams.get('startDateTo') || undefined,
+    page: positiveInt(searchParams.get('page'), 1),
+    pageSize: positiveInt(searchParams.get('pageSize'), 10),
+  }), [searchParams]);
+  const laborQuery = useMemo<PersonnelLaborWorkerListQuery>(() => ({
+    keyword: searchParams.get('keyword') || undefined,
+    entryDateFrom: searchParams.get('entryDateFrom') || undefined,
+    entryDateTo: searchParams.get('entryDateTo') || undefined,
+    page: positiveInt(searchParams.get('page'), 1),
+    pageSize: positiveInt(searchParams.get('pageSize'), 10),
+  }), [searchParams]);
+  const resignedQuery = useMemo<PersonnelResignedListQuery>(() => ({
+    keyword: searchParams.get('keyword') || undefined,
+    lastWorkingDateFrom: searchParams.get('lastWorkingDateFrom') || undefined,
+    lastWorkingDateTo: searchParams.get('lastWorkingDateTo') || undefined,
+    page: positiveInt(searchParams.get('page'), 1),
+    pageSize: positiveInt(searchParams.get('pageSize'), 10),
+  }), [searchParams]);
 
-  const employees = useEmployees(query);
+  const employees = useEmployees(employeeQuery);
+  const regularEmployees = useRegularEmployees(regularQuery);
+  const interns = useInterns(internQuery);
+  const laborWorkers = usePersonnelLaborWorkers(laborQuery);
+  const resignedEmployees = usePersonnelResigned(resignedQuery);
   const organizations = useOrganizations();
   const canCreate = Boolean(user?.permissions.includes(PERMISSIONS.EMPLOYEE_CREATE));
-  const canUpdate = Boolean(user?.permissions.includes(PERMISSIONS.EMPLOYEE_UPDATE));
-  const overview = [
-    { label: '全部在职', value: employees.data?.meta.total ?? '--', emphasized: true },
-    { label: '正式人员', value: '--' },
-    { label: '实习生', value: '--' },
-    { label: '劳务人员', value: '--' },
-    { label: '离职人员', value: '--' },
-  ];
+
+  useEffect(() => {
+    setSelectedRowKeys([]);
+  }, [searchParams]);
+
+  useEffect(() => {
+    setKeywordInput(searchParams.get('keyword') ?? '');
+  }, [searchParams]);
 
   const patchSearch = (changes: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams);
@@ -48,63 +333,291 @@ export function EmployeeListPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const switchView = (nextView: PersonnelView) => {
+    const retainedKeys: Record<PersonnelView, readonly string[]> = {
+      all: ['keyword', 'organizationId', 'status', 'pageSize'],
+      regular: ['keyword', 'organizationId', 'pageSize'],
+      intern: ['keyword', 'startDateFrom', 'startDateTo', 'pageSize'],
+      labor: ['keyword', 'entryDateFrom', 'entryDateTo', 'pageSize'],
+      resigned: ['keyword', 'lastWorkingDateFrom', 'lastWorkingDateTo', 'pageSize'],
+    };
+    const next = new URLSearchParams();
+    retainedKeys[nextView].forEach((key) => {
+      const value = searchParams.get(key);
+      if (value) next.set(key, value);
+    });
+    next.set('view', nextView);
+    next.set('page', '1');
+    setSearchParams(next, { replace: true });
+  };
+
   const handleTableChange = (pagination: TablePaginationConfig) => {
     patchSearch({ page: pagination.current ?? 1, pageSize: pagination.pageSize ?? 10 });
   };
 
-  const columns: ColumnsType<Employee> = [
-    {
-      title: '工号',
-      dataIndex: 'employeeNo',
-      width: 140,
-      sorter: (a, b) => a.employeeNo.localeCompare(b.employeeNo),
-    },
-    {
-      title: '姓名',
-      dataIndex: 'name',
-      width: 130,
-      render: (name: string, employee) => <Link to={`/personnel/employees/${employee.id}`}>{name}</Link>,
-    },
-    { title: '所属部门', dataIndex: 'organizationName', width: 180 },
-    {
-      title: '任职状态',
-      dataIndex: 'employmentStatus',
-      width: 120,
-      render: (status: EmploymentStatus) => <EmploymentStatusTag status={status} />,
-    },
-    { title: '手机号', dataIndex: 'mobile', width: 150 },
-    {
-      title: '操作',
-      key: 'actions',
-      fixed: 'right',
-      width: canUpdate ? 150 : 82,
-      render: (_, employee) => (
-        <Space size={4}>
-          <Link to={`/personnel/employees/${employee.id}`}>
-            <Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
-          </Link>
-          {canUpdate ? (
-            <Link to={`/personnel/employees/${employee.id}/edit`}>
-              <Button type="link" size="small" icon={<EditOutlined />}>编辑</Button>
-            </Link>
-          ) : null}
-        </Space>
-      ),
-    },
-  ];
-
-  const employeeFilterOptions: CheckboxFilterOption[] = (employees.data?.data ?? []).map((employee) => ({
-    label: `${employee.name} (${employee.employeeNo})`,
-    value: employee.id,
-  }));
-  const departmentFilterOptions: CheckboxFilterOption[] = (organizations.data ?? []).map((organization) => ({
+  const departmentOptions = (organizations.data ?? []).map((organization) => ({
     label: organization.name,
     value: organization.id,
   }));
-  const statusFilterOptions: CheckboxFilterOption[] = Object.entries(employmentStatusLabels).map(([value, label]) => ({
+  const statusOptions = Object.entries(employmentStatusLabels).map(([value, label]) => ({
     label,
     value,
   }));
+  const employeeOptions = (employees.data?.data ?? []).map((employee) => ({
+    label: `${employee.name}（${employee.employeeNo}）`,
+    value: employee.id,
+  }));
+
+  const activeQuery = view === 'all'
+    ? employees
+    : view === 'regular'
+      ? regularEmployees
+      : view === 'intern'
+        ? interns
+        : view === 'labor'
+          ? laborWorkers
+          : resignedEmployees;
+  const activeLabel = personnelViewCards.find((card) => card.view === view)?.label ?? '人员';
+  const cardTotals: Record<PersonnelView, number | string> = {
+    all: employees.data?.meta.total ?? '--',
+    regular: regularEmployees.data?.meta.total ?? '--',
+    intern: interns.data?.meta.total ?? '--',
+    labor: laborWorkers.data?.meta.total ?? '--',
+    resigned: resignedEmployees.data?.meta.total ?? '--',
+  };
+
+  const searchInput = (label: string, placeholder: string) => (
+    <Input.Search
+      className="personnel-view-keyword-input"
+      allowClear
+      aria-label={label}
+      placeholder={placeholder}
+      value={keywordInput}
+      onChange={(event) => {
+        setKeywordInput(event.target.value);
+        if (!event.target.value) patchSearch({ keyword: undefined, page: 1 });
+      }}
+      onSearch={(keyword) => patchSearch({ keyword: keyword.trim() || undefined, page: 1 })}
+    />
+  );
+
+  const pagination = {
+    current: employeeQuery.page,
+    pageSize: employeeQuery.pageSize,
+    total: activeQuery.data?.meta.total ?? 0,
+    showSizeChanger: true,
+    pageSizeOptions: [10, 20, 50],
+    showTotal: (total: number, range: [number, number]) => `${range[0]}-${range[1]} / 共 ${total} 条`,
+  };
+
+  const currentToolbar = (() => {
+    if (view === 'all') {
+      return (
+        <div className="employee-filter-toolbar">
+          <div className="employee-filter-controls">
+            <CheckboxFilterDropdown
+              label="人员"
+              options={employeeOptions}
+              value={selectedEmployeeIds}
+              onChange={(values) => {
+                setSelectedEmployeeIds(values);
+                const latestEmployee = employees.data?.data.find((employee) => employee.id === values.at(-1));
+                patchSearch({ keyword: latestEmployee?.employeeNo, page: 1 });
+              }}
+            />
+            <CheckboxFilterDropdown
+              label="部门"
+              options={departmentOptions}
+              value={employeeQuery.organizationId ? [employeeQuery.organizationId] : []}
+              onChange={(values) => patchSearch({ organizationId: values.at(-1), page: 1 })}
+            />
+            <CheckboxFilterDropdown
+              label="人员状态"
+              options={statusOptions}
+              value={employeeQuery.status ? [employeeQuery.status] : []}
+              onChange={(values) => patchSearch({ status: values.at(-1), page: 1 })}
+            />
+          </div>
+          <div className="employee-selection-summary" aria-live="polite">
+            <Typography.Text type="secondary">已选择 {selectedRowKeys.length} 人</Typography.Text>
+            {selectedRowKeys.length > 0 ? (
+              <Button type="link" size="small" onClick={() => setSelectedRowKeys([])}>清空</Button>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
+
+    if (view === 'regular') {
+      return (
+        <div className="employee-filter-toolbar personnel-view-filter-toolbar">
+          <div className="personnel-view-filter-controls">
+            {searchInput('搜索正式人员', '搜索姓名或工号')}
+            <CheckboxFilterDropdown
+              label="部门"
+              options={departmentOptions}
+              value={regularQuery.organizationId ? [regularQuery.organizationId] : []}
+              onChange={(values) => patchSearch({ organizationId: values.at(-1), page: 1 })}
+            />
+          </div>
+          <Typography.Text type="secondary">共 {regularEmployees.data?.meta.total ?? 0} 条</Typography.Text>
+        </div>
+      );
+    }
+
+    if (view === 'intern') {
+      return (
+        <div className="employee-filter-toolbar personnel-view-filter-toolbar">
+          <div className="personnel-view-filter-controls">
+            {searchInput('搜索实习生', '搜索姓名或工号')}
+            <DatePicker.RangePicker
+              aria-label="筛选实习开始日期"
+              value={internQuery.startDateFrom && internQuery.startDateTo
+                ? [dayjs(internQuery.startDateFrom), dayjs(internQuery.startDateTo)]
+                : null}
+              onChange={(_, dates) => patchSearch({
+                startDateFrom: dates[0] || undefined,
+                startDateTo: dates[1] || undefined,
+                page: 1,
+              })}
+            />
+          </div>
+          <Typography.Text type="secondary">共 {interns.data?.meta.total ?? 0} 条</Typography.Text>
+        </div>
+      );
+    }
+
+    if (view === 'labor') {
+      return (
+        <div className="employee-filter-toolbar personnel-view-filter-toolbar">
+          <div className="personnel-view-filter-controls">
+            {searchInput('搜索劳务人员', '搜索姓名或工号')}
+            <DatePicker.RangePicker
+              aria-label="筛选劳务人员入职日期"
+              value={laborQuery.entryDateFrom && laborQuery.entryDateTo
+                ? [dayjs(laborQuery.entryDateFrom), dayjs(laborQuery.entryDateTo)]
+                : null}
+              onChange={(_, dates) => patchSearch({
+                entryDateFrom: dates[0] || undefined,
+                entryDateTo: dates[1] || undefined,
+                page: 1,
+              })}
+            />
+          </div>
+          <Typography.Text type="secondary">共 {laborWorkers.data?.meta.total ?? 0} 条</Typography.Text>
+        </div>
+      );
+    }
+
+    return (
+      <div className="employee-filter-toolbar personnel-view-filter-toolbar">
+        <div className="personnel-view-filter-controls">
+          {searchInput('搜索离职人员', '搜索姓名或工号')}
+          <DatePicker.RangePicker
+            aria-label="筛选最后工作日"
+            value={resignedQuery.lastWorkingDateFrom && resignedQuery.lastWorkingDateTo
+              ? [dayjs(resignedQuery.lastWorkingDateFrom), dayjs(resignedQuery.lastWorkingDateTo)]
+              : null}
+            onChange={(_, dates) => patchSearch({
+              lastWorkingDateFrom: dates[0] || undefined,
+              lastWorkingDateTo: dates[1] || undefined,
+              page: 1,
+            })}
+          />
+        </div>
+        <Typography.Text type="secondary">共 {resignedEmployees.data?.meta.total ?? 0} 条</Typography.Text>
+      </div>
+    );
+  })();
+
+  const currentTable = (() => {
+    if (view === 'all') {
+      return (
+        <Table<EmployeeListItem>
+          className="employee-table"
+          rowKey="id"
+          rowSelection={{
+            selectedRowKeys,
+            preserveSelectedRowKeys: false,
+            onChange: setSelectedRowKeys,
+          }}
+          loading={employees.isLoading}
+          columns={employeeColumns}
+          dataSource={employees.data?.data ?? []}
+          scroll={{ x: 7_200 }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的员工" /> }}
+          pagination={pagination}
+          onChange={handleTableChange}
+        />
+      );
+    }
+
+    if (view === 'regular') {
+      return (
+        <Table<RegularEmployeeListItem>
+          className="employee-table personnel-view-table"
+          rowKey="employeeId"
+          rowSelection={{ columnWidth: 38 }}
+          loading={regularEmployees.isLoading}
+          columns={regularEmployeeColumns}
+          dataSource={regularEmployees.data?.data ?? []}
+          scroll={{ x: 2_500 }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的正式人员" /> }}
+          pagination={pagination}
+          onChange={handleTableChange}
+        />
+      );
+    }
+
+    if (view === 'intern') {
+      return (
+        <Table
+          className="employee-table intern-table"
+          rowKey="id"
+          rowSelection={{ columnWidth: 38 }}
+          loading={interns.isLoading}
+          columns={internColumns}
+          dataSource={interns.data?.data ?? []}
+          scroll={{ x: 1_650 }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的实习生任职记录" /> }}
+          pagination={pagination}
+          onChange={handleTableChange}
+        />
+      );
+    }
+
+    if (view === 'labor') {
+      return (
+        <Table<PersonnelLaborWorkerListItem>
+          className="employee-table personnel-view-table"
+          rowKey="employeeId"
+          rowSelection={{ columnWidth: 38 }}
+          loading={laborWorkers.isLoading}
+          columns={personnelLaborWorkerColumns}
+          dataSource={laborWorkers.data?.data ?? []}
+          scroll={{ x: 1_650 }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的当前劳务人员" /> }}
+          pagination={pagination}
+          onChange={handleTableChange}
+        />
+      );
+    }
+
+    return (
+      <Table<PersonnelResignedListItem>
+        className="employee-table personnel-view-table"
+        rowKey="id"
+        rowSelection={{ columnWidth: 38 }}
+        loading={resignedEmployees.isLoading}
+        columns={personnelResignedColumns}
+        dataSource={resignedEmployees.data?.data ?? []}
+        scroll={{ x: 1_850 }}
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的已完成离职人员" /> }}
+        pagination={pagination}
+        onChange={handleTableChange}
+      />
+    );
+  })();
 
   return (
     <section className="employee-list-page" aria-labelledby="employees-heading">
@@ -115,70 +628,40 @@ export function EmployeeListPage() {
         </div>
         {canCreate ? (
           <Link to="/personnel/employees/new">
-            <Button type="primary" icon={<PlusOutlined />}>新增员工</Button>
+            <Button type="primary" icon={<PlusOutlined />}>新增人员</Button>
           </Link>
         ) : null}
       </header>
 
-      <div className="employee-overview" aria-label="人员统计概览">
-        {overview.map((metric) => (
-          <div className={`employee-overview-card${metric.emphasized ? ' is-emphasized' : ''}`} key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-          </div>
+      <div className="employee-overview" aria-label="人员分类">
+        {personnelViewCards.map((card) => (
+          <button
+            className={`employee-overview-card${view === card.view ? ' is-active' : ''}`}
+            key={card.view}
+            type="button"
+            aria-pressed={view === card.view}
+            onClick={() => switchView(card.view)}
+          >
+            <span>{card.label}</span>
+            <strong>{cardTotals[card.view]}</strong>
+          </button>
         ))}
       </div>
 
-      {employees.isError ? (
+      {activeQuery.isError ? (
         <Alert
           className="content-alert"
           type="error"
           showIcon
-          message="人员列表加载失败"
-          description={employees.error.message}
-          action={<Button size="small" onClick={() => employees.refetch()}>重试</Button>}
+          message={`${activeLabel}加载失败`}
+          description={activeQuery.error.message}
+          action={<Button size="small" onClick={() => activeQuery.refetch()}>重试</Button>}
         />
       ) : null}
 
       <div className="employee-table-surface">
-        <div className="employee-filter-row">
-          <CheckboxFilterDropdown
-            label="人员"
-            options={employeeFilterOptions}
-            value={selectedFilters.employee ?? []}
-            onChange={(values) => setSelectedFilters((current) => ({ ...current, employee: values }))}
-          />
-          <CheckboxFilterDropdown
-            label="部门"
-            options={departmentFilterOptions}
-            value={selectedFilters.department ?? []}
-            onChange={(values) => setSelectedFilters((current) => ({ ...current, department: values }))}
-          />
-          <CheckboxFilterDropdown
-            label="任职状态"
-            options={statusFilterOptions}
-            value={selectedFilters.status ?? []}
-            onChange={(values) => setSelectedFilters((current) => ({ ...current, status: values }))}
-          />
-        </div>
-        <Table<Employee>
-          className="employee-table"
-          rowKey="id"
-          loading={employees.isLoading}
-          columns={columns}
-          dataSource={employees.data?.data ?? []}
-          scroll={{ x: 900 }}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的员工" /> }}
-          pagination={{
-            current: query.page,
-            pageSize: query.pageSize,
-            total: employees.data?.meta.total ?? 0,
-            showSizeChanger: true,
-            pageSizeOptions: [10, 20, 50],
-            showTotal: (total, range) => `${range[0]}-${range[1]} / 共 ${total} 条`,
-          }}
-          onChange={handleTableChange}
-        />
+        {currentToolbar}
+        {currentTable}
       </div>
     </section>
   );

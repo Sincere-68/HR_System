@@ -19,13 +19,13 @@ describe('DemoDataService', () => {
     expect(service.getUser('demo-user-admin')?.username).toBe('admin');
   });
 
-  it('keeps the three role scopes and sensitive permissions separate', () => {
+  it('keeps the three role scopes and operation permissions separate', () => {
     const service = createService();
     const departmentAdmin = service.authenticate('deptadmin', 'Demo@123');
     const viewer = service.authenticate('viewer', 'Demo@123');
 
     expect(departmentAdmin?.organizationIds).toEqual(['demo-org-product', 'demo-org-operations']);
-    expect(departmentAdmin?.permissions).not.toContain(PERMISSIONS.EMPLOYEE_SENSITIVE_READ);
+    expect(departmentAdmin?.permissions).toContain(PERMISSIONS.EMPLOYEE_UPDATE);
     expect(viewer?.organizationIds).toEqual(['demo-org-sales']);
     expect(viewer?.permissions).not.toContain(PERMISSIONS.EMPLOYEE_CREATE);
   });
@@ -38,19 +38,19 @@ describe('DemoDataService', () => {
       mobile: '13800004001',
       idCardNo: '110101199901011234',
       organizationId: 'demo-org-product',
-      employmentStatus: 'ACTIVE',
+      employmentStatus: 'REGULAR',
     });
 
     service.updateEmployee(created, {
       name: '演示员工（已编辑）',
       organizationId: 'demo-org-operations',
-      employmentStatus: 'INACTIVE',
+      employmentStatus: 'RESIGNED',
     });
 
     expect(service.getEmployees()).toHaveLength(5);
     expect(created.name).toBe('演示员工（已编辑）');
     expect(created.organization.name).toBe('运营部');
-    expect(created.employmentRecords[0]?.status).toBe(EmploymentStatus.INACTIVE);
+    expect(created.employmentRecords[0]?.status).toBe(EmploymentStatus.RESIGNED);
   });
 
   it('rejects duplicate employee numbers and ID card numbers', () => {
@@ -62,7 +62,7 @@ describe('DemoDataService', () => {
       mobile: '13800004998',
       idCardNo: '110101199901019998',
       organizationId: 'demo-org-product',
-      employmentStatus: 'ACTIVE',
+      employmentStatus: 'REGULAR',
     })).toThrow(ConflictException);
 
     expect(() => service.createEmployee({
@@ -71,7 +71,7 @@ describe('DemoDataService', () => {
       mobile: '13800004999',
       idCardNo: '110101199203181021',
       organizationId: 'demo-org-product',
-      employmentStatus: 'ACTIVE',
+      employmentStatus: 'REGULAR',
     })).toThrow('身份证号已存在');
   });
 });

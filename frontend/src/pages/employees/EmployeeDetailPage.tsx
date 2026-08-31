@@ -1,5 +1,19 @@
 import { ArrowLeftOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import { PERMISSIONS } from '@hr-demo/shared';
+import {
+  educationLevelLabels,
+  employmentRelationshipLabels,
+  employeeLevelLabels,
+  ethnicityLabels,
+  householdTypeLabels,
+  institutionTypeLabels,
+  maritalStatusLabels,
+  personnelCategoryLabels,
+  personnelPositionLabels,
+  personnelSourceLabels,
+  politicalStatusLabels,
+  workArrangementLabels,
+} from '../../config/personnel-fields';
 import { Alert, Button, Card, Descriptions, Skeleton, Space, Typography } from 'antd';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../features/auth/auth-context';
@@ -33,6 +47,10 @@ export function EmployeeDetailPage() {
   }
 
   const data = employee.data;
+  const label = (value: string | number | null | undefined, labels?: Record<string, string>) => {
+    if (value === null || value === undefined || value === '') return '--';
+    return labels?.[String(value)] ?? String(value);
+  };
   return (
     <section aria-labelledby="employee-detail-heading">
       <div className="page-heading detail-heading">
@@ -53,27 +71,60 @@ export function EmployeeDetailPage() {
           <Descriptions column={{ xs: 1, sm: 2 }} colon={false} layout="vertical">
             <Descriptions.Item label="工号">{data.employeeNo}</Descriptions.Item>
             <Descriptions.Item label="姓名">{data.name}</Descriptions.Item>
-            <Descriptions.Item label="手机号">{data.mobile}</Descriptions.Item>
-            <Descriptions.Item label="身份证号">{data.idCardNo}</Descriptions.Item>
+            <Descriptions.Item label="企业邮箱">{label(data.workEmail)}</Descriptions.Item>
+            <Descriptions.Item label="个人邮箱">{label(data.personalEmail)}</Descriptions.Item>
+            <Descriptions.Item label="手机号">{label(data.mobile)}</Descriptions.Item>
+            <Descriptions.Item label="性别">{label(data.gender)}</Descriptions.Item>
+            <Descriptions.Item label="出生日期">{label(data.birthDate)}</Descriptions.Item>
+            <Descriptions.Item label="年龄">{label(data.age)}</Descriptions.Item>
+            <Descriptions.Item label="民族">{label(data.ethnicity, ethnicityLabels)}</Descriptions.Item>
+            <Descriptions.Item label="婚姻状况">{label(data.maritalStatus, maritalStatusLabels)}</Descriptions.Item>
+            <Descriptions.Item label="政治面貌">{label(data.politicalStatus, politicalStatusLabels)}</Descriptions.Item>
+            <Descriptions.Item label="籍贯">{label(data.nativePlace)}</Descriptions.Item>
+            <Descriptions.Item label="户口类别">{label(data.householdType, householdTypeLabels)}</Descriptions.Item>
+            <Descriptions.Item label="证件类型">{label(data.documentType, { NATIONAL_ID: '居民身份证', PASSPORT: '护照', HK_MACAO_PERMIT: '港澳通行证', TAIWAN_PERMIT: '台湾通行证', RESIDENCE_PERMIT: '居住证', OTHER: '其他证件' })}</Descriptions.Item>
+            <Descriptions.Item label="证件号码">{label(data.documentNumber)}</Descriptions.Item>
+            <Descriptions.Item label="证件截止日期">{label(data.documentExpiryDate)}</Descriptions.Item>
+            <Descriptions.Item label="户籍所在地">{label(data.householdAddress)}</Descriptions.Item>
+            <Descriptions.Item label="联系地址">{label(data.residentialAddress)}</Descriptions.Item>
           </Descriptions>
-          {!user?.permissions.includes(PERMISSIONS.EMPLOYEE_SENSITIVE_READ) ? (
-            <Typography.Text type="secondary" className="masking-note">
-              当前账号无敏感字段权限，手机号和身份证号已由服务端脱敏。
-            </Typography.Text>
-          ) : null}
         </Card>
 
         <div className="detail-grid">
-          <Card title="所属部门" bordered={false}>
-            <Descriptions column={1} colon={false} layout="vertical">
-              <Descriptions.Item label="部门名称">{data.organizationName}</Descriptions.Item>
+          <Card title="任职信息" bordered={false}>
+            <Descriptions column={{ xs: 1, sm: 2 }} colon={false} layout="vertical">
+              <Descriptions.Item label="部门">{label(data.organizationName)}</Descriptions.Item>
+              <Descriptions.Item label="入职日期">{label(data.entryDate)}</Descriptions.Item>
+              <Descriptions.Item label="职位">{label(data.positionName)}</Descriptions.Item>
+              <Descriptions.Item label="职级">{label(data.jobLevel)}</Descriptions.Item>
+              <Descriptions.Item label="人员定位">{label(data.personnelPosition, personnelPositionLabels)}</Descriptions.Item>
+              <Descriptions.Item label="员工层级">{label(data.employeeLevel, employeeLevelLabels)}</Descriptions.Item>
+              <Descriptions.Item label="人员类别">{label(data.personnelCategory, personnelCategoryLabels)}</Descriptions.Item>
+              <Descriptions.Item label="人员来源">{label(data.personnelSource, personnelSourceLabels)}</Descriptions.Item>
+              <Descriptions.Item label="雇佣关系">{label(data.employmentRelationship, employmentRelationshipLabels)}</Descriptions.Item>
+              <Descriptions.Item label="用工形式">{label(data.workArrangement, workArrangementLabels)}</Descriptions.Item>
+              <Descriptions.Item label="全日制公司">{label(data.fullTimeCompany)}</Descriptions.Item>
+              <Descriptions.Item label="工作地点">{label(data.workplaceName)}</Descriptions.Item>
+              <Descriptions.Item label="直线经理">{label(data.managerName)}</Descriptions.Item>
+              <Descriptions.Item label="直线经理邮箱">{label(data.managerEmail)}</Descriptions.Item>
+              <Descriptions.Item label="累计工龄（年）">{label(data.totalWorkYears)}</Descriptions.Item>
+              <Descriptions.Item label="累计司龄（年）">{label(data.totalServiceYears)}</Descriptions.Item>
             </Descriptions>
           </Card>
-          <Card title="任职状态" bordered={false}>
-            <Descriptions column={1} colon={false} layout="vertical">
-              <Descriptions.Item label="当前状态">
-                <Space><EmploymentStatusTag status={data.employmentStatus} /></Space>
-              </Descriptions.Item>
+          <Card title="其他资料" bordered={false}>
+            <Descriptions column={{ xs: 1, sm: 2 }} colon={false} layout="vertical">
+              <Descriptions.Item label="当前状态"><Space><EmploymentStatusTag status={data.employmentStatus} /></Space></Descriptions.Item>
+              <Descriptions.Item label="紧急联系人">{label(data.emergencyContactName)}</Descriptions.Item>
+              <Descriptions.Item label="与本人关系">{label(data.emergencyContactRelationship)}</Descriptions.Item>
+              <Descriptions.Item label="紧急联系人电话">{label(data.emergencyContactMobile)}</Descriptions.Item>
+              <Descriptions.Item label="银行">{label(data.bankName)}</Descriptions.Item>
+              <Descriptions.Item label="开户行支行">{label(data.bankBranchName)}</Descriptions.Item>
+              <Descriptions.Item label="银行账号">{label(data.bankAccountNumber)}</Descriptions.Item>
+              <Descriptions.Item label="毕业学校名称">{label(data.graduationSchoolName)}</Descriptions.Item>
+              <Descriptions.Item label="院校类型">{label(data.institutionType, institutionTypeLabels)}</Descriptions.Item>
+              <Descriptions.Item label="最高学历">{label(data.highestEducation, educationLevelLabels)}</Descriptions.Item>
+              <Descriptions.Item label="毕业时间">{label(data.graduationDate)}</Descriptions.Item>
+              <Descriptions.Item label="专业">{label(data.major)}</Descriptions.Item>
             </Descriptions>
           </Card>
         </div>

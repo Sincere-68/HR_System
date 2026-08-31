@@ -12,7 +12,7 @@ export class OrganizationsService {
     private readonly demo: DemoDataService,
   ) {}
 
-  findAll(user: AuthenticatedUser) {
+  async findAll(user: AuthenticatedUser) {
     if (this.demo.enabled) {
       const organizations = this.demo.getOrganizations();
       return this.access.hasAllEmployeeData(user)
@@ -20,10 +20,11 @@ export class OrganizationsService {
         : organizations.filter((organization) => user.organizationIds.includes(organization.id));
     }
 
+    const accessibleOrganizationIds = (await this.access.getAccessibleOrganizationIds(user)) ?? [];
     return this.prisma.organization.findMany({
       where: this.access.hasAllEmployeeData(user)
         ? undefined
-        : { id: { in: user.organizationIds } },
+        : { id: { in: accessibleOrganizationIds } },
       select: { id: true, code: true, name: true, parentId: true },
       orderBy: [{ code: 'asc' }],
     });

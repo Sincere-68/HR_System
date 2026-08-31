@@ -99,13 +99,58 @@ export const navigationItems: NavigationItem[] = [
   { key: '/settings', label: '设置', icon: <SettingOutlined /> },
 ];
 
+const implementedRoutes = new Set([
+  '/personnel/employees',
+  '/personnel/blacklist',
+  '/personnel/approval',
+  '/contracts',
+  '/onboarding/offers',
+  '/onboarding/entries',
+  '/onboarding/integration',
+  '/onboarding/introduction',
+  '/onboarding/id-card-reader',
+  '/employment/probation',
+  '/employment/changes',
+  '/employment/trial-post',
+  '/employment/interns',
+  '/employment/labor',
+  '/employment/part-time',
+  '/employment/records',
+  '/employment/termination',
+  '/employment/retirement',
+  '/handover',
+  '/subsets/education',
+  '/subsets/work-history',
+  '/subsets/family',
+  '/subsets/appraisals',
+  '/subsets/training',
+  '/subsets/awards',
+  '/subsets/certificates',
+  '/subsets/projects',
+  '/subsets/skills',
+  '/subsets/languages',
+  '/staffing/transfer-types',
+  '/analytics/roster',
+]);
+
 export const placeholderRoutes = navigationItems.flatMap((item) =>
   item.children
-    ? item.children.filter((child) => child.key !== '/personnel/employees')
-    : item.key.startsWith('/') && item.key !== '/personnel/employees'
+    ? item.children.filter((child) => !implementedRoutes.has(child.key))
+    : item.key.startsWith('/') && !implementedRoutes.has(item.key)
       ? [item]
       : [],
 );
+
+export const placeholderHeadingTabs: Record<string, string[]> = {
+  '/employment/trial-post': ['试岗中人员', '考核中', '试岗不通过', '试岗通过', '全部试岗记录'],
+  '/employment/interns': ['实习生', '实习转正中', '已转正', '已离职'],
+  '/employment/termination': ['离职中的员工', '已完成的离职', '全部离职记录'],
+  '/employment/reporting-lines': ['汇报关系', '汇报关系图'],
+  '/subsets/materials': ['按人员查看', '按分类查看', '全部材料'],
+  '/analytics/dashboard': ['人事看板管理', '人员结构分析', '人员流动分析', '人事流程看板'],
+  '/analytics/structure': ['员工素质结构', '员工任职结构'],
+  '/analytics/mobility': ['员工流动统计', '各月入离职统计', '各机构入离职统计', '员工流入统计', '员工流出统计', '组织编制统计'],
+};
 
 export function findNavigationLabel(pathname: string) {
   for (const item of navigationItems) {

@@ -1,11 +1,12 @@
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { CloseOutlined } from '@ant-design/icons';
 import { PERMISSIONS, type CreateEmployeeInput, type UpdateEmployeeInput } from '@hr-demo/shared';
-import { Alert, App, Button, Card, Result, Skeleton, Space, Typography } from 'antd';
+import { Alert, App, Button, Result, Skeleton } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../features/auth/auth-context';
 import {
   useCreateEmployee,
   useEmployee,
+  useEmployeeFormOptions,
   useOrganizations,
   useUpdateEmployee,
 } from '../../features/employees/api';
@@ -19,12 +20,13 @@ export function EmployeeFormPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { message } = App.useApp();
-  const employee = useEmployee(id);
-  const organizations = useOrganizations();
-  const createEmployee = useCreateEmployee();
-  const updateEmployee = useUpdateEmployee(id ?? '');
   const permission = editing ? PERMISSIONS.EMPLOYEE_UPDATE : PERMISSIONS.EMPLOYEE_CREATE;
   const allowed = Boolean(user?.permissions.includes(permission));
+  const employee = useEmployee(id);
+  const organizations = useOrganizations();
+  const formOptions = useEmployeeFormOptions(id, allowed);
+  const createEmployee = useCreateEmployee();
+  const updateEmployee = useUpdateEmployee(id ?? '');
   const mutation = editing ? updateEmployee : createEmployee;
 
   if (!allowed) {
@@ -38,17 +40,17 @@ export function EmployeeFormPage() {
     );
   }
 
-  if (organizations.isLoading || (editing && employee.isLoading)) {
-    return <Card bordered={false}><Skeleton active paragraph={{ rows: 8 }} /></Card>;
+  if (organizations.isLoading || formOptions.isLoading || (editing && employee.isLoading)) {
+    return <div className="employee-editor-loading"><Skeleton active paragraph={{ rows: 10 }} /></div>;
   }
 
-  if (organizations.isError || (editing && (employee.isError || !employee.data))) {
+  if (organizations.isError || formOptions.isError || (editing && (employee.isError || !employee.data))) {
     return (
       <Alert
         type="error"
         showIcon
         message={editing ? '无法加载员工编辑信息' : '无法加载部门列表'}
-        description={employee.error?.message ?? organizations.error?.message}
+        description={employee.error?.message ?? formOptions.error?.message ?? organizations.error?.message}
       />
     );
   }
@@ -66,54 +68,39 @@ export function EmployeeFormPage() {
   };
 
   return (
-    <section aria-labelledby="employee-form-heading">
-      <div className="page-heading form-page-heading">
-        <div>
-          <Link className="back-link" to={editing ? `/personnel/employees/${id}` : '/personnel/employees'}>
-            <ArrowLeftOutlined /> {editing ? '返回员工详情' : '返回人员列表'}
-          </Link>
-          <Typography.Title id="employee-form-heading" level={2}>
-            {editing ? '编辑员工' : '新增员工'}
-          </Typography.Title>
-          <Typography.Paragraph type="secondary">
-            {editing ? '修改员工主档与当前任职状态' : '创建员工主档和首条任职记录'}
-          </Typography.Paragraph>
-        </div>
-        <Space>
-          <Link to={editing ? `/personnel/employees/${id}` : '/personnel/employees'}>
-            <Button>取消</Button>
-          </Link>
-          <Button
-            type="primary"
-            htmlType="submit"
-            form={FORM_ID}
-            icon={<SaveOutlined />}
-            loading={mutation.isPending}
-          >
-            保存
-          </Button>
-        </Space>
-      </div>
-
-      {mutation.isError ? (
-        <Alert
-          className="content-alert"
-          type="error"
-          showIcon
-          message="保存失败"
-          description={mutation.error.message}
+    <section className="employee-editor-page" aria-labelledby="employee-form-heading">
+      <header className="employee-editor-header">
+        <h1 id="employee-form-heading">{editing ? '编辑员工' : '新增员工'}</h1>
+        <Button
+          type="text"
+          className="employee-editor-close"
+          aria-label="关闭员工编辑"
+          icon={<CloseOutlined />}
+          onClick={() => navigate(editing ? `/personnel/employees/${id}` : '/personnel/employees')}
         />
-      ) : null}
-
-      <Card bordered={false} title="员工主档" className="form-panel">
+      </header>
+      <main className="employee-editor-content">
+        {mutation.isError ? (
+          <Alert
+            className="employee-editor-error"
+            type="error"
+            showIcon
+            message="保存失败"
+            description={mutation.error.message}
+          />
+        ) : null}
         <EmployeeForm
           formId={FORM_ID}
           employee={employee.data}
           organizations={organizations.data ?? []}
-          canReadSensitive={Boolean(user?.permissions.includes(PERMISSIONS.EMPLOYEE_SENSITIVE_READ))}
+          formOptions={formOptions.data}
           onSubmit={handleSubmit}
         />
-      </Card>
+      </main>
+      <footer className="employee-editor-footer">
+        <Button onClick={() => navigate(editing ? `/personnel/employees/${id}` : '/personnel/employees')}>取消</Button>
+        <Button type="primary" htmlType="submit" form={FORM_ID} loading={mutation.isPending}>保存</Button>
+      </footer>
     </section>
   );
 }
