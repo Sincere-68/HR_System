@@ -1,4 +1,6 @@
 import type {
+  EmployeeExportInput,
+  EmployeeImportResult,
   BlacklistListItem,
   BlacklistListQuery,
   EmployeeInfoApprovalListItem,
@@ -20,7 +22,7 @@ import type {
   UpdateEmployeeInput,
 } from '@hr-demo/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '../../lib/api';
+import { API_BASE_URL, apiRequest, tokenStorage } from '../../lib/api';
 
 export const employeeKeys = {
   all: ['employees'] as const,
@@ -41,6 +43,82 @@ function toSearchParams<T extends object>(query: T) {
     if (value !== undefined && value !== '') params.set(key, String(value));
   });
   return params;
+}
+
+function filenameFromDisposition(value: string | null, fallback: string) {
+  const encoded = value?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) return decodeURIComponent(encoded);
+  const plain = value?.match(/filename="?([^";]+)"?/i)?.[1];
+  return plain ?? fallback;
+}
+
+export async function importEmployeesFile(file: File) {
+  const token = tokenStorage.get();
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetch(`${API_BASE_URL}/employees/import`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message = Array.isArray(body.message) ? body.message[0] : body.message;
+    throw new Error(message ?? `导入失败 (${response.status})`);
+  }
+  return response.json() as Promise<EmployeeImportResult>;
+}
+
+export async function downloadEmployeeImportTemplate(format: 'XLSX' | 'CSV') {
+  const token = tokenStorage.get();
+  const response = await fetch(`${API_BASE_URL}/employees/import-template`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ format }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message = Array.isArray(body.message) ? body.message[0] : body.message;
+    throw new Error(message ?? `下载模板失败 (${response.status})`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filenameFromDisposition(response.headers.get('Content-Disposition'), `人员导入模板.${format.toLowerCase()}`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadEmployeeExport(input: EmployeeExportInput) {
+  const token = tokenStorage.get();
+  const response = await fetch(`${API_BASE_URL}/employees/export`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message = Array.isArray(body.message) ? body.message[0] : body.message;
+    throw new Error(message ?? `导出失败 (${response.status})`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filenameFromDisposition(response.headers.get('Content-Disposition'), `人员导出.${input.format.toLowerCase()}`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function useEmployees(query: EmployeeListQuery) {

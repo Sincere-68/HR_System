@@ -19,6 +19,7 @@ import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 import { useOrganizations } from '../../features/employees/api';
 import { useRetirements } from '../../features/employment/api';
 
@@ -102,11 +103,6 @@ export function RetirementManagementPage() {
   const handleTableChange = (pagination: TablePaginationConfig) => {
     patchSearch({ page: pagination.current ?? 1, pageSize: pagination.pageSize ?? 10 });
   };
-  const departmentOptions = (organizations.data ?? []).map((organization) => ({
-    value: organization.id,
-    label: organization.name,
-  }));
-
   return (
     <section className="employee-list-page retirement-management-page" aria-labelledby="retirement-heading">
       <header className="employee-page-heading">
@@ -150,15 +146,13 @@ export function RetirementManagementPage() {
               placeholder="搜索姓名或工号"
               onSearch={(keyword) => patchSearch({ keyword: keyword.trim() || undefined, page: 1 })}
             />
-            <Select
+            <OrganizationTreeSelect
               className="retirement-department-select"
               allowClear
-              showSearch
-              optionFilterProp="label"
               aria-label="筛选退休部门"
               placeholder="部门"
               loading={organizations.isLoading}
-              options={departmentOptions}
+              organizations={organizations.data ?? []}
               value={query.departmentId}
               onChange={(departmentId) => patchSearch({ departmentId, page: 1 })}
             />

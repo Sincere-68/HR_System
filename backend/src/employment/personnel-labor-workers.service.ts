@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createTableExport } from '../common/table-export';
 import {
   AssignmentStatus,
   EmploymentRelationship,
@@ -7,7 +8,7 @@ import {
   RecordStatus,
   ReportingRelationshipType,
 } from '@prisma/client';
-import type { Paginated } from '@hr-demo/shared';
+import type { EmployeeExportInput, Paginated } from '@hr-demo/shared';
 import { AccessControlService } from '../access-control/access-control.service';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
 import { DemoDataService } from '../demo/demo-data.service';
@@ -37,6 +38,22 @@ export class PersonnelLaborWorkersService {
     private readonly access: AccessControlService,
     private readonly demo: DemoDataService,
   ) {}
+
+  async exportAll(user: AuthenticatedUser, dto: EmployeeExportInput) {
+    const query = dto.query ?? {};
+    const result = await this.findAll(user, {
+      keyword: query.keyword,
+      entryDateFrom: (query as { entryDateFrom?: string }).entryDateFrom,
+      entryDateTo: (query as { entryDateTo?: string }).entryDateTo,
+      page: 1,
+      pageSize: 10_000,
+    } as QueryPersonnelLaborWorkersDto);
+    const rows = dto.employeeIds?.length ? result.data.filter(({ employeeId }) => dto.employeeIds!.includes(employeeId)) : result.data;
+    return createTableExport(rows, dto.fields, [
+      ['name', '姓名'], ['workEmail', '电子邮箱'], ['employeeNo', '工号'], ['entryDate', '入职日期'],
+      ['departmentName', '部门'], ['jobTitleName', '职务'], ['positionName', '职位'], ['workArrangement', '用工形式'], ['managerName', '直线经理'],
+    ].map(([key, title]) => ({ key: key!, title: title! })), dto.format, '劳务人员导出');
+  }
 
   async findAll(
     user: AuthenticatedUser,

@@ -19,7 +19,7 @@ export interface EmploymentRecordPresentationRow {
   } | null;
   employee: {
     employeeNo: string;
-    name: string;
+    name: string | null;
     employmentRecords: Array<{ status: EmploymentStatus }>;
     convertedCandidates: Array<{ resumeAttachmentId: string | null }>;
   };
@@ -44,7 +44,7 @@ export function presentEmploymentRecord(
     id: row.id,
     employeeId: row.employeeId,
     employeeNo: row.employee.employeeNo,
-    employeeName: row.employee.name,
+    employeeName: row.employee.name ?? '--',
     entryDate: row.employmentPeriod?.entryDate.toISOString().slice(0, 10) ?? null,
     departmentName: row.organization.name,
     positionName: row.position?.name ?? null,

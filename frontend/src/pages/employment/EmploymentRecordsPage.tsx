@@ -11,6 +11,7 @@ import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 import { useOrganizations } from '../../features/employees/api';
 import { useEmploymentRecords } from '../../features/employment/api';
 
@@ -180,15 +181,14 @@ export function EmploymentRecordsPage() {
               placeholder="搜索姓名或工号"
               onSearch={(keyword) => patchSearch({ keyword: keyword.trim() || undefined, page: 1 })}
             />
-            <Select
+            <OrganizationTreeSelect
               allowClear
-              showSearch
-              optionFilterProp="label"
               aria-label="筛选任职部门"
+              className="department-filter-tree-select"
               placeholder="任职部门"
               loading={organizations.isLoading}
               value={query.organizationId}
-              options={(organizations.data ?? []).map(({ id, name }) => ({ value: id, label: name }))}
+              organizations={organizations.data ?? []}
               onChange={(organizationId) => patchSearch({ organizationId, page: 1 })}
               style={{ width: 180 }}
             />

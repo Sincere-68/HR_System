@@ -5,9 +5,9 @@ export interface PersonnelResignedPresenterRow {
   reason: string | null;
   employee: {
     employeeNo: string;
-    name: string;
+    name: string | null;
     gender: string | null;
-    mobile: string;
+    mobile: string | null;
     identityDocuments: Array<{
       documentNumber: string;
       isPrimary: boolean;
@@ -28,7 +28,7 @@ export interface PersonnelResignedPresenterRow {
 export interface PersonnelResignedListItem {
   id: string;
   employeeNo: string;
-  name: string;
+  name: string | null;
   departmentName: string | null;
   gender: string | null;
   entryDate: string | null;
@@ -39,7 +39,7 @@ export interface PersonnelResignedListItem {
   lastWorkingDateBasis: 'ACTUAL' | 'PLANNED';
   fullTimeCompany: string | null;
   documentNumber: string | null;
-  mobile: string;
+  mobile: string | null;
 }
 
 function formatDate(value: Date | null) {

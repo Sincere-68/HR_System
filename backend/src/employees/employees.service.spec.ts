@@ -41,13 +41,13 @@ describe('EmployeesService in demo mode', () => {
     const { demo, access, employees } = createServices();
     const viewer = demo.getUser('demo-user-viewer')!;
 
-    const result = await employees.findAll(viewer, query({ organizationId: 'demo-org-product' }));
+    const result = await employees.findAll(viewer, query({ organizationId: 'demo-org-ceo_second_tmall_supermarket' }));
     expect(result.data).toEqual([]);
     await expect(
       employees.findOne(viewer, 'demo-employee-1001', auditContext),
     ).rejects.toBeInstanceOf(NotFoundException);
     await expect(
-      access.assertOrganizationAccess(viewer, 'demo-org-product'),
+      access.assertOrganizationAccess(viewer, 'demo-org-ceo_second_tmall_supermarket'),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -67,7 +67,7 @@ describe('EmployeesService in demo mode', () => {
       documentType: 'NATIONAL_ID',
       documentNumber: '110101199901015001',
       entryDate: '2026-01-01',
-      organizationId: 'demo-org-sales',
+      organizationId: 'demo-org-chairman_customer_service',
       hasProbation: false,
       employmentStatus: EmploymentStatus.REGULAR,
     } as never, auditContext)).rejects.toThrow('完整新增人员仅支持 MySQL 模式');
@@ -132,7 +132,7 @@ describe('EmployeesService database detail authorization', () => {
 
 describe('EmployeesService database form options', () => {
   it('returns only directory-backed options and excludes fixed enum directories', async () => {
-    const positions = [{ id: 'position-1', name: '虚构职位', organizationId: null }];
+    const positions = [{ id: 'position-1', code: '00105', name: 'web前端工程师', organizationId: null }];
     const workplaces = [{ id: 'workplace-1', name: '虚构园区' }];
     const managers = [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }];
     const employingCompanies = [{ id: 'company-1', code: 'COMPANY_001', name: '虚构全日制公司' }];
@@ -174,7 +174,216 @@ describe('EmployeesService database form options', () => {
     expect(result).not.toHaveProperty('signingOrganizations');
     expect(result).not.toHaveProperty('personnelPositions');
     expect(result).not.toHaveProperty('employeeLevels');
+    expect(prisma.position.findMany).toHaveBeenCalledWith({
+      where: { status: 'ACTIVE', archivedAt: null },
+      select: { id: true, code: true, name: true, organizationId: true },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+    });
   });
+});
+
+describe('EmployeesService database department history', () => {
+  const employeeId = 'employee-organization-1';
+  const user = {
+    id: 'user-admin', username: 'admin', displayName: '虚构管理员', role: 'ADMIN' as const,
+    roleName: '管理员', permissions: [PERMISSIONS.EMPLOYEE_UPDATE], organizationIds: ['org-current', 'org-target'],
+  };
+  const currentEmployee = {
+    id: employeeId,
+    employeeNo: 'FAKE-ORGANIZATION-001',
+    name: '虚构组织员工',
+    mobile: '13900001008',
+    idCardNo: null,
+    organizationId: 'org-current',
+    organization: { id: 'org-current', name: '旧部门' },
+    assignments: [], employmentPeriods: [], reportingAsEmployee: [], identityDocuments: [], familyMembers: [],
+    educationExperiences: [], workExperiences: [], convertedCandidates: [], gender: null, workEmail: null,
+    personalEmail: null, birthDate: null, ethnicity: null, maritalStatus: null, politicalStatus: null,
+    nativePlace: null, nativePlaceRegionCode: null, householdType: null, householdRegionCode: null,
+    householdAddress: null, residentialRegionCode: null, residentialAddress: null, bankName: null,
+    bankBranchName: null, bankAccountNumber: null, employmentRecords: [{ status: EmploymentStatus.REGULAR }],
+    createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+  const currentAssignment = {
+    id: 'assignment-current', employmentPeriodId: 'period-1', positionId: 'position-1', jobLevel: 'S2',
+    jobTitleId: 'job-title-1', workplaceId: 'workplace-1', assignmentType: 'PRIMARY',
+    personnelPosition: 'FRONT_OFFICE', employeeLevel: 'STAFF', personnelCategory: 'NON_TALENT_PROGRAM',
+    employmentRelationship: 'INTERNAL_EMPLOYEE', personnelSource: 'SOCIAL_RECRUITMENT',
+    workArrangement: 'CONTRACT_EMPLOYMENT', organization: { id: 'org-current', code: 'CURRENT', name: '旧部门' },
+    startDate: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('ends the former primary assignment and creates a successor when the department changes', async () => {
+    const assignmentUpdate = jest.fn().mockResolvedValue(undefined);
+    const assignmentCreate = jest.fn().mockResolvedValue({ id: 'assignment-next' });
+    const employeeUpdate = jest.fn().mockResolvedValue(undefined);
+    const changeLogCreate = jest.fn().mockResolvedValue(undefined);
+    const tx = {
+      employeeAssignment: { findFirst: jest.fn().mockResolvedValue(currentAssignment), update: assignmentUpdate, create: assignmentCreate },
+      employeeIdentityDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeFamilyMember: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeEducationExperience: { findFirst: jest.fn().mockResolvedValue(null) },
+      employee: { update: employeeUpdate, findUniqueOrThrow: jest.fn().mockResolvedValue(currentEmployee) },
+      organization: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'org-target', code: 'TARGET', name: '新部门' }) },
+      employeeFieldChangeLog: { create: changeLogCreate },
+    };
+    const access = { getEmployeeWhere: jest.fn().mockResolvedValue({}), assertOrganizationAccess: jest.fn().mockResolvedValue(undefined) };
+    const service = new EmployeesService(
+      { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)), employee: { findFirst: jest.fn().mockResolvedValue(currentEmployee) } } as never,
+      access as never,
+      { create: jest.fn() } as never,
+      { enabled: false } as never,
+    );
+
+    await service.update(user, employeeId, { organizationId: 'org-target' } as never, auditContext);
+
+    expect(access.assertOrganizationAccess).toHaveBeenCalledWith(user, 'org-target');
+    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ organizationId: 'org-target' }) }));
+    expect(assignmentUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'assignment-current' },
+      data: expect.objectContaining({ status: 'ENDED', endDate: expect.any(Date) }),
+    }));
+    expect(assignmentCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        employeeId,
+        organizationId: 'org-target',
+        positionId: 'position-1',
+        jobLevel: 'S2',
+        jobTitleId: 'job-title-1',
+        workplaceId: 'workplace-1',
+        isPrimary: true,
+        status: 'ACTIVE',
+      }),
+    }));
+    expect(changeLogCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        assignmentId: 'assignment-next',
+        changedField: 'organizationId',
+        oldValue: { id: 'org-current', code: 'CURRENT', label: '旧部门' },
+        newValue: { id: 'org-target', code: 'TARGET', label: '新部门' },
+      }),
+    }));
+  });
+
+  it('creates the first employment period and primary assignment when all initial employment fields are supplied', async () => {
+    const employeeUpdate = jest.fn().mockResolvedValue(undefined);
+    const periodCreate = jest.fn().mockResolvedValue({ id: 'period-first' });
+    const assignmentCreate = jest.fn().mockResolvedValue({ id: 'assignment-first' });
+    const employmentRecordCreate = jest.fn().mockResolvedValue(undefined);
+    const fieldChangeLogCreate = jest.fn().mockResolvedValue(undefined);
+    const tx = {
+      employeeAssignment: { findFirst: jest.fn().mockResolvedValue(null), create: assignmentCreate },
+      employeeIdentityDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeFamilyMember: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeEducationExperience: { findFirst: jest.fn().mockResolvedValue(null) },
+      employee: { update: employeeUpdate, findUniqueOrThrow: jest.fn().mockResolvedValue(currentEmployee) },
+      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-target', code: 'TARGET', name: '新部门' }) },
+      position: { findFirst: jest.fn() },
+      workplace: { findFirst: jest.fn() },
+      employmentPeriod: { create: periodCreate },
+      employmentRecord: { create: employmentRecordCreate },
+      employeeFieldChangeLog: { create: fieldChangeLogCreate },
+    };
+    const service = new EmployeesService(
+      { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)), employee: { findFirst: jest.fn().mockResolvedValue(currentEmployee) } } as never,
+      { getEmployeeWhere: jest.fn().mockResolvedValue({}), assertOrganizationAccess: jest.fn().mockResolvedValue(undefined) } as never,
+      { create: jest.fn() } as never,
+      { enabled: false } as never,
+    );
+
+    await service.update(user, employeeId, {
+      initialEmployment: {
+        organizationId: 'org-target',
+        entryDate: '2026-01-01',
+        employmentRelationship: 'INTERNAL_EMPLOYEE',
+        workArrangement: 'CONTRACT_EMPLOYMENT',
+        employmentStatus: 'REGULAR',
+      },
+    } as never, auditContext);
+
+    expect(periodCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        employeeId,
+        sequenceNo: 1,
+        employmentRelationship: 'INTERNAL_EMPLOYEE',
+        employmentStatus: 'REGULAR',
+      }),
+    }));
+    expect(assignmentCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        employeeId,
+        employmentPeriodId: 'period-first',
+        organizationId: 'org-target',
+        isPrimary: true,
+        status: 'ACTIVE',
+      }),
+    }));
+    expect(employmentRecordCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        employeeId,
+        employmentPeriodId: 'period-first',
+        status: 'REGULAR',
+        currentFlag: true,
+      }),
+    }));
+    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ organizationId: 'org-target' }) }));
+  });
+
+  it('selects a primary assignment only when its employment period has started', async () => {
+    const assignmentFindFirst = jest.fn().mockResolvedValue(currentAssignment);
+    const tx = {
+      employeeAssignment: { findFirst: assignmentFindFirst, update: jest.fn(), create: jest.fn() },
+      employeeIdentityDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeFamilyMember: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeEducationExperience: { findFirst: jest.fn().mockResolvedValue(null) },
+      employee: { update: jest.fn(), findUniqueOrThrow: jest.fn().mockResolvedValue(currentEmployee) },
+      organization: { findUniqueOrThrow: jest.fn() },
+      employeeFieldChangeLog: { create: jest.fn() },
+    };
+    const service = new EmployeesService(
+      { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)), employee: { findFirst: jest.fn().mockResolvedValue(currentEmployee) } } as never,
+      { getEmployeeWhere: jest.fn().mockResolvedValue({}), assertOrganizationAccess: jest.fn() } as never,
+      { create: jest.fn() } as never,
+      { enabled: false } as never,
+    );
+
+    await service.update(user, employeeId, { organizationId: 'org-current' } as never, auditContext);
+
+    expect(assignmentFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        employeeId,
+        isPrimary: true,
+        status: 'ACTIVE',
+        employmentPeriod: { entryDate: { lte: expect.any(Date) } },
+      }),
+    }));
+  });
+
+  it('does not create a new assignment when the submitted department is unchanged', async () => {
+    const assignmentCreate = jest.fn();
+    const tx = {
+      employeeAssignment: { findFirst: jest.fn().mockResolvedValue(currentAssignment), update: jest.fn(), create: assignmentCreate },
+      employeeIdentityDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeFamilyMember: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeEducationExperience: { findFirst: jest.fn().mockResolvedValue(null) },
+      employee: { update: jest.fn(), findUniqueOrThrow: jest.fn().mockResolvedValue(currentEmployee) },
+      organization: { findUniqueOrThrow: jest.fn() },
+      employeeFieldChangeLog: { create: jest.fn() },
+    };
+    const access = { getEmployeeWhere: jest.fn().mockResolvedValue({}), assertOrganizationAccess: jest.fn() };
+    const service = new EmployeesService(
+      { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)), employee: { findFirst: jest.fn().mockResolvedValue(currentEmployee) } } as never,
+      access as never,
+      { create: jest.fn() } as never,
+      { enabled: false } as never,
+    );
+
+    await service.update(user, employeeId, { organizationId: 'org-current' } as never, auditContext);
+
+    expect(access.assertOrganizationAccess).not.toHaveBeenCalled();
+    expect(assignmentCreate).not.toHaveBeenCalled();
+  });
+
 });
 
 describe('EmployeesService database update document compatibility', () => {
@@ -203,8 +412,11 @@ describe('EmployeesService database update document compatibility', () => {
     maritalStatus: null,
     politicalStatus: null,
     nativePlace: null,
+    nativePlaceRegionCode: null,
     householdType: null,
+    householdRegionCode: null,
     householdAddress: null,
+    residentialRegionCode: null,
     residentialAddress: null,
     bankName: null,
     bankBranchName: null,
@@ -225,7 +437,7 @@ describe('EmployeesService database update document compatibility', () => {
 
   function createService(currentDocument: {
     id: string;
-    documentType: 'NATIONAL_ID' | 'PASSPORT';
+    documentType: 'NATIONAL_ID' | 'PASSPORT' | 'SINGAPORE_EP';
     documentNumber: string;
     expiryDate: Date | null;
   } | null) {
@@ -281,6 +493,31 @@ describe('EmployeesService database update document compatibility', () => {
       data: expect.objectContaining({
         documentType: 'PASSPORT',
         documentNumber: 'PFAKE20260001',
+      }),
+    });
+  });
+
+  it('clears the legacy identifier when the primary document changes to a newly confirmed non-resident document', async () => {
+    const { service, employeeUpdate, documentUpdate } = createService({
+      id: 'document-1',
+      documentType: 'NATIONAL_ID',
+      documentNumber: '110101199901015001',
+      expiryDate: new Date('2036-01-01T00:00:00.000Z'),
+    });
+
+    await service.update(user, employeeId, {
+      documentType: 'SINGAPORE_EP',
+      documentNumber: 'EPFAKE20260001',
+    } as never, auditContext);
+
+    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ idCardNo: null }),
+    }));
+    expect(documentUpdate).toHaveBeenCalledWith({
+      where: { id: 'document-1' },
+      data: expect.objectContaining({
+        documentType: 'SINGAPORE_EP',
+        documentNumber: 'EPFAKE20260001',
       }),
     });
   });
@@ -419,7 +656,7 @@ describe('EmployeesService database update document compatibility', () => {
     expect(changeLogCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         changedField: 'documentType',
-        oldValue: { code: 'NATIONAL_ID', label: '居民身份证' },
+        oldValue: { code: 'NATIONAL_ID', label: '身份证' },
         newValue: { code: 'PASSPORT', label: '护照' },
       }),
     });
@@ -463,6 +700,56 @@ describe('EmployeesService database update document compatibility', () => {
         newValue: { code: 'NONLOCAL_URBAN', label: '外地城镇' },
       }),
     });
+  });
+
+  it('persists only valid administrative-region codes and audits their changes', async () => {
+    const current = {
+      ...employee,
+      nativePlaceRegionCode: '110105',
+      householdRegionCode: null,
+      residentialRegionCode: null,
+    };
+    const employeeUpdate = jest.fn().mockResolvedValue(undefined);
+    const changeLogCreate = jest.fn().mockResolvedValue(undefined);
+    const tx = {
+      employeeAssignment: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeIdentityDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeFamilyMember: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeEducationExperience: { findFirst: jest.fn().mockResolvedValue(null) },
+      employee: { update: employeeUpdate, findUniqueOrThrow: jest.fn().mockResolvedValue(current) },
+      employeeFieldChangeLog: { create: changeLogCreate },
+    };
+    const service = new EmployeesService(
+      {
+        $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+        employee: { findFirst: jest.fn().mockResolvedValue(current) },
+      } as never,
+      { getEmployeeWhere: jest.fn().mockResolvedValue({}) } as never,
+      { create: jest.fn().mockResolvedValue(undefined) } as never,
+      { enabled: false } as never,
+    );
+
+    await service.update(user, employeeId, {
+      nativePlaceRegionCode: '310115',
+      householdRegionCode: '440305',
+    } as never, auditContext);
+
+    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        nativePlaceRegionCode: '310115',
+        householdRegionCode: '440305',
+      }),
+    }));
+    expect(changeLogCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        changedField: 'nativePlaceRegionCode',
+        oldValue: '110105',
+        newValue: '310115',
+      }),
+    }));
+
+    await expect(service.update(user, employeeId, { residentialRegionCode: '999999' } as never, auditContext))
+      .rejects.toThrow('联系地址地区行政区划代码不存在');
   });
 
   it('records fixed assignment enum changes with stable code and label snapshots', async () => {
@@ -612,8 +899,11 @@ describe('EmployeesService database creation', () => {
       maritalStatus: null,
       politicalStatus: null,
       nativePlace: null,
+      nativePlaceRegionCode: null,
       householdType: null,
+      householdRegionCode: null,
       householdAddress: null,
+      residentialRegionCode: null,
       residentialAddress: null,
       bankName: null,
       bankBranchName: null,

@@ -1,3 +1,5 @@
+import { IDENTITY_DOCUMENT_TYPE_LABELS } from '@hr-demo/shared';
+
 const ETHNICITY_LABELS: Record<string, string> = {
   HAN: '汉族', HUI: '回族', SHE: '畲族', TATAR: '塔塔尔族', ACHANG: '阿昌族',
   KAZAKH: '哈萨克族', TUJIA: '土家族', JINGPO: '景颇族', HANI: '哈尼族', TU: '土族',
@@ -40,14 +42,7 @@ export const EMPLOYEE_ENUM_LABELS: Record<string, Record<string, string>> = {
     NONLOCAL_URBAN: '外地城镇',
   },
   bankName: { ICBC: '中国工商银行' },
-  documentType: {
-    NATIONAL_ID: '居民身份证',
-    PASSPORT: '护照',
-    HK_MACAO_PERMIT: '港澳通行证',
-    TAIWAN_PERMIT: '台湾通行证',
-    RESIDENCE_PERMIT: '居住证',
-    OTHER: '其他证件',
-  },
+  documentType: IDENTITY_DOCUMENT_TYPE_LABELS,
   institutionType: {
     RANK_985: '985',
     RANK_211: '211',

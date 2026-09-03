@@ -12,6 +12,7 @@ export interface OfferViewTableProps {
   pageSize: number;
   query: UseQueryResult<PaginatedOfferList, Error>;
   scrollX: number;
+  onSelectedRowIdsChange?: (ids: string[]) => void;
 }
 
 export function OfferViewTable({
@@ -22,6 +23,7 @@ export function OfferViewTable({
   pageSize,
   query,
   scrollX,
+  onSelectedRowIdsChange,
 }: OfferViewTableProps) {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -34,7 +36,14 @@ export function OfferViewTable({
       <Table<OfferListItem>
         className="employee-table onboarding-table offer-view-table"
         rowKey="id"
-        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys, columnWidth: 38 }}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => {
+            setSelectedRowKeys(keys);
+            onSelectedRowIdsChange?.(keys.map(String));
+          },
+          columnWidth: 38,
+        }}
         loading={query.isLoading}
         columns={columns}
         dataSource={query.data?.data ?? []}

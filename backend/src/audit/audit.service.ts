@@ -22,6 +22,7 @@ export class AuditService {
     resourceId: string | undefined,
     metadata?: Prisma.InputJsonValue,
     client: Prisma.TransactionClient = this.prisma,
+    resourceType = 'employee',
   ) {
     if (this.demo.enabled) {
       this.demo.recordAudit(context, action, resourceId, metadata);
@@ -32,7 +33,7 @@ export class AuditService {
       data: {
         userId: context.userId,
         action,
-        resourceType: 'employee',
+        resourceType,
         resourceId,
         metadata,
         ipAddress: context.ipAddress?.slice(0, 64),

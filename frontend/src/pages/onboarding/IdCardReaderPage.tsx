@@ -1,9 +1,10 @@
 import type { OnboardingListQuery } from '@hr-demo/shared';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useIdCardReader } from '../../features/onboarding/api';
+import { downloadOnboardingExport, useIdCardReader } from '../../features/onboarding/api';
 import { OnboardingListPage } from './OnboardingListPage';
 import { idCardReadColumns } from './onboarding-table-configs';
+import { fieldsFromColumns, onboardingExportQuery } from './export-fields';
 
 function positiveInt(value: string | null, fallback: number) {
   const parsed = Number(value);
@@ -35,6 +36,10 @@ export function IdCardReaderPage() {
       onPageChange={handlePageChange}
       scrollX={2_600}
       emptyText="暂无身份证读取记录"
+      exportConfig={{
+        fields: fieldsFromColumns(idCardReadColumns),
+        onExport: (input) => downloadOnboardingExport('id-card-reader', { ...input, query: onboardingExportQuery(query) }, '身份证读取导出'),
+      }}
     />
   );
 }

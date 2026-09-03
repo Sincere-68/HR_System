@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createTableExport } from '../common/table-export';
 import {
   AgreementStatus,
   AssignmentStatus,
@@ -11,6 +12,7 @@ import type { AuthenticatedUser } from '../common/types/authenticated-user';
 import { DemoDataService } from '../demo/demo-data.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryPersonnelResignedDto } from './dto/query-personnel-resigned.dto';
+import type { EmployeeExportInput } from '@hr-demo/shared';
 import {
   presentPersonnelResigned,
   type PersonnelResignedListItem,
@@ -41,6 +43,23 @@ export class PersonnelResignedService {
     private readonly access: AccessControlService,
     private readonly demo: DemoDataService,
   ) {}
+
+  async exportAll(user: AuthenticatedUser, dto: EmployeeExportInput) {
+    const query = dto.query ?? {};
+    const result = await this.findAll(user, {
+      keyword: query.keyword,
+      lastWorkingDateFrom: (query as { lastWorkingDateFrom?: string }).lastWorkingDateFrom,
+      lastWorkingDateTo: (query as { lastWorkingDateTo?: string }).lastWorkingDateTo,
+      page: 1,
+      pageSize: 10_000,
+    } as QueryPersonnelResignedDto);
+    const rows = dto.employeeIds?.length ? result.data.filter(({ id }) => dto.employeeIds!.includes(id)) : result.data;
+    return createTableExport(rows, dto.fields, [
+      ['employeeNo', '工号'], ['name', '姓名'], ['departmentName', '部门'], ['gender', '性别'], ['entryDate', '入职日期'],
+      ['previousPositionName', '离职前职位'], ['terminationReason', '离职原因'], ['movementType', '异动类型'],
+      ['lastWorkingDate', '最后工作日'], ['fullTimeCompany', '全日制公司'], ['documentNumber', '证件号码'], ['mobile', '手机号码'],
+    ].map(([key, title]) => ({ key: key!, title: title! })), dto.format, '离职人员导出');
+  }
 
   async findAll(
     user: AuthenticatedUser,

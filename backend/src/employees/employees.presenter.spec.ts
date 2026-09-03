@@ -23,7 +23,10 @@ function employee(): EmployeeListSnapshot {
     maritalStatus: 'UNMARRIED',
     politicalStatus: null,
     nativePlace: '虚构籍贯',
+    nativePlaceRegionCode: '310115',
+    householdRegionCode: '110105',
     householdAddress: '虚构户籍地址',
+    residentialRegionCode: '440305',
     residentialAddress: '虚构联系地址',
     employmentPeriods: [{
       personnelCategory: 'NON_TALENT_PROGRAM',
@@ -115,7 +118,10 @@ describe('presentEmployeeListItem', () => {
     expect(result.documentNumber).toBe('110101200001011001');
     expect(result.workEmail).toBe('fictional@example.invalid');
     expect(result.personalEmail).toBe('private@example.invalid');
+    expect(result.nativePlaceRegionCode).toBe('310115');
+    expect(result.householdRegionCode).toBe('110105');
     expect(result.householdAddress).toBe('虚构户籍地址');
+    expect(result.residentialRegionCode).toBe('440305');
     expect(result.residentialAddress).toBe('虚构联系地址');
     expect(result.emergencyContactMobile).toBe('13900002002');
     expect(result.managerEmail).toBe('manager@example.invalid');

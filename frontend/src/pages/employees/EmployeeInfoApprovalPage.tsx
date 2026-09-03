@@ -9,7 +9,7 @@ import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEmployeeInfoApprovals, useOrganizations } from '../../features/employees/api';
-import { CheckboxFilterDropdown } from '../../components/CheckboxFilterDropdown';
+import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 
 const statusLabels: Record<ProcessStatus, string> = {
   DRAFT: '草稿',
@@ -104,10 +104,6 @@ export function EmployeeInfoApprovalPage() {
     },
   ];
 
-  const departmentOptions = (organizations.data ?? []).map((organization) => ({
-    label: organization.name,
-    value: organization.id,
-  }));
   const organizationLoadError = organizations.isError;
 
   return (
@@ -156,11 +152,15 @@ export function EmployeeInfoApprovalPage() {
       <div className="employee-table-surface">
         <div className="employee-filter-toolbar">
           <div className="employee-filter-controls">
-            <CheckboxFilterDropdown
-              label="部门"
-              options={departmentOptions}
-              value={query.departmentId ? [query.departmentId] : []}
-              onChange={(values) => patchSearch({ departmentId: values.at(-1), page: 1 })}
+            <OrganizationTreeSelect
+              aria-label="筛选部门"
+              className="department-filter-tree-select"
+              variant="borderless"
+              allowClear
+              organizations={organizations.data ?? []}
+              placeholder="部门"
+              value={query.departmentId}
+              onChange={(departmentId) => patchSearch({ departmentId, page: 1 })}
             />
           </div>
           <Typography.Text type="secondary">共 {approvals.data?.meta.total ?? 0} 条</Typography.Text>

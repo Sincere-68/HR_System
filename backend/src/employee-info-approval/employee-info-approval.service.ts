@@ -133,16 +133,17 @@ export class EmployeeInfoApprovalService {
         const currentStep = approvalRequest && ACTIVE_APPROVAL_STATUSES.includes(approvalRequest.status)
           ? approvalRequest.steps.find((step) => step.stepOrder === approvalRequest.currentStep)
           : undefined;
-        const canUseLegacyDepartment = row.employee.assignments.length === 0
-          && (hasAllEmployeeData || accessibleOrganizationIds.includes(row.employee.organizationId));
+        const canUseLegacyDepartment = Boolean(row.employee.organizationId && row.employee.organization)
+          && row.employee.assignments.length === 0
+          && (hasAllEmployeeData || accessibleOrganizationIds.includes(row.employee.organizationId!));
 
         return {
           id: row.id,
           employeeId: row.employeeId,
           canViewEmployeeDetail: true,
-          employeeName: row.employee.name,
+          employeeName: row.employee.name ?? '--',
           departmentName: row.employee.assignments[0]?.organization.name
-            ?? (canUseLegacyDepartment ? row.employee.organization.name : null),
+            ?? (canUseLegacyDepartment ? row.employee.organization?.name ?? null : null),
           activityName: null,
           applicantName: approvalRequest?.applicant.displayName ?? null,
           submittedAt: approvalRequest?.submittedAt?.toISOString() ?? null,

@@ -1,6 +1,11 @@
 import type {
+  CreateInternOfferInput,
+  CreatedInternOffer,
   EmployeeIntroductionListItem,
   IdCardReadListItem,
+  InternConversionEmployeeOption,
+  InternConversionOfferPrefill,
+  InternOfferFormOptions,
   OfferListItem,
   OfferListQuery,
   OnboardingEntryListItem,
@@ -9,8 +14,9 @@ import type {
   Paginated,
   PaginatedOfferList,
 } from '@hr-demo/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
+import { downloadTableExport } from '../employees/download';
 
 function toSearchParams(query: OnboardingListQuery) {
   const params = new URLSearchParams();
@@ -28,17 +34,70 @@ function toOfferSearchParams(query: OfferListQuery) {
 }
 
 export const onboardingKeys = {
+  all: ['onboarding'] as const,
   offers: (query: OfferListQuery) => ['onboarding', 'offers', query] as const,
+  internOfferFormOptions: ['onboarding', 'intern-offer-form-options'] as const,
+  internConversionOptions: ['onboarding', 'intern-conversion-options'] as const,
+  internConversionPrefill: (employeeId: string | undefined) => ['onboarding', 'intern-conversion-options', employeeId] as const,
   entries: (query: OnboardingListQuery) => ['onboarding', 'entries', query] as const,
   integration: (query: OnboardingListQuery) => ['onboarding', 'integration', query] as const,
   introduction: (query: OnboardingListQuery) => ['onboarding', 'introduction', query] as const,
   idCardReader: (query: OnboardingListQuery) => ['onboarding', 'id-card-reader', query] as const,
 };
 
+export function downloadOnboardingExport(
+  endpoint: 'offers' | 'entries' | 'integration' | 'introduction' | 'id-card-reader',
+  input: { format: 'XLSX' | 'CSV'; fields: string[]; employeeIds?: string[]; query?: object },
+  fallbackName: string,
+) {
+  const { query, ...body } = input;
+  const offerView = (query as { view?: unknown } | undefined)?.view;
+  const queryString = endpoint === 'offers' && offerView
+    ? `?view=${encodeURIComponent(String(offerView))}`
+    : '';
+  return downloadTableExport(`/onboarding/${endpoint}/export${queryString}`, body, fallbackName);
+}
+
 export function useOffers(query: OfferListQuery) {
   return useQuery({
     queryKey: onboardingKeys.offers(query),
     queryFn: () => apiRequest<PaginatedOfferList>(`/onboarding/offers?${toOfferSearchParams(query)}`),
+  });
+}
+
+export function useInternOfferFormOptions(enabled = true) {
+  return useQuery({
+    queryKey: onboardingKeys.internOfferFormOptions,
+    queryFn: () => apiRequest<InternOfferFormOptions>('/onboarding/intern-offer-form-options'),
+    enabled,
+  });
+}
+
+export function useCreateInternOffer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateInternOfferInput) =>
+      apiRequest<CreatedInternOffer>('/onboarding/intern-offers', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: onboardingKeys.all }),
+  });
+}
+
+export function useInternConversionOptions(enabled = true) {
+  return useQuery({
+    queryKey: onboardingKeys.internConversionOptions,
+    queryFn: () => apiRequest<InternConversionEmployeeOption[]>('/onboarding/intern-conversion-options'),
+    enabled,
+  });
+}
+
+export function useInternConversionOfferPrefill(employeeId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: onboardingKeys.internConversionPrefill(employeeId),
+    queryFn: () => apiRequest<InternConversionOfferPrefill>(`/onboarding/intern-conversion-options/${encodeURIComponent(employeeId!)}`),
+    enabled: Boolean(employeeId) && enabled,
   });
 }
 

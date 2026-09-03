@@ -12,6 +12,7 @@ coverage/
 .env.*
 !.env.example
 !**/.env.example
+.italent.config.json
 
 # 编辑器和操作系统临时文件
 .vscode/

@@ -11,18 +11,23 @@ vi.mock('../../features/onboarding/api', () => ({
 
 vi.mock('./offer-views/SentOffersTable', () => ({
   SentOffersTable: () => <div data-testid="sent-offers-table">已发Offer表格</div>,
+  sentOfferColumns: [],
 }));
 vi.mock('./offer-views/AcceptedOffersTable', () => ({
   AcceptedOffersTable: () => <div data-testid="accepted-offers-table">已接受Offer表格</div>,
+  acceptedOfferColumns: [],
 }));
 vi.mock('./offer-views/RejectedOffersTable', () => ({
   RejectedOffersTable: () => <div data-testid="rejected-offers-table">已拒绝Offer表格</div>,
+  rejectedOfferColumns: [],
 }));
 vi.mock('./offer-views/OnboardedOffersTable', () => ({
   OnboardedOffersTable: () => <div data-testid="onboarded-offers-table">已入职Offer表格</div>,
+  onboardedOfferColumns: [],
 }));
 vi.mock('./offer-views/AllOffersTable', () => ({
   AllOffersTable: () => <div data-testid="all-offers-table">全部Offer表格</div>,
+  allOfferColumns: [],
 }));
 
 const offer = {
@@ -100,7 +105,18 @@ describe('OffersPage', () => {
     expect(screen.getByText('已上传')).toBeInTheDocument();
     expect(within(table).getAllByText('--').length).toBeGreaterThanOrEqual(3);
     expect(screen.getByRole('button', { name: '暂无操作' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: /Offer/ }).map((card) => card.textContent)).toEqual([
+    const pendingActions = [...document.querySelectorAll('.onboarding-page-actions > a')];
+    expect(pendingActions.map((action) => action.textContent)).toEqual(['创建Offer', '新建实习Offer']);
+    expect(pendingActions.map((action) => action.getAttribute('href'))).toEqual([
+      '/onboarding/offers/templates', '/onboarding/offers/new?source=new-hire',
+    ]);
+    expect(screen.getByRole('button', { name: /创建Offer/ })).toBeEnabled();
+    expect(screen.getByRole('link', { name: /创建Offer/ })).toHaveAttribute('href', '/onboarding/offers/templates');
+    expect(screen.getByRole('button', { name: /新建实习Offer/ })).toBeEnabled();
+    expect(screen.getByRole('link', { name: /新建实习Offer/ })).toHaveAttribute('href', '/onboarding/offers/new?source=new-hire');
+    expect(screen.getAllByRole('button', { name: /Offer/ })
+      .filter((button) => !['创建Offer', '新建实习Offer'].includes(button.textContent ?? ''))
+      .map((card) => card.textContent)).toEqual([
       '待发Offer1', '已发Offer2', '已接受Offer3', '已拒绝Offer4', '已入职Offer5', '全部Offer15',
     ]);
     expect(screen.getByRole('button', { name: '待发Offer 1' })).toHaveAttribute('aria-pressed', 'true');
@@ -116,10 +132,12 @@ describe('OffersPage', () => {
     expect(screen.getByTestId('location-search')).toHaveTextContent('?view=ACCEPTED&page=1&pageSize=20');
     expect(screen.getByTestId('accepted-offers-table')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '已接受Offer 3' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: '创建Offer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新建实习Offer' })).not.toBeInTheDocument();
   });
 
   it('falls back for invalid view and pagination values', () => {
-    renderPage('/onboarding/offers?view=INVALID&page=bad&pageSize=0');
+    renderPage('/onboarding/offers?view=INVALID&page=bad&pageSize=101');
     expect(useOffers).toHaveBeenLastCalledWith({ view: 'PENDING_SEND', page: 1, pageSize: 10 });
   });
 

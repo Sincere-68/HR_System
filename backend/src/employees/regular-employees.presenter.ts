@@ -23,7 +23,7 @@ export interface RegularEmployeeListItem {
 
 export interface RegularEmployeeSnapshot {
   id: string;
-  name: string;
+  name: string | null;
   employeeNo: string;
   gender: Gender | null;
   workEmail: string | null;
@@ -43,7 +43,7 @@ export interface RegularEmployeeSnapshot {
     }>;
   }>;
   reportingAsEmployee: Array<{
-    manager: { name: string };
+    manager: { name: string | null };
   }>;
 }
 
@@ -65,7 +65,7 @@ export function presentRegularEmployee(
   return {
     employeeId: employee.id,
     canViewEmployeeDetail,
-    name: employee.name,
+    name: employee.name ?? '--',
     employeeNo: employee.employeeNo,
     entryDate: formatDate(period.entryDate),
     departmentName: assignment.organization.name,

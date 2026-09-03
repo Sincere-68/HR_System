@@ -12,6 +12,18 @@ vi.mock('../layouts/AppLayout', () => ({
   AppLayout: () => <Outlet />,
 }));
 
+vi.mock('../pages/SystemSelectionPage', () => ({
+  SystemSelectionPage: () => <h1>选择要进入的系统</h1>,
+}));
+
+vi.mock('../layouts/PerformanceLayout', () => ({
+  PerformanceLayout: () => <Outlet />,
+}));
+
+vi.mock('../pages/performance/PerformanceDashboardPage', () => ({
+  PerformanceDashboardPage: () => <h1>绩效系统</h1>,
+}));
+
 vi.mock('../pages/PlaceholderPage', () => ({
   PlaceholderPage: ({
     title,
@@ -46,6 +58,14 @@ vi.mock('../pages/staffing/TransferTypesPage', () => ({
 
 vi.mock('../pages/onboarding/OffersPage', () => ({
   OffersPage: () => <><h1>Offer管理</h1><span>个人邮箱</span></>,
+}));
+
+vi.mock('../pages/onboarding/InternOfferFormPage', () => ({
+  InternOfferFormPage: () => <><h1>新建实习Offer</h1><span>候选人信息</span></>,
+}));
+
+vi.mock('../pages/onboarding/OfferCreationPage', () => ({
+  OfferCreationPage: () => <><h1>Offer创建</h1><span>实习生转正</span></>,
 }));
 
 vi.mock('../pages/onboarding/EntriesPage', () => ({
@@ -106,6 +126,8 @@ vi.mock('../pages/subsets/LanguagesPage', () => ({
 
 const implementedOnboardingRoutes = [
   { path: '/onboarding/offers', title: 'Offer管理', feature: '个人邮箱' },
+  { path: '/onboarding/offers/new', title: '新建实习Offer', feature: '候选人信息' },
+  { path: '/onboarding/offers/templates', title: 'Offer创建', feature: '实习生转正' },
   { path: '/onboarding/entries', title: '入职管理', feature: '计划入职日期' },
   { path: '/onboarding/integration', title: '新员工融入', feature: '融入进度' },
   { path: '/onboarding/introduction', title: '新员工入职介绍', feature: '入职介绍信息状态' },
@@ -191,6 +213,24 @@ describe('AppRouter onboarding integration', () => {
 
     expect(screen.getByTestId('placeholder-page')).toHaveTextContent('汇报关系');
     expect(screen.getByTestId('placeholder-page')).toHaveAttribute('data-pending-fields', 'true');
+  });
+});
+
+describe('AppRouter system entry', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders system selection at the default route', () => {
+    renderRoute('/');
+
+    expect(screen.getByRole('heading', { name: '选择要进入的系统' })).toBeInTheDocument();
+  });
+
+  it('renders the performance system entry separately from personnel management', () => {
+    renderRoute('/performance');
+
+    expect(screen.getByRole('heading', { name: '绩效系统' })).toBeInTheDocument();
   });
 });
 

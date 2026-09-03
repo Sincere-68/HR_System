@@ -54,7 +54,30 @@ export class AccessControlService {
    * authorization must use canAccessOrganizationInScope below.
    */
   canAccessOrganization(user: AuthenticatedUser, organizationId: string) {
-    return this.hasAllEmployeeData(user) || user.organizationIds.includes(organizationId);
+    if (this.hasAllEmployeeData(user)) return true;
+    if (!this.demo.enabled) return user.organizationIds.includes(organizationId);
+
+    const organizations = this.demo.getOrganizations();
+    const childrenByParent = new Map<string, string[]>();
+    for (const organization of organizations) {
+      if (!organization.parentId) continue;
+      const children = childrenByParent.get(organization.parentId) ?? [];
+      children.push(organization.id);
+      childrenByParent.set(organization.parentId, children);
+    }
+
+    const accessible = new Set(user.organizationIds);
+    const pending = [...user.organizationIds];
+    while (pending.length > 0) {
+      const parentId = pending.shift();
+      if (!parentId) continue;
+      for (const childId of childrenByParent.get(parentId) ?? []) {
+        if (accessible.has(childId)) continue;
+        accessible.add(childId);
+        pending.push(childId);
+      }
+    }
+    return accessible.has(organizationId);
   }
 
   async canAccessOrganizationInScope(user: AuthenticatedUser, organizationId: string) {
@@ -137,7 +160,13 @@ export class AccessControlService {
     }
     const exists = this.demo.enabled
       ? this.demo.organizationExists(organizationId)
-      : Boolean(await this.prisma.organization.count({ where: { id: organizationId } }));
+      : Boolean(await this.prisma.organization.count({
+        where: {
+          id: organizationId,
+          status: RecordStatus.ACTIVE,
+          archivedAt: null,
+        },
+      }));
     if (!exists) throw new NotFoundException('部门不存在');
   }
 }

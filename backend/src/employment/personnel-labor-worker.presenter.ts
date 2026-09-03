@@ -6,7 +6,7 @@ import type { WorkArrangement } from '@prisma/client';
  * employment-management LaborWorkerListItem contract.
  */
 export interface PersonnelLaborWorkerListItem {
-  name: string;
+  name: string | null;
   /** Employee.workEmail. */
   workEmail: string | null;
   employeeNo: string;
@@ -25,7 +25,7 @@ export interface PersonnelLaborWorkerPresentationRow {
   entryDate: Date;
   employee: {
     employeeNo: string;
-    name: string;
+    name: string | null;
     workEmail: string | null;
   };
   /** The service limits this relation to the current effective primary assignment. */

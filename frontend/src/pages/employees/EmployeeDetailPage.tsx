@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
-import { PERMISSIONS } from '@hr-demo/shared';
+import { formatChinaAdministrativeRegion, PERMISSIONS } from '@hr-demo/shared';
 import {
   educationLevelLabels,
   employmentRelationshipLabels,
@@ -7,6 +7,7 @@ import {
   ethnicityLabels,
   householdTypeLabels,
   institutionTypeLabels,
+  identityDocumentTypeLabels,
   maritalStatusLabels,
   personnelCategoryLabels,
   personnelPositionLabels,
@@ -80,13 +81,16 @@ export function EmployeeDetailPage() {
             <Descriptions.Item label="民族">{label(data.ethnicity, ethnicityLabels)}</Descriptions.Item>
             <Descriptions.Item label="婚姻状况">{label(data.maritalStatus, maritalStatusLabels)}</Descriptions.Item>
             <Descriptions.Item label="政治面貌">{label(data.politicalStatus, politicalStatusLabels)}</Descriptions.Item>
-            <Descriptions.Item label="籍贯">{label(data.nativePlace)}</Descriptions.Item>
+            <Descriptions.Item label="籍贯地区">{label(formatChinaAdministrativeRegion(data.nativePlaceRegionCode))}</Descriptions.Item>
+            <Descriptions.Item label="籍贯详细说明">{label(data.nativePlace)}</Descriptions.Item>
             <Descriptions.Item label="户口类别">{label(data.householdType, householdTypeLabels)}</Descriptions.Item>
-            <Descriptions.Item label="证件类型">{label(data.documentType, { NATIONAL_ID: '居民身份证', PASSPORT: '护照', HK_MACAO_PERMIT: '港澳通行证', TAIWAN_PERMIT: '台湾通行证', RESIDENCE_PERMIT: '居住证', OTHER: '其他证件' })}</Descriptions.Item>
+            <Descriptions.Item label="证件类型">{label(data.documentType, identityDocumentTypeLabels)}</Descriptions.Item>
             <Descriptions.Item label="证件号码">{label(data.documentNumber)}</Descriptions.Item>
             <Descriptions.Item label="证件截止日期">{label(data.documentExpiryDate)}</Descriptions.Item>
-            <Descriptions.Item label="户籍所在地">{label(data.householdAddress)}</Descriptions.Item>
-            <Descriptions.Item label="联系地址">{label(data.residentialAddress)}</Descriptions.Item>
+            <Descriptions.Item label="户籍所在地地区">{label(formatChinaAdministrativeRegion(data.householdRegionCode))}</Descriptions.Item>
+            <Descriptions.Item label="户籍详细地址">{label(data.householdAddress)}</Descriptions.Item>
+            <Descriptions.Item label="联系地址地区">{label(formatChinaAdministrativeRegion(data.residentialRegionCode))}</Descriptions.Item>
+            <Descriptions.Item label="联系详细地址">{label(data.residentialAddress)}</Descriptions.Item>
           </Descriptions>
         </Card>
 
@@ -113,7 +117,9 @@ export function EmployeeDetailPage() {
           </Card>
           <Card title="其他资料" bordered={false}>
             <Descriptions column={{ xs: 1, sm: 2 }} colon={false} layout="vertical">
-              <Descriptions.Item label="当前状态"><Space><EmploymentStatusTag status={data.employmentStatus} /></Space></Descriptions.Item>
+              <Descriptions.Item label="当前状态">
+                {data.employmentStatus ? <Space><EmploymentStatusTag status={data.employmentStatus} /></Space> : '--'}
+              </Descriptions.Item>
               <Descriptions.Item label="紧急联系人">{label(data.emergencyContactName)}</Descriptions.Item>
               <Descriptions.Item label="与本人关系">{label(data.emergencyContactRelationship)}</Descriptions.Item>
               <Descriptions.Item label="紧急联系人电话">{label(data.emergencyContactMobile)}</Descriptions.Item>

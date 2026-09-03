@@ -43,5 +43,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   }
 
   if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+
+  const body = await response.text();
+  if (body.trim() === '') return null as T;
+  return JSON.parse(body) as T;
 }

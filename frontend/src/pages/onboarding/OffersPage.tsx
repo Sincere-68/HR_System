@@ -1,19 +1,18 @@
-import { SolutionOutlined } from '@ant-design/icons';
-import {
-  OFFER_LIST_VIEWS,
-  type OfferListView,
-} from '@hr-demo/shared';
+import { ExportOutlined, FileTextOutlined, PlusOutlined, SolutionOutlined } from '@ant-design/icons';
+import { type OfferListView } from '@hr-demo/shared';
 import { Alert, Button, Typography } from 'antd';
-import { useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useOffers } from '../../features/onboarding/api';
-import { AcceptedOffersTable } from './offer-views/AcceptedOffersTable';
-import { AllOffersTable } from './offer-views/AllOffersTable';
+import { useMemo, useState } from 'react';
+import { TableExportDialog } from '../../features/employees/TableExportDialog';
+import { Link, useSearchParams } from 'react-router-dom';
+import { downloadOnboardingExport, useOffers } from '../../features/onboarding/api';
+import { AcceptedOffersTable, acceptedOfferColumns } from './offer-views/AcceptedOffersTable';
+import { AllOffersTable, allOfferColumns } from './offer-views/AllOffersTable';
 import { OfferViewTable } from './offer-views/OfferViewTable';
-import { OnboardedOffersTable } from './offer-views/OnboardedOffersTable';
-import { RejectedOffersTable } from './offer-views/RejectedOffersTable';
-import { SentOffersTable } from './offer-views/SentOffersTable';
+import { OnboardedOffersTable, onboardedOfferColumns } from './offer-views/OnboardedOffersTable';
+import { RejectedOffersTable, rejectedOfferColumns } from './offer-views/RejectedOffersTable';
+import { SentOffersTable, sentOfferColumns } from './offer-views/SentOffersTable';
 import { offerColumns } from './onboarding-table-configs';
+import { fieldsFromColumns } from './export-fields';
 
 const offerViewCards: Array<{ view: OfferListView; label: string; countKey: 'pendingSend' | 'sent' | 'accepted' | 'rejected' | 'onboarded' | 'all' }> = [
   { view: 'PENDING_SEND', label: '待发Offer', countKey: 'pendingSend' },
@@ -26,11 +25,16 @@ const offerViewCards: Array<{ view: OfferListView; label: string; countKey: 'pen
 
 function positiveInt(value: string | null, fallback: number) {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 100 ? parsed : fallback;
 }
 
 function isOfferListView(value: string | null): value is OfferListView {
-  return Boolean(value && OFFER_LIST_VIEWS.includes(value as OfferListView));
+  return value === 'PENDING_SEND'
+    || value === 'SENT'
+    || value === 'ACCEPTED'
+    || value === 'REJECTED'
+    || value === 'ONBOARDED'
+    || value === 'ALL';
 }
 
 export function OffersPage() {
@@ -45,6 +49,8 @@ export function OffersPage() {
     pageSize: positiveInt(searchParams.get('pageSize'), 10),
   }), [searchParams, view]);
   const offers = useOffers(query);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [selectedOfferIds, setSelectedOfferIds] = useState<string[]>([]);
 
   const patchSearch = (changes: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams);
@@ -64,7 +70,15 @@ export function OffersPage() {
     page: query.page,
     pageSize: query.pageSize,
     onPageChange: handlePageChange,
+    onSelectedRowIdsChange: setSelectedOfferIds,
   };
+  const exportColumns = view === 'SENT' ? sentOfferColumns
+    : view === 'ACCEPTED' ? acceptedOfferColumns
+      : view === 'REJECTED' ? rejectedOfferColumns
+        : view === 'ONBOARDED' ? onboardedOfferColumns
+          : view === 'ALL' ? allOfferColumns
+            : offerColumns;
+  const exportFields = fieldsFromColumns(exportColumns);
 
   const currentTable = (() => {
     switch (view) {
@@ -97,7 +111,25 @@ export function OffersPage() {
           <span className="employee-title-icon" aria-hidden="true"><SolutionOutlined /></span>
           <Typography.Title id="offers-heading" level={1}>Offer管理</Typography.Title>
         </div>
+        <div className="onboarding-page-actions">
+          <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>导出</Button>
+          {view === 'PENDING_SEND' ? (
+            <>
+              <Link to="/onboarding/offers/templates"><Button type="primary" icon={<FileTextOutlined />}>创建Offer</Button></Link>
+              <Link to="/onboarding/offers/new?source=new-hire"><Button type="primary" icon={<PlusOutlined />}>新建实习Offer</Button></Link>
+            </>
+          ) : null}
+        </div>
       </header>
+
+      <TableExportDialog
+        open={exportOpen}
+        title="导出Offer"
+        fields={exportFields}
+        selectedRowIds={selectedOfferIds}
+        onClose={() => setExportOpen(false)}
+        onExport={(input) => downloadOnboardingExport('offers', { ...input, query }, 'Offer管理导出')}
+      />
 
       <div className="offer-overview" aria-label="Offer阶段">
         {offerViewCards.map((card) => (

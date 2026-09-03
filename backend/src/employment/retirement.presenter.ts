@@ -7,7 +7,7 @@ export interface RetirementSnapshot {
   plannedRetirementDate: Date;
   employee: {
     employeeNo: string;
-    name: string;
+    name: string | null;
     gender: Gender | null;
     birthDate: Date | null;
   };
@@ -44,7 +44,7 @@ export function presentRetirement(
   return {
     id: row.id,
     employeeId: row.employeeId,
-    employeeName: row.employee.name,
+    employeeName: row.employee.name ?? '--',
     employeeNo: row.employee.employeeNo,
     gender: row.employee.gender,
     age: row.employee.birthDate ? calculateAgeOnDate(row.employee.birthDate, queryDate) : null,

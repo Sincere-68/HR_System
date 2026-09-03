@@ -1,0 +1,56 @@
+import type { PersonnelTransferFieldKey } from '@hr-demo/shared';
+
+type ImportColumnProfileEntry = readonly [header: string, field: PersonnelTransferFieldKey | null];
+
+/**
+ * Exact column order used by the confirmed legacy "全部在职" export.
+ * Null entries are display-only values and are deliberately ignored on import.
+ */
+export const KNOWN_ACTIVE_EMPLOYEE_EXPORT_PROFILE = [
+  ['JobNumber', 'employeeNo'],
+  ['parent_Name', 'name'],
+  ['OIdDepartment', 'organizationName'],
+  ['EntryDate', 'entryDate'],
+  ['LookupPrefix_OIdJobPosition_Name', 'positionName'],
+  ['parent_Gender', 'gender'],
+  ['parent_extrenyuandingwei_612121_1868211974', 'personnelPosition'],
+  ['OIdJobLevel', 'jobLevel'],
+  ['extyuangongcengji_612121_869310435', 'employeeLevel'],
+  ['Place', 'workplaceName'],
+  ['parent_Email', 'workEmail'],
+  ['parent_BackupMail', 'personalEmail'],
+  ['parent_MobilePhone', 'mobile'],
+  ['EmploymentType', 'personnelCategory'],
+  ['EmploymentSource', 'personnelSource'],
+  ['EmployeeStatus', null],
+  ['LookupPrefix_UserID_FirstPartyCode', 'fullTimeCompany'],
+  ['EmployType', 'employmentRelationship'],
+  ['EmploymentForm', 'workArrangement'],
+  ['POIdEmpAdmin-ExportName', 'managerName'],
+  ['POIdEmpAdmin-Email', null],
+  ['WorkYearTotal', null],
+  ['WorkYearCompanyTotal', null],
+  ['parent_IDType', 'documentType'],
+  ['parent_IDNumber', 'documentNumber'],
+  ['parent_CertificateValidityTerm', 'documentExpiryDate'],
+  ['parent_Birthday', 'birthDate'],
+  ['parent_Age', null],
+  ['parent_Nation', 'ethnicity'],
+  ['parent_MarryCategory', 'maritalStatus'],
+  ['parent_PoliticalStatus', 'politicalStatus'],
+  ['parent_RegistAddress', 'householdAddress'],
+  ['parent_DomicileType', 'householdType'],
+  ['parent_Birthplace', 'nativePlace'],
+  ['parent_HomeAddress', 'residentialAddress'],
+  ['parent_EmergencyContact', 'emergencyContactName'],
+  ['parent_EmergencyContactRelationship', 'emergencyContactRelationship'],
+  ['parent_EmergencyContactPhone', 'emergencyContactMobile'],
+  ['LookupPrefix_UserID_BankID', 'bankName'],
+  ['LookupPrefix_UserID_DepositBank', 'bankBranchName'],
+  ['LookupPrefix_UserID_BankAccount', 'bankAccountNumber'],
+  ['parent_LastSchool', 'graduationSchoolName'],
+  ['parent_extyuanxiaoleixing_612121_1185096412', 'institutionType'],
+  ['parent_EducationLevel', 'highestEducation'],
+  ['parent_GraduateDate', 'graduationDate'],
+  ['parent_Major', 'major'],
+] as const satisfies readonly ImportColumnProfileEntry[];

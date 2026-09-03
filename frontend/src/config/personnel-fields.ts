@@ -5,6 +5,8 @@ import {
   ETHNICITIES,
   HOUSEHOLD_TYPES,
   INSTITUTION_TYPES,
+  IDENTITY_DOCUMENT_TYPES,
+  IDENTITY_DOCUMENT_TYPE_LABELS,
   JOB_LEVELS,
   MARITAL_STATUSES,
   EMPLOYEE_LEVELS,
@@ -19,6 +21,7 @@ import {
   type Ethnicity,
   type HouseholdType,
   type InstitutionType,
+  type IdentityDocumentType,
   type JobLevel,
   type MaritalStatus,
   type EmployeeLevel,
@@ -84,6 +87,8 @@ export const householdTypeLabels: Record<HouseholdType, string> = {
 
 export const bankNameLabels: Record<BankName, string> = { ICBC: '中国工商银行' };
 
+export const identityDocumentTypeLabels: Record<IdentityDocumentType, string> = IDENTITY_DOCUMENT_TYPE_LABELS;
+
 export const educationLevelLabels: Record<EducationLevel, string> = {
   DOCTORAL: '博士研究生', MASTER: '硕士研究生', MBA: 'MBA', BACHELOR: '本科',
   DUAL_BACHELOR: '本科双学位', ASSOCIATE_DEGREE: '大专',
@@ -135,6 +140,7 @@ export const personnelSourceOptions = enumOptions(PERSONNEL_SOURCES, personnelSo
 export const workArrangementOptions = enumOptions(WORK_ARRANGEMENTS, workArrangementLabels);
 export const householdTypeOptions = enumOptions(HOUSEHOLD_TYPES, householdTypeLabels);
 export const bankNameOptions = enumOptions(BANK_NAMES, bankNameLabels);
+export const identityDocumentTypeOptions = enumOptions(IDENTITY_DOCUMENT_TYPES, identityDocumentTypeLabels);
 export const educationLevelOptions = enumOptions(EDUCATION_LEVELS, educationLevelLabels);
 export const institutionTypeOptions = enumOptions(INSTITUTION_TYPES, institutionTypeLabels);
 export const maritalStatusOptions = enumOptions(MARITAL_STATUSES, maritalStatusLabels);

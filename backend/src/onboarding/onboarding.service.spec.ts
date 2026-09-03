@@ -47,6 +47,35 @@ function createService(demoEnabled: boolean, overrides: Record<string, unknown> 
   return { service, prisma, access };
 }
 
+describe('OnboardingService exports', () => {
+  it('exports only selected fields from the active Offer view', async () => {
+    const offer = {
+      id: 'offer-1', name: '虚构候选人', personalEmail: 'candidate@example.invalid', mobile: null,
+      gender: null, organizationName: null, appliedPositionName: null, offeredPositionName: null,
+      workplaceName: null, proposedEntryDate: null, probationMonths: null, offerSenderName: null,
+      issueDate: null, recommenderName: null, acceptedAt: null, syncStatus: null, rejectedAt: null,
+      rejectedReason: null, entryDate: null, approvalStatus: null, currentApproverName: null,
+      offerStatus: 'DRAFT' as const, resumeInfo: null,
+    };
+    const { service } = createService(false);
+    jest.spyOn(service, 'findOffers').mockResolvedValue({
+      data: [offer],
+      meta: { page: 1, pageSize: 10_000, total: 1, totalPages: 1, viewCounts: emptyOfferViewCounts },
+    });
+
+    const result = await service.exportOffers(user, {
+      format: 'CSV',
+      fields: ['name', 'personalEmail'],
+      query: { view: 'PENDING_SEND' },
+    });
+
+    expect(result.buffer.toString('utf8')).toContain('姓名');
+    expect(result.buffer.toString('utf8')).toContain('个人邮箱');
+    expect(result.buffer.toString('utf8')).not.toContain('录用部门');
+    expect(result.buffer.toString('utf8')).toContain('candidate@example.invalid');
+  });
+});
+
 describe('OnboardingService', () => {
   const methods = [
     'findOffers',

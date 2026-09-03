@@ -20,6 +20,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { StaffingModule } from './staffing/staffing.module';
+import { PerformanceModule } from './performance/performance.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { StaffingModule } from './staffing/staffing.module';
     EmploymentModule,
     StaffingModule,
     OnboardingModule,
+    PerformanceModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

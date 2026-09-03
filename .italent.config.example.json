@@ -1,0 +1,8 @@
+{
+  "requestUrl": "https://cloud.italent.cn/mrest/PerformanceCloud/PerformanceCloud/100000/GoalTemplate/GoalTemplateDetail?goalTemplateId=REPLACE_TEMPLATE_ID&__t=REPLACE_TIMESTAMP&_qsrcapp=performancecloud&quark_s=REPLACE_SIGNATURE",
+  "cookie": "PASTE_THE_COMPLETE_COOKIE_REQUEST_HEADER_VALUE_HERE",
+  "referer": "https://cloud.italent.cn/PerformanceCloud?_qsrcapp=performancecloud",
+  "tenantId": "REPLACE_TENANT_ID",
+  "userId": "REPLACE_USER_ID",
+  "vid": "REPLACE_VID"
+}

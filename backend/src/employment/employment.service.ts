@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createTableExport } from '../common/table-export';
 import {
   ApprovalDecision,
   AssignmentStatus,
@@ -9,6 +10,7 @@ import {
   RecordStatus,
 } from '@prisma/client';
 import {
+  type EmployeeExportInput,
   type EmployeeMovementListItem,
   type EmploymentRecordListItem,
   type InternListItem,
@@ -361,7 +363,7 @@ export class EmploymentService {
         return {
           id: row.id,
           employeeId: row.employeeId,
-          employeeName: row.employee.name,
+          employeeName: row.employee.name ?? '--',
           workEmail: row.employee.workEmail,
           internshipOrganizationName: null,
           departmentName: assignment?.organization.name ?? null,
@@ -382,6 +384,23 @@ export class EmploymentService {
         totalPages: Math.ceil(total / query.pageSize),
       },
     };
+  }
+
+  async exportInterns(user: AuthenticatedUser, dto: EmployeeExportInput) {
+    const query = dto.query ?? {};
+    const result = await this.findInterns(user, {
+      keyword: query.keyword,
+      startDateFrom: (query as { startDateFrom?: string }).startDateFrom,
+      startDateTo: (query as { startDateTo?: string }).startDateTo,
+      page: 1,
+      pageSize: 10_000,
+    } as QueryInternsDto);
+    const rows = dto.employeeIds?.length ? result.data.filter(({ id }) => dto.employeeIds!.includes(id)) : result.data;
+    return createTableExport(rows, dto.fields, [
+      ['employeeName', '姓名'], ['workEmail', '邮箱'], ['internshipOrganizationName', '实习机构'], ['departmentName', '实习部门'],
+      ['positionName', '实习职位'], ['startDate', '实习开始日期'], ['approvalStatus', '审批状态'], ['managerName', '直线经理'],
+      ['bankName', '银行'], ['bankAccountNumber', '银行账号'], ['bankBranchName', '开户行支行'],
+    ].map(([key, title]) => ({ key: key!, title: title! })), dto.format, '实习生导出');
   }
 
   async findLaborWorkers(
@@ -699,7 +718,7 @@ export class EmploymentService {
         id: row.id,
         employeeId: row.employeeId,
         employeeNo: row.employee.employeeNo,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         departmentName: assignments[index]?.organization.name ?? null,
         positionName: assignments[index]?.position?.name ?? null,
         startDate: row.startDate.toISOString().slice(0, 10),
@@ -1267,7 +1286,7 @@ export class EmploymentService {
           id: row.id,
           employeeId: row.employeeId,
           employeeNo: row.employee.employeeNo,
-          employeeName: row.employee.name,
+          employeeName: row.employee.name ?? '--',
           effectiveDate: row.effectiveDate.toISOString().slice(0, 10),
           movementTypeName: row.movementType.name,
           movementTypeEmployeeName: null,

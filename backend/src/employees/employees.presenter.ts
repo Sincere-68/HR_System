@@ -16,14 +16,14 @@ import {
 export interface EmployeeWithCurrentRecord {
   id: string;
   employeeNo: string;
-  name: string;
-  mobile: string;
+  name: string | null;
+  mobile: string | null;
   idCardNo: string | null;
-  organizationId: string;
-  organization: { id?: string; name: string };
+  organizationId: string | null;
+  organization: { id?: string; code?: string; name: string } | null;
   assignments?: Array<{
     id?: string;
-    organization: { id: string; name: string };
+    organization: { id: string; code?: string; name: string };
     status?: 'ACTIVE' | 'ENDED';
     isPrimary: boolean;
     startDate: Date;
@@ -43,8 +43,11 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
   maritalStatus: string | null;
   politicalStatus: string | null;
   nativePlace: string | null;
+  nativePlaceRegionCode?: string | null;
   householdType?: string | null;
+  householdRegionCode?: string | null;
   householdAddress: string | null;
+  residentialRegionCode?: string | null;
   residentialAddress: string | null;
   bankName?: string | null;
   bankBranchName?: string | null;
@@ -61,7 +64,7 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
   }>;
   assignments: Array<{
     id?: string;
-    organization: { id: string; name: string };
+    organization: { id: string; code?: string; name: string };
     status: 'ACTIVE' | 'ENDED';
     positionId?: string | null;
     jobLevel?: JobLevel | null;
@@ -79,7 +82,7 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
     endDate: Date | null;
   }>;
   reportingAsEmployee: Array<{
-    manager: { name: string; workEmail: string | null };
+    manager: { name: string | null; workEmail: string | null };
     isPrimary: boolean;
     startDate: Date;
     endDate: Date | null;
@@ -118,8 +121,7 @@ export function presentEmployee(
   employee: EmployeeWithCurrentRecord,
   visibleOrganizationIds?: readonly string[],
 ) {
-  const currentRecord = employee.employmentRecords[0];
-  if (!currentRecord) throw new Error(`Employee ${employee.id} has no current employment record`);
+  const currentRecord = employee.employmentRecords[0] ?? null;
   const assignments = employee.assignments ?? [];
   const allowedAssignments = visibleOrganizationIds
     ? assignments.filter((assignment) => visibleOrganizationIds.includes(assignment.organization.id))
@@ -127,20 +129,21 @@ export function presentEmployee(
   const visibleAssignment = allowedAssignments.find((assignment) => assignment.isPrimary)
     ?? allowedAssignments[0]
     ?? null;
-  const mayUseLegacyOrganization = assignments.length === 0
-    && (!visibleOrganizationIds || visibleOrganizationIds.includes(employee.organizationId));
+  const mayUseLegacyOrganization = Boolean(employee.organizationId && employee.organization)
+    && assignments.length === 0
+    && (!visibleOrganizationIds || visibleOrganizationIds.includes(employee.organizationId!));
 
   return {
     id: employee.id,
     employeeNo: employee.employeeNo,
-    name: employee.name,
-    mobile: employee.mobile,
+    name: displayEmployeeName(employee.name),
+    mobile: employee.mobile ?? '--',
     idCardNo: employee.idCardNo,
     organizationId: visibleAssignment?.organization.id
-      ?? (mayUseLegacyOrganization ? employee.organizationId : ''),
+      ?? (mayUseLegacyOrganization ? employee.organizationId! : ''),
     organizationName: visibleAssignment?.organization.name
-      ?? (mayUseLegacyOrganization ? employee.organization.name : ''),
-    employmentStatus: currentRecord.status,
+      ?? (mayUseLegacyOrganization ? employee.organization?.name ?? '' : ''),
+    employmentStatus: currentRecord?.status ?? null,
     createdAt: employee.createdAt.toISOString(),
     updatedAt: employee.updatedAt.toISOString(),
   };
@@ -186,8 +189,11 @@ export function presentDemoEmployeeListItem(
     maritalStatus: null,
     politicalStatus: null,
     nativePlace: null,
+    nativePlaceRegionCode: null,
     householdType: null,
+    householdRegionCode: null,
     householdAddress: null,
+    residentialRegionCode: null,
     residentialAddress: null,
     emergencyContactName: null,
     emergencyContactRelationship: null,
@@ -239,6 +245,10 @@ function sumExperienceYears(
   ) * 100) / 100;
 }
 
+export function displayEmployeeName(value: string | null) {
+  return value ?? '--';
+}
+
 function calculateAge(birthDate: Date | null, now: Date) {
   if (!birthDate) return null;
   let age = now.getUTCFullYear() - birthDate.getUTCFullYear();
@@ -253,8 +263,6 @@ export function presentEmployeeListItem(
   now = new Date(),
   visibleOrganizationIds?: readonly string[],
 ): EmployeeListItem {
-  const currentRecord = employee.employmentRecords[0];
-  if (!currentRecord) throw new Error(`Employee ${employee.id} has no current employment record`);
 
   const currentPeriod = employee.employmentPeriods[0] ?? null;
   const currentAgreement = currentPeriod?.agreements?.[0] ?? null;
@@ -316,8 +324,11 @@ export function presentEmployeeListItem(
     maritalStatus: employee.maritalStatus as EmployeeListItem['maritalStatus'],
     politicalStatus: employee.politicalStatus as EmployeeListItem['politicalStatus'],
     nativePlace: employee.nativePlace,
+    nativePlaceRegionCode: employee.nativePlaceRegionCode ?? null,
     householdType: employee.householdType as EmployeeListItem['householdType'] ?? null,
+    householdRegionCode: employee.householdRegionCode ?? null,
     householdAddress: employee.householdAddress,
+    residentialRegionCode: employee.residentialRegionCode ?? null,
     residentialAddress: employee.residentialAddress,
     emergencyContactName: emergencyContact?.name ?? null,
     emergencyContactRelationship: emergencyContact?.relationship ?? null,

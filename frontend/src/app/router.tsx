@@ -1,9 +1,18 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../features/auth/protected-route';
 import { AppLayout } from '../layouts/AppLayout';
+import { PerformanceLayout } from '../layouts/PerformanceLayout';
 import { LoginPage } from '../pages/LoginPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
+import { SystemSelectionPage } from '../pages/SystemSelectionPage';
+import { PerformanceAmountBasePage } from '../pages/performance/PerformanceAmountBasePage';
+import { PerformanceDashboardPage } from '../pages/performance/PerformanceDashboardPage';
+import { PerformanceMyTasksPage } from '../pages/performance/PerformanceMyTasksPage';
+import { PerformanceResultsPage } from '../pages/performance/PerformanceResultsPage';
+import { PerformanceTasksPage } from '../pages/performance/PerformanceTasksPage';
+import { PerformanceTemplatesPage } from '../pages/performance/PerformanceTemplatesPage';
+import { PerformanceTemplateEditorPage } from '../pages/performance/PerformanceTemplateEditorPage';
 import { BlacklistPage } from '../pages/blacklist/BlacklistPage';
 import { BlacklistRemovalPage } from '../pages/blacklist/BlacklistRemovalPage';
 import { EmployeeDetailPage } from '../pages/employees/EmployeeDetailPage';
@@ -26,6 +35,8 @@ import { IdCardReaderPage } from '../pages/onboarding/IdCardReaderPage';
 import { IntegrationPage } from '../pages/onboarding/IntegrationPage';
 import { IntroductionPage } from '../pages/onboarding/IntroductionPage';
 import { OffersPage } from '../pages/onboarding/OffersPage';
+import { InternOfferFormPage } from '../pages/onboarding/InternOfferFormPage';
+import { OfferCreationPage } from '../pages/onboarding/OfferCreationPage';
 import { HandoverPage } from '../pages/HandoverPage';
 import { AppraisalsPage } from '../pages/subsets/AppraisalsPage';
 import { AwardsPage } from '../pages/subsets/AwardsPage';
@@ -45,8 +56,18 @@ export function AppRouter() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
+        <Route index element={<SystemSelectionPage />} />
+        <Route path="performance" element={<PerformanceLayout />}>
+          <Route index element={<PerformanceDashboardPage />} />
+          <Route path="templates" element={<PerformanceTemplatesPage />} />
+          <Route path="templates/new" element={<PerformanceTemplateEditorPage />} />
+          <Route path="templates/:templateId" element={<PerformanceTemplateEditorPage />} />
+          <Route path="tasks" element={<PerformanceTasksPage />} />
+          <Route path="my-tasks" element={<PerformanceMyTasksPage />} />
+          <Route path="results" element={<PerformanceResultsPage />} />
+          <Route path="settings/amount-base" element={<PerformanceAmountBasePage />} />
+        </Route>
         <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/personnel/employees" replace />} />
           <Route path="personnel/employees" element={<EmployeeListPage />} />
           <Route
             path="personnel/employees/new"
@@ -74,6 +95,8 @@ export function AppRouter() {
           <Route path="employment/termination" element={<TerminationManagementPage />} />
           <Route path="employment/retirement" element={<RetirementManagementPage />} />
           <Route path="onboarding/offers" element={<OffersPage />} />
+          <Route path="onboarding/offers/new" element={<InternOfferFormPage />} />
+          <Route path="onboarding/offers/templates" element={<OfferCreationPage />} />
           <Route path="onboarding/entries" element={<EntriesPage />} />
           <Route path="onboarding/integration" element={<IntegrationPage />} />
           <Route path="onboarding/introduction" element={<IntroductionPage />} />

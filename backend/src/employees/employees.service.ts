@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import {
   AgreementStatus,
   AgreementType,
@@ -13,7 +14,16 @@ import {
   ReportingRelationshipType,
   WorkArrangement,
 } from '@prisma/client';
-import type { EmployeeFormOptions, EmployeeListItem, Paginated } from '@hr-demo/shared';
+import {
+  isChinaAdministrativeRegionCode,
+  PERSONNEL_FIELDS,
+  type EmployeeFormOptions,
+  type EmployeeImportResult,
+  type EmployeeListItem,
+  type EmployeeTransferRowResult,
+  type Paginated,
+  type PersonnelTransferFieldKey,
+} from '@hr-demo/shared';
 import { AccessControlService } from '../access-control/access-control.service';
 import { AuditService, type AuditContext } from '../audit/audit.service';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
@@ -22,10 +32,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { QueryEmployeesDto } from './dto/query-employees.dto';
 import { QueryRegularEmployeesDto } from './dto/query-regular-employees.dto';
-import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { collectFieldChanges, enumValue } from './employee-field-change-log';
+import { EmployeeExportDto } from './dto/employee-transfer.dto';
+import { InitialEmploymentDto, UpdateEmployeeDto } from './dto/update-employee.dto';
+import { collectFieldChanges, directoryValue, enumValue } from './employee-field-change-log';
 import { EMPLOYEE_ENUM_LABELS, employeeEnumLabel } from './employee-field-labels';
+import { KNOWN_ACTIVE_EMPLOYEE_EXPORT_PROFILE } from './employee-import-column-profiles';
 import {
+  displayEmployeeName,
   presentDemoEmployeeDetail,
   presentDemoEmployeeListItem,
   presentEmployee,
@@ -40,7 +53,7 @@ import {
 
 function getEmployeeDetailInclude(now = new Date()) {
   return Prisma.validator<Prisma.EmployeeInclude>()({
-    organization: { select: { id: true, name: true } },
+    organization: { select: { id: true, code: true, name: true } },
   employmentRecords: {
     where: { currentFlag: true },
     select: { status: true },
@@ -113,12 +126,11 @@ function getEmployeeDetailInclude(now = new Date()) {
     where: {
       status: AssignmentStatus.ACTIVE,
       archivedAt: null,
-      startDate: { lte: now },
-      OR: [{ endDate: null }, { endDate: { gte: now } }],
+      employmentPeriod: { entryDate: { lte: now } },
     },
     orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
     include: {
-      organization: { select: { id: true, name: true } },
+      organization: { select: { id: true, code: true, name: true } },
       position: { select: { id: true, name: true } },
       workplace: { select: { id: true, name: true } },
     },
@@ -169,7 +181,7 @@ function getEmployeeListInclude(now: Date) {
       },
       orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
       include: {
-        organization: { select: { id: true, name: true } },
+        organization: { select: { id: true, code: true, name: true } },
         position: { select: { id: true, name: true } },
         workplace: { select: { id: true, name: true } },
       },
@@ -253,15 +265,10 @@ export class EmployeesService {
       this.prisma.position.findMany({
         where: {
           status: RecordStatus.ACTIVE,
-          OR: [
-            { organizationId: null },
-            ...(hasAllEmployeeData
-              ? [{}]
-              : [{ organizationId: { in: accessibleOrganizationIds } }]),
-          ],
+          archivedAt: null,
         },
-        select: { id: true, name: true, organizationId: true },
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        select: { id: true, code: true, name: true, organizationId: true },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.workplace.findMany({
         where: { status: RecordStatus.ACTIVE },
@@ -271,6 +278,7 @@ export class EmployeesService {
       this.prisma.employee.findMany({
         where: {
           ...managerWhere,
+          name: { not: null },
           ...(options.excludeEmployeeId ? { id: { not: options.excludeEmployeeId } } : {}),
         },
         select: { id: true, name: true, employeeNo: true },
@@ -289,7 +297,7 @@ export class EmployeesService {
     return {
       positions,
       workplaces,
-      managers,
+      managers: managers.map(({ id, name, employeeNo }) => ({ id, name: displayEmployeeName(name), employeeNo })),
       employingCompanies,
     };
   }
@@ -346,6 +354,13 @@ export class EmployeesService {
     if (query.status) {
       conditions.push({
         employmentRecords: { some: { status: query.status, currentFlag: true } },
+      });
+    } else {
+      conditions.push({
+        OR: [
+          { employmentRecords: { some: { currentFlag: true } } },
+          { employmentRecords: { none: {} } },
+        ],
       });
     }
 
@@ -469,6 +484,254 @@ export class EmployeesService {
     };
   }
 
+  // Imports may create a partial employee master. A later row for the same
+  // employee can atomically establish its first employment period and primary
+  // assignment when it supplies the confirmed complete employment fields.
+  async importEmployees(
+    user: AuthenticatedUser,
+    file: { originalname: string; buffer: Buffer } | undefined,
+    auditContext: AuditContext,
+  ): Promise<EmployeeImportResult> {
+    if (!file) throw new BadRequestException('请选择要导入的 XLSX 或 CSV 文件');
+    if (this.demo.enabled) throw new ConflictException('人员导入仅支持 MySQL 模式');
+
+    const extension = file.originalname.split('.').pop()?.toLocaleLowerCase();
+    if (extension !== 'xlsx' && extension !== 'csv') {
+      throw new BadRequestException('仅支持 .xlsx 或 .csv 文件');
+    }
+    const workbook = new ExcelJS.Workbook();
+    if (extension === 'xlsx') {
+      await workbook.xlsx.load(file.buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    } else {
+      const csvText = this.decodeImportCsv(file.buffer);
+      const rows = this.parseImportCsv(csvText);
+      const worksheet = workbook.addWorksheet('人员');
+      rows.forEach((row) => worksheet.addRow(row));
+    }
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) throw new BadRequestException('导入文件不包含工作表');
+    if (worksheet.rowCount > 10_001) throw new BadRequestException('单次最多导入 10000 行');
+
+    const columns = this.resolveImportColumns(worksheet.getRow(1).values as unknown[]);
+    if (!columns.has('employeeNo')) throw new BadRequestException('导入文件必须包含“工号”列');
+    const results: EmployeeTransferRowResult[] = [];
+    const seenEmployeeNos = new Set<string>();
+
+    for (let index = 2; index <= worksheet.rowCount; index += 1) {
+      const values = worksheet.getRow(index).values as unknown[];
+      const input = this.readImportRow(columns, values);
+      if (Object.values(input).every((value) => value === undefined)) continue;
+      const employeeNo = input.employeeNo?.trim() ?? null;
+      if (!employeeNo) {
+        results.push({ rowNumber: index, employeeNo: null, action: 'FAILED', errors: ['工号不能为空'] });
+        continue;
+      }
+      if (seenEmployeeNos.has(employeeNo)) {
+        results.push({ rowNumber: index, employeeNo, action: 'FAILED', errors: ['导入文件中的工号重复'] });
+        continue;
+      }
+      seenEmployeeNos.add(employeeNo);
+
+      try {
+        const existing = await this.prisma.employee.findUnique({
+          where: { employeeNo },
+          select: {
+            id: true,
+            assignments: {
+              where: { isPrimary: true, status: AssignmentStatus.ACTIVE, archivedAt: null },
+              take: 1,
+              select: { id: true },
+            },
+          },
+        });
+        if (existing) {
+          const update = this.toImportUpdateInput(input);
+          const hasCurrentPrimaryAssignment = existing.assignments.length > 0;
+          if (!hasCurrentPrimaryAssignment && this.hasImportEmploymentValues(input)) {
+            const warnings = await this.completeImportedEmployment(user, existing.id, input, update, auditContext);
+            results.push({ rowNumber: index, employeeNo, action: 'UPDATED', errors: [], warnings });
+            continue;
+          }
+          if (Object.keys(update).length === 0) {
+            results.push({ rowNumber: index, employeeNo, action: 'SKIPPED', errors: [] });
+            continue;
+          }
+          await this.update(user, existing.id, update, auditContext);
+          results.push({ rowNumber: index, employeeNo, action: 'UPDATED', errors: [] });
+        } else {
+          await this.createPartialImportedEmployee(user, input, auditContext);
+          results.push({ rowNumber: index, employeeNo, action: 'CREATED', errors: [] });
+        }
+      } catch (error) {
+        results.push({
+          rowNumber: index,
+          employeeNo,
+          action: 'FAILED',
+          errors: [error instanceof Error ? error.message : '导入失败'],
+        });
+      }
+    }
+
+    return {
+      created: results.filter(({ action }) => action === 'CREATED').length,
+      updated: results.filter(({ action }) => action === 'UPDATED').length,
+      skipped: results.filter(({ action }) => action === 'SKIPPED').length,
+      failed: results.filter(({ action }) => action === 'FAILED').length,
+      rows: results,
+    };
+  }
+
+  async getImportTemplate(format: 'XLSX' | 'CSV') {
+    const fields = PERSONNEL_FIELDS.filter(({ importable }) => importable);
+    const extension = format === 'XLSX' ? 'xlsx' : 'csv';
+    const filename = `人员导入模板.${extension}`;
+    if (format === 'CSV') {
+      const csv = fields.map(({ title }) => `"${title}"`).join(',');
+      return {
+        buffer: Buffer.from(`﻿${csv}\r\n`, 'utf8'),
+        filename,
+        contentType: 'text/csv; charset=utf-8',
+      };
+    }
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('人员');
+    worksheet.addRow(fields.map(({ title }) => title));
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.columns.forEach((column, index) => {
+      column.width = Math.min(36, Math.max(12, fields[index]?.title.length ?? 12));
+    });
+    return {
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+      filename,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+  }
+
+  async exportEmployees(user: AuthenticatedUser, dto: EmployeeExportDto) {
+    const fields = dto.fields as PersonnelTransferFieldKey[];
+    const query = dto.query ?? {};
+    const now = new Date();
+    const visibleOrganizationIds = this.access.hasAllEmployeeData(user)
+      ? undefined
+      : (await this.access.getAccessibleOrganizationIds(user)) ?? [];
+
+    let rows: EmployeeListItem[];
+    if (this.demo.enabled) {
+      rows = this.findAllInDemo(user, {
+        ...query,
+        page: 1,
+        pageSize: 10_000,
+      } as QueryEmployeesDto).data as EmployeeListItem[];
+    } else {
+      const conditions: Prisma.EmployeeWhereInput[] = [];
+      if (visibleOrganizationIds) {
+        conditions.push(await this.access.getEmployeeWhere(user, visibleOrganizationIds, now));
+      }
+      if (query.keyword) {
+        conditions.push({
+          OR: [
+            { name: { contains: query.keyword } },
+            { employeeNo: { contains: query.keyword } },
+          ],
+        });
+      }
+      if (query.status) {
+        conditions.push({ employmentRecords: { some: { status: query.status, currentFlag: true } } });
+      } else {
+        conditions.push({
+          OR: [
+            { employmentRecords: { some: { currentFlag: true } } },
+            { employmentRecords: { none: {} } },
+          ],
+        });
+      }
+      if (query.organizationId) {
+        const subtreeIds = await this.access.getOrganizationSubtreeIds(
+          query.organizationId,
+          visibleOrganizationIds,
+        );
+        conditions.push({
+          OR: [
+            {
+              assignments: {
+                some: {
+                  status: AssignmentStatus.ACTIVE,
+                  archivedAt: null,
+                  startDate: { lte: now },
+                  OR: [{ endDate: null }, { endDate: { gte: now } }],
+                  organizationId: { in: subtreeIds },
+                },
+              },
+            },
+            { assignments: { none: {} }, organizationId: { in: subtreeIds } },
+          ],
+        });
+      }
+      if (dto.employeeIds?.length) {
+        conditions.push({ id: { in: dto.employeeIds } });
+      }
+      const employees = await this.prisma.employee.findMany({
+        where: { AND: conditions },
+        include: getEmployeeListInclude(now),
+        orderBy: [{ employeeNo: 'asc' }, { id: 'asc' }],
+        take: 10_000,
+      });
+      rows = employees.map((employee) => presentEmployeeListItem(employee, now, visibleOrganizationIds));
+    }
+
+    if (dto.employeeIds?.length && this.demo.enabled) {
+      const selectedIds = new Set(dto.employeeIds);
+      rows = rows.filter(({ id }) => selectedIds.has(id));
+    }
+
+    const fieldDefinitions = fields.map((field) => {
+      const definition = PERSONNEL_FIELDS.find(({ key }) => key === field);
+      if (!definition) throw new BadRequestException(`不支持导出字段：${field}`);
+      return definition;
+    });
+    const values = rows.map((row) => fieldDefinitions.map(({ key }) => this.exportCellValue(row[key as keyof EmployeeListItem])));
+    const extension = dto.format === 'XLSX' ? 'xlsx' : 'csv';
+    const filename = `人员导出_${this.utcCalendarDay().toISOString().slice(0, 10)}.${extension}`;
+
+    if (dto.format === 'CSV') {
+      const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+      const csv = [
+        fieldDefinitions.map(({ title }) => escape(title)).join(','),
+        ...values.map((row) => row.map((value) => escape(value)).join(',')),
+      ].join('\r\n');
+      return {
+        buffer: Buffer.from(`﻿${csv}`, 'utf8'),
+        filename,
+        contentType: 'text/csv; charset=utf-8',
+      };
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('人员');
+    worksheet.addRow(fieldDefinitions.map(({ title }) => title));
+    values.forEach((row) => worksheet.addRow(row));
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.columns.forEach((column, index) => {
+      column.width = Math.min(36, Math.max(12, fieldDefinitions[index]?.title.length ?? 12));
+    });
+    return {
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+      filename,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+  }
+
+  async exportRegularEmployees(user: AuthenticatedUser, dto: EmployeeExportDto) {
+    const result = await this.findRegularEmployees(user, {
+      page: 1,
+      pageSize: 10_000,
+    } as QueryRegularEmployeesDto);
+    const rows = dto.employeeIds?.length
+      ? result.data.filter(({ employeeId }) => dto.employeeIds!.includes(employeeId))
+      : result.data;
+    return this.createTransferExportFile(rows, dto.fields, dto.format, '正式人员导出');
+  }
+
   async findOne(user: AuthenticatedUser, id: string, auditContext: AuditContext) {
     if (this.demo.enabled) {
       const employee = this.findAccessibleDemoEmployee(user, id);
@@ -491,6 +754,7 @@ export class EmployeesService {
     }
 
     await this.validateCreateRelations(user, dto);
+    this.validateRegionCodes(dto);
     const entryDate = this.toDate(dto.entryDate);
     const probationEndDate = dto.probationEndDate ? this.toDate(dto.probationEndDate) : undefined;
     const contractEndDate = dto.contractEndDate ? this.toDate(dto.contractEndDate) : undefined;
@@ -533,8 +797,11 @@ export class EmployeesService {
             ethnicity: dto.ethnicity,
             maritalStatus: dto.maritalStatus,
             politicalStatus: dto.politicalStatus,
+            nativePlaceRegionCode: dto.nativePlaceRegionCode,
             householdType: dto.householdType,
+            householdRegionCode: dto.householdRegionCode,
             householdAddress: dto.householdAddress,
+            residentialRegionCode: dto.residentialRegionCode,
             residentialAddress: dto.residentialAddress,
             bankName: dto.bankName,
             bankBranchName: dto.bankBranchName,
@@ -726,7 +993,15 @@ export class EmployeesService {
     const current = this.demo.enabled
       ? this.findAccessibleDemoEmployee(user, id)
       : await this.findAccessibleEmployee(user, id);
+    const organizationChanged = dto.organizationId !== undefined && dto.organizationId !== current.organizationId;
+    if (organizationChanged) {
+      await this.access.assertOrganizationAccess(user, dto.organizationId!);
+    }
+    if (dto.initialEmployment) {
+      await this.access.assertOrganizationAccess(user, dto.initialEmployment.organizationId);
+    }
     const changedFields = Object.keys(dto);
+    this.validateRegionCodes(dto);
     if (changedFields.length === 0) {
       if (this.demo.enabled) return presentDemoEmployeeDetail(current as DemoEmployeeRecord);
       const visibleOrganizationIds = this.access.hasAllEmployeeData(user)
@@ -736,24 +1011,39 @@ export class EmployeesService {
     }
 
     if (this.demo.enabled) {
-      const employee = this.demo.updateEmployee(current as DemoEmployeeRecord, dto);
+      const employee = this.demo.updateEmployee(current as DemoEmployeeRecord, dto as never);
       await this.audit.create(auditContext, AuditAction.UPDATE, id, { changedFields });
       return presentDemoEmployeeDetail(employee);
     }
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        const entryDateValidationDate = this.utcCalendarDay();
         const currentAssignment = await tx.employeeAssignment.findFirst({
-          where: { employeeId: id, isPrimary: true, status: AssignmentStatus.ACTIVE, archivedAt: null },
+          where: {
+            employeeId: id,
+            isPrimary: true,
+            status: AssignmentStatus.ACTIVE,
+            archivedAt: null,
+            employmentPeriod: { entryDate: { lte: entryDateValidationDate } },
+          },
           orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
           select: {
             id: true,
+            employmentPeriodId: true,
+            positionId: true,
+            jobLevel: true,
+            jobTitleId: true,
+            workplaceId: true,
+            assignmentType: true,
             personnelPosition: true,
             employeeLevel: true,
             personnelCategory: true,
             employmentRelationship: true,
             personnelSource: true,
             workArrangement: true,
+            organization: { select: { id: true, code: true, name: true } },
+            startDate: true,
           },
         });
         const currentDocument = await tx.employeeIdentityDocument.findFirst({
@@ -811,8 +1101,11 @@ export class EmployeesService {
           'maritalStatus',
           'politicalStatus',
           'nativePlace',
+          'nativePlaceRegionCode',
           'householdType',
+          'householdRegionCode',
           'householdAddress',
+          'residentialRegionCode',
           'residentialAddress',
           'bankName',
           'bankBranchName',
@@ -822,16 +1115,33 @@ export class EmployeesService {
           dto as Record<string, unknown>,
           current as unknown as Record<string, unknown>,
         ).filter(({ field }) => profileFields.includes(field as (typeof profileFields)[number]));
+        if (dto.initialEmployment && currentAssignment) {
+          throw new BadRequestException('当前员工已有主要任职记录，不能重复补建首段任职');
+        }
+        if (!currentAssignment && dto.initialEmployment) {
+          await this.createInitialEmploymentForEmployee(
+            tx,
+            id,
+            dto.initialEmployment,
+            auditContext,
+          );
+        }
+        if (organizationChanged && !currentAssignment && !dto.initialEmployment) {
+          throw new BadRequestException('当前员工没有可更新的主要任职记录；请一次性补齐首段任职信息');
+        }
         await tx.employee.update({
           where: { id },
           data: {
             employeeNo: dto.employeeNo, name: dto.name, workEmail: dto.workEmail, personalEmail: dto.personalEmail,
             mobile: dto.mobile, gender: dto.gender, birthDate: dto.birthDate ? this.toDate(dto.birthDate) : undefined,
             ethnicity: dto.ethnicity, maritalStatus: dto.maritalStatus, politicalStatus: dto.politicalStatus,
-            nativePlace: dto.nativePlace, householdType: dto.householdType, householdAddress: dto.householdAddress,
+            nativePlace: dto.nativePlace, nativePlaceRegionCode: dto.nativePlaceRegionCode,
+            householdType: dto.householdType, householdRegionCode: dto.householdRegionCode,
+            householdAddress: dto.householdAddress, residentialRegionCode: dto.residentialRegionCode,
             residentialAddress: dto.residentialAddress, bankName: dto.bankName, bankBranchName: dto.bankBranchName,
             bankAccountNumber: dto.bankAccountNumber,
             idCardNo: changesDocument ? legacyIdCardNo : undefined,
+            organizationId: organizationChanged ? dto.organizationId : undefined,
           },
         });
         for (const change of profileChanges) {
@@ -864,10 +1174,69 @@ export class EmployeesService {
 
         const assignmentFields = ['personnelPosition', 'employeeLevel', 'personnelCategory', 'employmentRelationship', 'personnelSource', 'workArrangement'] as const;
         const changesCurrentAssignment = assignmentFields.some((field) => dto[field] !== undefined);
-        if (changesCurrentAssignment && !currentAssignment) {
-          throw new BadRequestException('当前员工没有可更新的主要任职记录');
+        if (changesCurrentAssignment && !currentAssignment && !dto.initialEmployment) {
+          throw new BadRequestException('当前员工没有可更新的主要任职记录；请一次性补齐首段任职信息');
         }
-        if (currentAssignment && changesCurrentAssignment) {
+        if (currentAssignment && organizationChanged) {
+          const effectiveDate = this.utcCalendarDay();
+          const previousEndDate = new Date(effectiveDate);
+          previousEndDate.setUTCDate(previousEndDate.getUTCDate() - 1);
+          const assignmentChanges = this.createAssignmentChangeSnapshots(currentAssignment, dto);
+          await tx.employeeAssignment.update({
+            where: { id: currentAssignment.id },
+            data: { endDate: previousEndDate, status: AssignmentStatus.ENDED },
+          });
+          const nextAssignment = await tx.employeeAssignment.create({
+            data: {
+              employeeId: id,
+              employmentPeriodId: currentAssignment.employmentPeriodId,
+              organizationId: dto.organizationId!,
+              positionId: currentAssignment.positionId,
+              jobLevel: currentAssignment.jobLevel,
+              jobTitleId: currentAssignment.jobTitleId,
+              workplaceId: currentAssignment.workplaceId,
+              assignmentType: currentAssignment.assignmentType,
+              personnelPosition: dto.personnelPosition ?? currentAssignment.personnelPosition,
+              employeeLevel: dto.employeeLevel ?? currentAssignment.employeeLevel,
+              personnelCategory: dto.personnelCategory ?? currentAssignment.personnelCategory,
+              employmentRelationship: dto.employmentRelationship ?? currentAssignment.employmentRelationship,
+              personnelSource: dto.personnelSource ?? currentAssignment.personnelSource,
+              workArrangement: dto.workArrangement ?? currentAssignment.workArrangement,
+              isPrimary: true,
+              startDate: effectiveDate,
+              status: AssignmentStatus.ACTIVE,
+            },
+            select: { id: true },
+          });
+          const targetOrganization = await tx.organization.findUniqueOrThrow({
+            where: { id: dto.organizationId! },
+            select: { id: true, code: true, name: true },
+          });
+          await tx.employeeFieldChangeLog.create({
+            data: {
+              employeeId: id,
+              assignmentId: nextAssignment.id,
+              changedField: 'organizationId',
+              oldValue: directoryValue(currentAssignment.organization) ?? undefined,
+              newValue: directoryValue(targetOrganization) ?? undefined,
+              changedById: auditContext.userId,
+            },
+          });
+          for (const field of assignmentFields) {
+            if (dto[field] === undefined) continue;
+            const snapshot = assignmentChanges.get(field);
+            await tx.employeeFieldChangeLog.create({
+              data: {
+                employeeId: id,
+                assignmentId: nextAssignment.id,
+                changedField: field,
+                oldValue: snapshot?.oldValue ?? undefined,
+                newValue: snapshot?.newValue ?? undefined,
+                changedById: auditContext.userId,
+              },
+            });
+          }
+        } else if (currentAssignment && changesCurrentAssignment) {
           const assignmentData = {
             personnelPosition: dto.personnelPosition ?? currentAssignment.personnelPosition,
             employeeLevel: dto.employeeLevel ?? currentAssignment.employeeLevel,
@@ -1202,6 +1571,457 @@ export class EmployeesService {
     return new Set(rows.map(({ id }) => id));
   }
 
+  private decodeImportCsv(buffer: Buffer) {
+    const utf8 = buffer.toString('utf8').replace(/^﻿/, '');
+    if (this.hasRecognizedImportHeader(utf8)) return utf8;
+
+    // Chinese Excel exports commonly use GB18030 but decode into mojibake
+    // without replacement characters under UTF-8. Choose the encoding by
+    // whether its first row contains a real Chinese business header instead
+    // of relying on replacement-character detection alone.
+    const gb18030 = new TextDecoder('gb18030').decode(buffer).replace(/^﻿/, '');
+    return this.hasRecognizedImportHeader(gb18030) ? gb18030 : utf8;
+  }
+
+  private hasRecognizedImportHeader(value: string) {
+    const headerRow = this.parseImportCsv(value)[0] ?? [];
+    const knownHeaders = new Set(PERSONNEL_FIELDS.map(({ title }) => this.normalizeImportHeader(title)));
+    return headerRow.some((header) => knownHeaders.has(this.normalizeImportHeader(header)));
+  }
+
+  private parseImportCsv(value: string) {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = '';
+    let quoted = false;
+    for (let index = 0; index < value.length; index += 1) {
+      const character = value[index]!;
+      if (character === '"') {
+        if (quoted && value[index + 1] === '"') {
+          cell += '"';
+          index += 1;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (character === ',' && !quoted) {
+        row.push(cell);
+        cell = '';
+      } else if ((character === '\n' || character === '\r') && !quoted) {
+        if (character === '\r' && value[index + 1] === '\n') index += 1;
+        row.push(cell);
+        if (row.some((item) => item.length > 0)) rows.push(row);
+        row = [];
+        cell = '';
+      } else {
+        cell += character;
+      }
+    }
+    row.push(cell);
+    if (row.some((item) => item.length > 0)) rows.push(row);
+    return rows;
+  }
+
+  private resolveImportColumns(values: unknown[]) {
+    const columns = new Map<PersonnelTransferFieldKey, number>();
+    values.forEach((value, index) => {
+      const header = this.normalizeImportHeader(this.exportCellValue(value));
+      // The import contract is the actual Chinese business column title shown
+      // on the personnel table/template. Do not guess external system fields
+      // such as JobNumber or OIdDepartment: their semantics are unconfirmed.
+      const field = PERSONNEL_FIELDS.find(({ title, importable }) => (
+        importable && this.normalizeImportHeader(title) === header
+      ));
+      if (field && !columns.has(field.key)) columns.set(field.key, index);
+    });
+    if (columns.has('employeeNo')) return columns;
+
+    const externalHeaders = values.slice(1).map((value) => this.normalizeImportHeader(this.exportCellValue(value)));
+    while (externalHeaders.at(-1) === '') externalHeaders.pop();
+    const isKnownActiveEmployeeExport = externalHeaders.length === KNOWN_ACTIVE_EMPLOYEE_EXPORT_PROFILE.length
+      && KNOWN_ACTIVE_EMPLOYEE_EXPORT_PROFILE.every(([header], index) => (
+        this.normalizeImportHeader(header) === externalHeaders[index]
+      ));
+    if (!isKnownActiveEmployeeExport) return columns;
+
+    KNOWN_ACTIVE_EMPLOYEE_EXPORT_PROFILE.forEach(([, field], index) => {
+      if (field) columns.set(field, index + 1);
+    });
+    return columns;
+  }
+
+  private normalizeImportHeader(value: string) {
+    return value
+      .replace(/^﻿/, '')
+      .replace(/ /g, ' ')
+      .trim()
+      .replace(/[\s\r\n]+/g, '')
+      .replace(/[（）]/g, (character) => (character === '（' ? '(' : ')'))
+      .toLocaleLowerCase();
+  }
+
+  private readImportRow(columns: Map<PersonnelTransferFieldKey, number>, values: unknown[]) {
+    const input: Partial<Record<PersonnelTransferFieldKey, string>> = {};
+    columns.forEach((columnIndex, field) => {
+      const value = this.exportCellValue(values[columnIndex]).trim();
+      if (value) input[field] = value;
+    });
+    return input;
+  }
+
+  private toImportUpdateInput(input: Partial<Record<PersonnelTransferFieldKey, string>>): UpdateEmployeeDto {
+    const update: Record<string, string> = {};
+    const passthroughFields: PersonnelTransferFieldKey[] = [
+      'name', 'workEmail', 'personalEmail', 'mobile', 'documentNumber', 'nativePlace',
+      'householdAddress', 'residentialAddress', 'bankBranchName', 'bankAccountNumber',
+      'graduationSchoolName', 'major',
+    ];
+    passthroughFields.forEach((field) => {
+      if (input[field] !== undefined) update[field] = input[field]!;
+    });
+
+    const enumFields = [
+      'gender', 'personnelPosition', 'employeeLevel', 'personnelCategory', 'personnelSource',
+      'employmentRelationship', 'workArrangement', 'documentType', 'ethnicity', 'maritalStatus',
+      'politicalStatus', 'householdType', 'bankName', 'institutionType', 'highestEducation',
+    ] as const;
+    for (const field of enumFields) {
+      const value = input[field];
+      if (value === undefined) continue;
+      const labels = EMPLOYEE_ENUM_LABELS[field];
+      const code = Object.entries(labels ?? {}).find(([candidate, label]) => (
+        candidate === value || label === value
+      ))?.[0];
+      if (!code) {
+        const title = PERSONNEL_FIELDS.find(({ key }) => key === field)?.title ?? field;
+        throw new BadRequestException(`${title} 不支持“${value}”`);
+      }
+      update[field] = code;
+    }
+    for (const field of ['birthDate', 'documentExpiryDate', 'graduationDate'] as const) {
+      const value = input[field];
+      if (value !== undefined) update[field] = this.normalizeImportDate(value, field);
+    }
+    return update as UpdateEmployeeDto;
+  }
+
+  private normalizeImportDate(value: string, field: string) {
+    const normalized = value.trim().replace(/[/.]/g, '-');
+    if (!/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
+      throw new BadRequestException(`${field} 必须为 YYYY-MM-DD、YYYY/MM/DD 或 YYYY.MM.DD`);
+    }
+    const [year, month, day] = normalized.split('-').map(Number);
+    const date = new Date(Date.UTC(year!, month! - 1, day!));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month! - 1 || date.getUTCDate() !== day) {
+      throw new BadRequestException(`${field} 不是有效日期`);
+    }
+    return date.toISOString().slice(0, 10);
+  }
+
+  private hasImportEmploymentValues(input: Partial<Record<PersonnelTransferFieldKey, string>>) {
+    return [
+      'organizationName',
+      'entryDate',
+      'employmentRelationship',
+      'workArrangement',
+      'employmentStatus',
+    ].some((field) => input[field as PersonnelTransferFieldKey] !== undefined);
+  }
+
+  private async completeImportedEmployment(
+    user: AuthenticatedUser,
+    employeeId: string,
+    input: Partial<Record<PersonnelTransferFieldKey, string>>,
+    profile: UpdateEmployeeDto,
+    auditContext: AuditContext,
+  ) {
+    const requiredFields: Array<[PersonnelTransferFieldKey, string]> = [
+      ['organizationName', '部门'],
+      ['entryDate', '入职日期'],
+      ['employmentRelationship', '雇佣关系'],
+      ['workArrangement', '用工形式'],
+      ['employmentStatus', '人员状态'],
+    ];
+    const missing = requiredFields
+      .filter(([field]) => input[field] === undefined)
+      .map(([, label]) => label);
+    if (missing.length > 0) {
+      throw new BadRequestException(`补齐任职信息时必须同时提供：${missing.join('、')}`);
+    }
+    const accessibleOrganizationIds = await this.access.getAccessibleOrganizationIds(user);
+    const organizations = await this.prisma.organization.findMany({
+      where: {
+        name: input.organizationName!,
+        status: RecordStatus.ACTIVE,
+        archivedAt: null,
+        ...(accessibleOrganizationIds === null ? {} : { id: { in: accessibleOrganizationIds } }),
+      },
+      select: { id: true, code: true, name: true },
+      take: 2,
+    });
+    if (organizations.length !== 1) {
+      throw new BadRequestException(
+        organizations.length === 0 ? '部门不存在、不在当前范围内或已停用' : '部门名称存在多个有效匹配项，请使用唯一部门名称',
+      );
+    }
+    const organization = organizations[0]!;
+    const entryDate = this.toDate(this.normalizeImportDate(input.entryDate!, '入职日期'));
+    const employmentRelationship = profile.employmentRelationship;
+    const workArrangement = profile.workArrangement;
+    const employmentStatus = this.normalizeImportEmploymentStatus(input.employmentStatus!);
+    if (!employmentRelationship || !workArrangement || !employmentStatus) {
+      throw new BadRequestException('雇佣关系、用工形式或人员状态不支持');
+    }
+
+    const warnings: string[] = [];
+    const position = await this.resolveImportPosition(input.positionName, warnings);
+    const workplace = await this.resolveImportWorkplace(input.workplaceName, warnings);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.employee.update({
+        where: { id: employeeId },
+        data: {
+          name: profile.name,
+          mobile: profile.mobile,
+          workEmail: profile.workEmail,
+          personalEmail: profile.personalEmail,
+          gender: profile.gender,
+          birthDate: profile.birthDate ? this.toDate(profile.birthDate) : undefined,
+          ethnicity: profile.ethnicity,
+          maritalStatus: profile.maritalStatus,
+          politicalStatus: profile.politicalStatus,
+          nativePlace: profile.nativePlace,
+          nativePlaceRegionCode: profile.nativePlaceRegionCode,
+          householdType: profile.householdType,
+          householdRegionCode: profile.householdRegionCode,
+          householdAddress: profile.householdAddress,
+          residentialRegionCode: profile.residentialRegionCode,
+          residentialAddress: profile.residentialAddress,
+          bankName: profile.bankName,
+          bankBranchName: profile.bankBranchName,
+          bankAccountNumber: profile.bankAccountNumber,
+          organizationId: organization.id,
+        },
+      });
+      const period = await tx.employmentPeriod.create({
+        data: {
+          employeeId,
+          sequenceNo: 1,
+          personnelCategory: profile.personnelCategory,
+          personnelSource: profile.personnelSource,
+          employmentRelationship,
+          entryDate,
+          employmentStatus,
+          isRehire: false,
+          status: RecordStatus.ACTIVE,
+        },
+      });
+      const assignment = await tx.employeeAssignment.create({
+        data: {
+          employeeId,
+          employmentPeriodId: period.id,
+          organizationId: organization.id,
+          positionId: position?.id,
+          jobLevel: input.jobLevel as never,
+          workplaceId: workplace?.id,
+          personnelPosition: profile.personnelPosition,
+          employeeLevel: profile.employeeLevel,
+          personnelCategory: profile.personnelCategory,
+          personnelSource: profile.personnelSource,
+          employmentRelationship,
+          assignmentType: AssignmentType.PRIMARY,
+          workArrangement,
+          isPrimary: true,
+          startDate: entryDate,
+          status: AssignmentStatus.ACTIVE,
+        },
+      });
+      await tx.employmentRecord.create({
+        data: {
+          employeeId,
+          employmentPeriodId: period.id,
+          status: employmentStatus,
+          effectiveAt: entryDate,
+          currentFlag: true,
+        },
+      });
+      await tx.employeeFieldChangeLog.create({
+        data: {
+          employeeId,
+          assignmentId: assignment.id,
+          changedField: 'organizationId',
+          newValue: directoryValue(organization) ?? undefined,
+          changedById: auditContext.userId,
+        },
+      });
+      await this.audit.create(auditContext, AuditAction.UPDATE, employeeId, {
+        importRow: true,
+        completedEmployment: true,
+        changedFields: Object.keys(input),
+      }, tx);
+    });
+    return warnings;
+  }
+
+  private normalizeImportEmploymentStatus(value: string) {
+    const labels: Record<string, EmploymentStatus> = {
+      试用: EmploymentStatus.PROBATION,
+      正式: EmploymentStatus.REGULAR,
+      待入职: EmploymentStatus.PENDING_ENTRY,
+      调出: EmploymentStatus.TRANSFERRED_OUT,
+      待调入: EmploymentStatus.PENDING_TRANSFER_IN,
+      退休: EmploymentStatus.RETIRED,
+      离职: EmploymentStatus.RESIGNED,
+      非正式: EmploymentStatus.NON_REGULAR,
+    };
+    return labels[value] ?? (Object.values(EmploymentStatus).includes(value as EmploymentStatus)
+      ? value as EmploymentStatus
+      : null);
+  }
+
+  private async resolveImportPosition(value: string | undefined, warnings: string[]) {
+    if (!value) return null;
+    const matches = await this.prisma.position.findMany({
+      where: { name: value, status: RecordStatus.ACTIVE, archivedAt: null },
+      select: { id: true },
+      take: 2,
+    });
+    if (matches.length === 1) return matches[0]!;
+    warnings.push(matches.length === 0 ? `职位“${value}”不存在，未导入` : `职位“${value}”匹配多个目录项，未导入`);
+    return null;
+  }
+
+  private async resolveImportWorkplace(value: string | undefined, warnings: string[]) {
+    if (!value) return null;
+    const matches = await this.prisma.workplace.findMany({
+      where: { name: value, status: RecordStatus.ACTIVE, archivedAt: null },
+      select: { id: true },
+      take: 2,
+    });
+    if (matches.length === 1) return matches[0]!;
+    warnings.push(matches.length === 0 ? `工作地点“${value}”不存在，未导入` : `工作地点“${value}”匹配多个目录项，未导入`);
+    return null;
+  }
+
+  private async createPartialImportedEmployee(
+    user: AuthenticatedUser,
+    input: Partial<Record<PersonnelTransferFieldKey, string>>,
+    auditContext: AuditContext,
+  ) {
+    const employeeNo = input.employeeNo?.trim();
+    if (!employeeNo || !/^[A-Za-z0-9_-]{1,32}$/.test(employeeNo)) {
+      throw new BadRequestException('工号只能包含字母、数字、下划线和连字符，且长度不超过 32 位');
+    }
+    const organizationName = input.organizationName?.trim();
+    let organizationId: string | undefined;
+    if (organizationName) {
+      const accessibleOrganizationIds = await this.access.getAccessibleOrganizationIds(user);
+      const organization = await this.prisma.organization.findFirst({
+        where: {
+          name: organizationName,
+          status: RecordStatus.ACTIVE,
+          archivedAt: null,
+          ...(accessibleOrganizationIds === null ? {} : { id: { in: accessibleOrganizationIds } }),
+        },
+        select: { id: true },
+      });
+      if (!organization) throw new BadRequestException('部门不存在、不在当前范围内或已停用');
+      organizationId = organization.id;
+    }
+
+    const profile = this.toImportUpdateInput(input);
+    const documentType = profile.documentType;
+    const documentNumber = input.documentNumber?.toUpperCase();
+    if ((documentType && !documentNumber) || (!documentType && documentNumber)) {
+      throw new BadRequestException('证件类型和证件号码必须同时提供');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.create({
+        data: {
+          employeeNo,
+          name: profile.name ?? null,
+          mobile: profile.mobile ?? null,
+          workEmail: profile.workEmail,
+          personalEmail: profile.personalEmail,
+          gender: profile.gender as never,
+          birthDate: profile.birthDate ? this.toDate(profile.birthDate) : undefined,
+          ethnicity: profile.ethnicity as never,
+          maritalStatus: profile.maritalStatus as never,
+          politicalStatus: profile.politicalStatus as never,
+          nativePlace: profile.nativePlace,
+          nativePlaceRegionCode: profile.nativePlaceRegionCode,
+          householdType: profile.householdType as never,
+          householdRegionCode: profile.householdRegionCode,
+          householdAddress: profile.householdAddress,
+          residentialRegionCode: profile.residentialRegionCode,
+          residentialAddress: profile.residentialAddress,
+          bankName: profile.bankName as never,
+          bankBranchName: profile.bankBranchName,
+          bankAccountNumber: profile.bankAccountNumber,
+          organizationId,
+          idCardNo: documentType === 'NATIONAL_ID' ? documentNumber : undefined,
+        },
+      });
+      if (documentType && documentNumber) {
+        await tx.employeeIdentityDocument.create({
+          data: {
+            employeeId: employee.id,
+            documentType: documentType as never,
+            documentNumber,
+            expiryDate: profile.documentExpiryDate ? this.toDate(profile.documentExpiryDate) : undefined,
+            isPrimary: true,
+            status: RecordStatus.ACTIVE,
+          },
+        });
+      }
+      await this.audit.create(
+        auditContext,
+        AuditAction.CREATE,
+        employee.id,
+        { importRow: true, changedFields: Object.keys(input) },
+        tx,
+      );
+    });
+  }
+
+  private async createTransferExportFile(
+    rows: Array<object>,
+    fields: string[],
+    format: 'XLSX' | 'CSV',
+    name: string,
+  ) {
+    const definitions = fields.map((key) => {
+      const definition = PERSONNEL_FIELDS.find((field) => field.key === key);
+      if (!definition) throw new BadRequestException(`不支持导出字段：${key}`);
+      return definition;
+    });
+    const values = rows.map((row) => definitions.map(({ key }) => this.exportCellValue((row as Record<string, unknown>)[key])));
+    const extension = format === 'XLSX' ? 'xlsx' : 'csv';
+    const filename = `${name}_${this.utcCalendarDay().toISOString().slice(0, 10)}.${extension}`;
+    if (format === 'CSV') {
+      const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+      return {
+        buffer: Buffer.from(`﻿${[definitions.map(({ title }) => quote(title)).join(','), ...values.map((row) => row.map(quote).join(','))].join('\r\n')}`, 'utf8'),
+        filename,
+        contentType: 'text/csv; charset=utf-8',
+      };
+    }
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('导出数据');
+    worksheet.addRow(definitions.map(({ title }) => title));
+    values.forEach((row) => worksheet.addRow(row));
+    worksheet.getRow(1).font = { bold: true };
+    return {
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+      filename,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+  }
+
+  private exportCellValue(value: unknown): string {
+    if (value === null || value === undefined || value === '') return '';
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    return String(value);
+  }
+
   private utcCalendarDay(value = new Date()) {
     return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
   }
@@ -1216,9 +2036,9 @@ export class EmployeesService {
   private findAllInDemo(
     user: AuthenticatedUser,
     query: QueryEmployeesDto,
-  ): Paginated<ReturnType<typeof presentEmployee>> {
+  ): Paginated<EmployeeListItem> {
     let employees = this.demo.getEmployees().filter(
-      (employee) => this.access.hasAllEmployeeData(user) || user.organizationIds.includes(employee.organizationId),
+      (employee) => this.access.canAccessOrganization(user, employee.organizationId),
     );
     if (query.organizationId) {
       employees = this.access.canAccessOrganization(user, query.organizationId)
@@ -1278,10 +2098,10 @@ export class EmployeesService {
         where: {
           id: dto.positionId,
           status: RecordStatus.ACTIVE,
-          OR: [{ organizationId: null }, { organizationId: dto.organizationId }],
+          archivedAt: null,
         },
       }));
-      labels.push('职位不存在、已停用或不属于所选部门');
+      labels.push('职位不存在、已停用或已归档');
     }
     if (dto.workplaceId) {
       checks.push(this.prisma.workplace.count({ where: { id: dto.workplaceId, status: RecordStatus.ACTIVE } }));
@@ -1296,6 +2116,121 @@ export class EmployeesService {
     const results = await Promise.all(checks);
     const invalidIndex = results.findIndex((count) => count === 0);
     if (invalidIndex >= 0) throw new BadRequestException(labels[invalidIndex]);
+  }
+
+  private validateRegionCodes(dto: Pick<
+    CreateEmployeeDto | UpdateEmployeeDto,
+    'nativePlaceRegionCode' | 'householdRegionCode' | 'residentialRegionCode'
+  >) {
+    const fields = [
+      ['nativePlaceRegionCode', '籍贯地区'],
+      ['householdRegionCode', '户籍所在地地区'],
+      ['residentialRegionCode', '联系地址地区'],
+    ] as const;
+    for (const [field, label] of fields) {
+      const code = dto[field];
+      if (code !== undefined && !isChinaAdministrativeRegionCode(code)) {
+        throw new BadRequestException(`${label}行政区划代码不存在`);
+      }
+    }
+  }
+
+  private async createInitialEmploymentForEmployee(
+    tx: Prisma.TransactionClient,
+    employeeId: string,
+    input: InitialEmploymentDto,
+    auditContext: AuditContext,
+  ) {
+    const position = input.positionId
+      ? await tx.position.findFirst({
+        where: { id: input.positionId, status: RecordStatus.ACTIVE, archivedAt: null },
+        select: { id: true },
+      })
+      : null;
+    if (input.positionId && !position) {
+      throw new BadRequestException('职位不存在、已停用或已归档');
+    }
+    const workplace = input.workplaceId
+      ? await tx.workplace.findFirst({
+        where: { id: input.workplaceId, status: RecordStatus.ACTIVE, archivedAt: null },
+        select: { id: true },
+      })
+      : null;
+    if (input.workplaceId && !workplace) {
+      throw new BadRequestException('工作地点不存在或已停用');
+    }
+    const organization = await tx.organization.findFirst({
+      where: { id: input.organizationId, status: RecordStatus.ACTIVE, archivedAt: null },
+      select: { id: true, code: true, name: true },
+    });
+    if (!organization) {
+      throw new BadRequestException('部门不存在、已停用或已归档');
+    }
+
+    const entryDate = this.toDate(input.entryDate);
+    const period = await tx.employmentPeriod.create({
+      data: {
+        employeeId,
+        sequenceNo: 1,
+        personnelCategory: input.personnelCategory,
+        personnelSource: input.personnelSource,
+        employmentRelationship: input.employmentRelationship,
+        entryDate,
+        employmentStatus: input.employmentStatus,
+        isRehire: false,
+        status: RecordStatus.ACTIVE,
+      },
+    });
+    const assignment = await tx.employeeAssignment.create({
+      data: {
+        employeeId,
+        employmentPeriodId: period.id,
+        organizationId: organization.id,
+        positionId: position?.id,
+        jobLevel: input.jobLevel as never,
+        workplaceId: workplace?.id,
+        personnelPosition: input.personnelPosition,
+        employeeLevel: input.employeeLevel,
+        personnelCategory: input.personnelCategory,
+        personnelSource: input.personnelSource,
+        employmentRelationship: input.employmentRelationship,
+        assignmentType: AssignmentType.PRIMARY,
+        workArrangement: input.workArrangement,
+        isPrimary: true,
+        startDate: entryDate,
+        status: AssignmentStatus.ACTIVE,
+      },
+      select: { id: true },
+    });
+    await tx.employmentRecord.create({
+      data: {
+        employeeId,
+        employmentPeriodId: period.id,
+        status: input.employmentStatus,
+        effectiveAt: entryDate,
+        currentFlag: true,
+      },
+    });
+    await tx.employee.update({ where: { id: employeeId }, data: { organizationId: organization.id } });
+    const values = [
+      ['organizationId', directoryValue(organization)],
+      ['personnelCategory', enumValue(input.personnelCategory, employeeEnumLabel('personnelCategory', input.personnelCategory))],
+      ['personnelSource', enumValue(input.personnelSource, employeeEnumLabel('personnelSource', input.personnelSource))],
+      ['employmentRelationship', enumValue(input.employmentRelationship, employeeEnumLabel('employmentRelationship', input.employmentRelationship))],
+      ['workArrangement', enumValue(input.workArrangement, employeeEnumLabel('workArrangement', input.workArrangement))],
+      ['employmentStatus', enumValue(input.employmentStatus, employeeEnumLabel('employmentStatus', input.employmentStatus))],
+    ] as const;
+    for (const [changedField, newValue] of values) {
+      await tx.employeeFieldChangeLog.create({
+        data: {
+          employeeId,
+          assignmentId: assignment.id,
+          changedField,
+          newValue: newValue ?? undefined,
+          changedById: auditContext.userId,
+        },
+      });
+    }
   }
 
   private createAssignmentChangeSnapshots(

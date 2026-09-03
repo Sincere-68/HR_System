@@ -9,7 +9,7 @@ export interface TerminationPresenterRow {
   terminationType: string;
   reason: string | null;
   status: ProcessStatus;
-  employee: { employeeNo: string; name: string };
+  employee: { employeeNo: string; name: string | null };
   handoverCase: { archivedAt: Date | null; status: ProcessStatus } | null;
   approvalRequest: {
     archivedAt: Date | null;
@@ -46,7 +46,7 @@ export function presentTermination(
     id: row.id,
     employeeId: row.employeeId,
     employeeNo: row.employee.employeeNo,
-    employeeName: row.employee.name,
+    employeeName: row.employee.name ?? '--',
     previousDepartmentName: options.assignment?.organizationName ?? null,
     previousPositionName: options.assignment?.positionName ?? null,
     lastWorkingDate: lastWorkingDate.toISOString().slice(0, 10),

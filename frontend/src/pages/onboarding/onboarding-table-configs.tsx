@@ -9,6 +9,7 @@ import { Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { ReactNode } from 'react';
 import { renderAgreementType } from '../../config/agreement-types';
+import { identityDocumentTypeLabels } from '../../config/personnel-fields';
 import { renderNullable, renderUnavailableAction } from './OnboardingListPage';
 
 export const onboardingStatusLabels: Record<string, string> = {
@@ -36,15 +37,6 @@ const genderLabels: Record<string, string> = {
 export function renderGender(value: string | null | undefined) {
   return renderNullable(value ? genderLabels[value] ?? value : null);
 }
-
-const identityDocumentTypeLabels: Record<string, string> = {
-  NATIONAL_ID: '居民身份证',
-  PASSPORT: '护照',
-  HK_MACAO_PERMIT: '港澳居民来往内地通行证',
-  TAIWAN_PERMIT: '台湾居民来往大陆通行证',
-  RESIDENCE_PERMIT: '居住证',
-  OTHER: '其他',
-};
 
 function renderIdentityDocumentType(value: IdCardReadListItem['documentType']) {
   return renderNullable(value ? identityDocumentTypeLabels[value] ?? value : null);

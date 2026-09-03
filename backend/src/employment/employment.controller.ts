@@ -1,5 +1,6 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { PERMISSIONS } from '@hr-demo/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -15,6 +16,7 @@ import { QueryTrialPostDto } from './dto/query-trial-post.dto';
 import { QueryTerminationsDto } from './dto/query-terminations.dto';
 import { QueryPersonnelLaborWorkersDto } from './dto/query-personnel-labor-workers.dto';
 import { QueryPersonnelResignedDto } from './dto/query-personnel-resigned.dto';
+import { EmployeeExportDto } from '../employees/dto/employee-transfer.dto';
 import { EmploymentService } from './employment.service';
 import { PersonnelLaborWorkersService } from './personnel-labor-workers.service';
 import { PersonnelResignedService } from './personnel-resigned.service';
@@ -28,6 +30,33 @@ export class EmploymentController {
     private readonly personnelLaborWorkers: PersonnelLaborWorkersService,
     private readonly personnelResigned: PersonnelResignedService,
   ) {}
+
+  @Post('interns/export')
+  @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
+  @ApiOperation({ summary: '导出人员页实习生列表' })
+  async exportInterns(@CurrentUser() user: AuthenticatedUser, @Body() dto: EmployeeExportDto, @Res({ passthrough: true }) response: Response) {
+    return this.sendExport(response, dto, await this.service.exportInterns(user, dto));
+  }
+
+  @Post('personnel-labor-workers/export')
+  @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
+  @ApiOperation({ summary: '导出人员页劳务人员列表' })
+  async exportPersonnelLaborWorkers(@CurrentUser() user: AuthenticatedUser, @Body() dto: EmployeeExportDto, @Res({ passthrough: true }) response: Response) {
+    return this.sendExport(response, dto, await this.personnelLaborWorkers.exportAll(user, dto));
+  }
+
+  @Post('personnel-resigned/export')
+  @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
+  @ApiOperation({ summary: '导出人员页离职人员列表' })
+  async exportPersonnelResigned(@CurrentUser() user: AuthenticatedUser, @Body() dto: EmployeeExportDto, @Res({ passthrough: true }) response: Response) {
+    return this.sendExport(response, dto, await this.personnelResigned.exportAll(user, dto));
+  }
+
+  private sendExport(response: Response, dto: EmployeeExportDto, result: { contentType: string; filename: string; buffer: Buffer }) {
+    response.setHeader('Content-Type', result.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="employment-export.${dto.format.toLocaleLowerCase()}"; filename*=UTF-8''${encodeURIComponent(result.filename)}`);
+    return new StreamableFile(result.buffer);
+  }
 
   @Get('records')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)

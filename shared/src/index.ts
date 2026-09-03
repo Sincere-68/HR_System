@@ -1,3 +1,20 @@
+export { POSITION_CATALOG, matchesPositionCatalogEntry, searchPositionCatalog } from './position-catalog';
+export type { PositionCatalogEntry } from './position-catalog';
+export { ORGANIZATION_CATALOG } from './organization-catalog';
+export type { OrganizationCatalogEntry } from './organization-catalog';
+export {
+  CHINA_ADMINISTRATIVE_REGIONS,
+  CHINA_ADMINISTRATIVE_REGION_OPTIONS,
+  formatChinaAdministrativeRegion,
+  getChinaAdministrativeRegionPath,
+  isChinaAdministrativeRegionCode,
+} from './china-administrative-regions';
+export type {
+  ChinaAdministrativeRegion,
+  ChinaAdministrativeRegionCascaderOption,
+  ChinaAdministrativeRegionPath,
+} from './china-administrative-regions';
+
 export const ROLE_CODES = ['ADMIN', 'DEPT_ADMIN', 'VIEWER'] as const;
 export type RoleCode = (typeof ROLE_CODES)[number];
 
@@ -108,10 +125,127 @@ export const IDENTITY_DOCUMENT_TYPES = [
   'PASSPORT',
   'HK_MACAO_PERMIT',
   'TAIWAN_PERMIT',
-  'RESIDENCE_PERMIT',
+  'MILITARY_ID',
+  'ARMED_POLICE_OFFICER_ID',
+  'HK_MACAO_ID',
+  'FOREIGN_PASSPORT',
+  'HK_PERMANENT_ID',
+  'TAIWAN_ID',
+  'MACAO_PERMANENT_ID',
+  'FOREIGN_PERMANENT_RESIDENCE_ID',
+  'MACAO_NON_PERMANENT_ID',
+  'HK_ID',
+  'THAILAND_ID',
+  'MALAYSIA_ID',
+  'VIETNAM_ID',
+  'INDONESIA_ID',
+  'HK_MACAO_RESIDENCE_PERMIT',
+  'TAIWAN_RESIDENCE_PERMIT',
+  'MEXICO_ID',
+  'SINGAPORE_ID',
+  'SINGAPORE_PR',
+  'SINGAPORE_EP',
+  'SINGAPORE_WP',
+  'SINGAPORE_SP',
+  'SINGAPORE_LOC',
+  'SINGAPORE_PLOC',
+  'SINGAPORE_STUDENT_PASS',
+  'PHILIPPINES_ID',
+  'HK_MACAO_NON_CHINESE_PERMIT',
+  'US_SSN',
+  'CANADA_SIN',
+  'MALAYSIA_OLD_ID',
+  'MALAYSIA_WP',
+  'MALAYSIA_PR',
+  'MALAYSIA_MILITARY_ID',
+  'MALAYSIA_POLICE_ID',
+  'MALAYSIA_PASSPORT',
+  'MALAYSIA_EP',
+  'MALAYSIA_PROFESSIONAL_VISIT_PASS',
+  'MALAYSIA_DEPENDENT_PASS',
+  'MALAYSIA_ENTREPRENEUR_PASS',
+  'MALAYSIA_TALENT_RESIDENCE_PASS',
+  'MALAYSIA_LONG_TERM_SOCIAL_VISIT_PASS',
+  'MALAYSIA_SHORT_TERM_SOCIAL_VISIT_PASS',
+  'MALAYSIA_FOREIGN_STUDENT_PASS',
+  'MALAYSIA_WORKING_HOLIDAY_PASS',
+  'MALAYSIA_PROFESSIONAL_TRAINING_PASS',
+  'MALAYSIA_TECHNICAL_TRAINING_PASS',
+  'IANG_VISA',
+  'HK_QUALITY_MIGRANT_ADMISSION_SCHEME',
+  'MAINLAND_TRAVEL_PERMIT_HK_MACAO',
+  'HK_TOP_TALENT_PASS_SCHEME',
+  'SINGAPORE_LONG_TERM_VISIT_PASS_SG14',
+  'HK_DOCUMENT_OF_IDENTITY',
+  'EXIT_ENTRY_PERMIT_HK_MACAO',
+  'SINGAPORE_ONE_PASS',
+  'SOUTH_KOREA_ID',
   'OTHER',
 ] as const;
 export type IdentityDocumentType = (typeof IDENTITY_DOCUMENT_TYPES)[number];
+
+export const IDENTITY_DOCUMENT_TYPE_LABELS = {
+  NATIONAL_ID: '身份证',
+  PASSPORT: '护照',
+  HK_MACAO_PERMIT: '港澳居民来往内地通行证',
+  TAIWAN_PERMIT: '台湾居民来往大陆通行证',
+  MILITARY_ID: '军人证',
+  ARMED_POLICE_OFFICER_ID: '武警警官证',
+  HK_MACAO_ID: '港澳身份证',
+  FOREIGN_PASSPORT: '外国护照',
+  HK_PERMANENT_ID: '香港永久性居民身份证',
+  TAIWAN_ID: '台湾身份证',
+  MACAO_PERMANENT_ID: '澳门特别行政区永久性居民身份证',
+  FOREIGN_PERMANENT_RESIDENCE_ID: '外国人永久居留证',
+  MACAO_NON_PERMANENT_ID: '澳门特别行政区非永久性居民身份证',
+  HK_ID: '香港居民身份证',
+  THAILAND_ID: '泰国身份证',
+  MALAYSIA_ID: '马来西亚身份证',
+  VIETNAM_ID: '越南身份证',
+  INDONESIA_ID: '印度尼西亚身份证',
+  HK_MACAO_RESIDENCE_PERMIT: '港澳居民居住证',
+  TAIWAN_RESIDENCE_PERMIT: '台湾居民居住证',
+  MEXICO_ID: '墨西哥身份证',
+  SINGAPORE_ID: '新加坡身份证',
+  SINGAPORE_PR: '新加坡永久居民（PR）',
+  SINGAPORE_EP: '新加坡亚籍（EP）',
+  SINGAPORE_WP: '新加坡亚籍（WP）',
+  SINGAPORE_SP: '新加坡亚籍（SP）',
+  SINGAPORE_LOC: '新加坡家属准证（LOC）',
+  SINGAPORE_PLOC: '新加坡家属准证（PLOC）',
+  SINGAPORE_STUDENT_PASS: '新加坡学生证',
+  PHILIPPINES_ID: '菲律宾身份证',
+  HK_MACAO_NON_CHINESE_PERMIT: '港澳居民来往内地通行证（非中国籍）',
+  US_SSN: '美国SSN',
+  CANADA_SIN: '加拿大SIN',
+  MALAYSIA_OLD_ID: '马来西亚旧身份证',
+  MALAYSIA_WP: '马来西亚亚籍工作准证（WP）',
+  MALAYSIA_PR: '马来西亚永久居民',
+  MALAYSIA_MILITARY_ID: '马来西亚军人证件',
+  MALAYSIA_POLICE_ID: '马来西亚警察证件',
+  MALAYSIA_PASSPORT: '马来西亚护照证件',
+  MALAYSIA_EP: '马来西亚亚籍工作准证（EP）',
+  MALAYSIA_PROFESSIONAL_VISIT_PASS: '马来西亚专业访问准证',
+  MALAYSIA_DEPENDENT_PASS: '马来西亚家属准证',
+  MALAYSIA_ENTREPRENEUR_PASS: '马来西亚企业家准证',
+  MALAYSIA_TALENT_RESIDENCE_PASS: '马来西亚人才居留准证',
+  MALAYSIA_LONG_TERM_SOCIAL_VISIT_PASS: '马来西亚长期社交访问准证',
+  MALAYSIA_SHORT_TERM_SOCIAL_VISIT_PASS: '马来西亚短期社交访问准证',
+  MALAYSIA_FOREIGN_STUDENT_PASS: '马来西亚外籍学生证',
+  MALAYSIA_WORKING_HOLIDAY_PASS: '马来西亚工作假期准证',
+  MALAYSIA_PROFESSIONAL_TRAINING_PASS: '马来西亚专业培训准证',
+  MALAYSIA_TECHNICAL_TRAINING_PASS: '马来西亚技工培训准证',
+  IANG_VISA: 'IANG签证',
+  HK_QUALITY_MIGRANT_ADMISSION_SCHEME: '香港优秀人才入境计划',
+  MAINLAND_TRAVEL_PERMIT_HK_MACAO: '往来港澳通行证',
+  HK_TOP_TALENT_PASS_SCHEME: '香港高端人才通行证计划',
+  SINGAPORE_LONG_TERM_VISIT_PASS_SG14: '长期访问通行证（SG14）',
+  HK_DOCUMENT_OF_IDENTITY: '香港特别行政区签证身份书（黄本）',
+  EXIT_ENTRY_PERMIT_HK_MACAO: '前往港澳通行证',
+  SINGAPORE_ONE_PASS: '新加坡专才准证（ONE Pass）',
+  SOUTH_KOREA_ID: '韩国身份证',
+  OTHER: '其他',
+} as const satisfies Record<IdentityDocumentType, string>;
 
 export const GENDERS = ['MALE', 'FEMALE', 'UNDISCLOSED'] as const;
 export type Gender = (typeof GENDERS)[number];
@@ -138,8 +272,26 @@ export const PERMISSIONS = {
   EMPLOYEE_UPDATE: 'employee.update',
   EMPLOYEE_DATA_ALL: 'employee.data.all',
   ORGANIZATION_READ: 'organization.read',
+  PERFORMANCE_READ: 'performance.read',
+  PERFORMANCE_TEMPLATE_MANAGE: 'performance.template.manage',
+  PERFORMANCE_CYCLE_MANAGE: 'performance.cycle.manage',
+  PERFORMANCE_TASK_HANDLE: 'performance.task.handle',
+  PERFORMANCE_RESULT_MODIFY: 'performance.result.modify',
+  PERFORMANCE_AMOUNT_BASE_MANAGE: 'performance.amount-base.manage',
 } as const;
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+
+export const PERFORMANCE_MODULE_TYPES = ['METRIC', 'EVALUATION', 'ADJUSTMENT'] as const;
+export type PerformanceModuleType = (typeof PERFORMANCE_MODULE_TYPES)[number];
+export type PerformanceModuleKind = 'metric' | 'evaluation' | 'adjustment';
+export const PERFORMANCE_EXECUTOR_TYPES = ['AUTO', 'USER', 'DIRECTORY'] as const;
+export type PerformanceExecutorType = (typeof PERFORMANCE_EXECUTOR_TYPES)[number];
+export const PERFORMANCE_DIRECTORY_TYPES = ['POSITION', 'JOB_TITLE'] as const;
+export type PerformanceDirectoryType = (typeof PERFORMANCE_DIRECTORY_TYPES)[number];
+export const PERFORMANCE_VERSION_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const;
+export type PerformanceVersionStatus = (typeof PERFORMANCE_VERSION_STATUSES)[number];
+export const PERFORMANCE_ADJUSTMENT_DIRECTIONS = ['ADD', 'DEDUCT'] as const;
+export type PerformanceAdjustmentDirection = (typeof PERFORMANCE_ADJUSTMENT_DIRECTIONS)[number];
 
 export interface AuthUser {
   id: string;
@@ -166,7 +318,7 @@ export interface Employee {
   idCardNo: string | null;
   organizationId: string;
   organizationName: string;
-  employmentStatus: EmploymentStatus;
+  employmentStatus: EmploymentStatus | null;
   workEmail?: string | null;
   personalEmail?: string | null;
   createdAt: string;
@@ -209,8 +361,14 @@ export interface EmployeeListItem extends Employee {
   maritalStatus: MaritalStatus | null;
   politicalStatus: PoliticalStatus | null;
   nativePlace: string | null;
+  /** GB/T 2260 compatible administrative-division code selected for 籍贯. */
+  nativePlaceRegionCode: string | null;
   householdType: HouseholdType | null;
+  /** GB/T 2260 compatible administrative-division code selected for 户籍所在地. */
+  householdRegionCode: string | null;
   householdAddress: string | null;
+  /** GB/T 2260 compatible administrative-division code selected for 联系地址. */
+  residentialRegionCode: string | null;
   residentialAddress: string | null;
   emergencyContactName: string | null;
   emergencyContactRelationship: string | null;
@@ -252,7 +410,7 @@ export const PERSONNEL_FIELDS = [
   { key: 'mobile', title: '手机号码', dataType: 'string', importable: true, computed: false },
   { key: 'personnelCategory', title: '人员类别', dataType: 'enum', importable: true, computed: false },
   { key: 'personnelSource', title: '人员来源', dataType: 'enum', importable: true, computed: false },
-  { key: 'employmentStatus', title: '人员状态', dataType: 'enum', importable: false, computed: false },
+  { key: 'employmentStatus', title: '人员状态', dataType: 'enum', importable: true, computed: false },
   { key: 'fullTimeCompany', title: '全日制公司', dataType: 'relation', importable: true, computed: false },
   { key: 'employmentRelationship', title: '雇佣关系', dataType: 'enum', importable: true, computed: false },
   { key: 'workArrangement', title: '用工形式', dataType: 'enum', importable: true, computed: false },
@@ -268,10 +426,13 @@ export const PERSONNEL_FIELDS = [
   { key: 'ethnicity', title: '民族', dataType: 'enum', importable: true, computed: false },
   { key: 'maritalStatus', title: '婚姻状况', dataType: 'enum', importable: true, computed: false },
   { key: 'politicalStatus', title: '政治面貌', dataType: 'enum', importable: true, computed: false },
-  { key: 'nativePlace', title: '籍贯', dataType: 'string', importable: true, computed: false },
+  { key: 'nativePlace', title: '籍贯详细说明', dataType: 'string', importable: true, computed: false },
+  { key: 'nativePlaceRegionCode', title: '籍贯地区', dataType: 'string', importable: true, computed: false },
   { key: 'householdType', title: '户口类别', dataType: 'enum', importable: true, computed: false },
-  { key: 'householdAddress', title: '户籍所在地', dataType: 'string', importable: true, computed: false },
-  { key: 'residentialAddress', title: '联系地址', dataType: 'string', importable: true, computed: false },
+  { key: 'householdRegionCode', title: '户籍所在地地区', dataType: 'string', importable: true, computed: false },
+  { key: 'householdAddress', title: '户籍详细地址', dataType: 'string', importable: true, computed: false },
+  { key: 'residentialRegionCode', title: '联系地址地区', dataType: 'string', importable: true, computed: false },
+  { key: 'residentialAddress', title: '联系详细地址', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactName', title: '紧急联系人', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactRelationship', title: '与本人关系', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactMobile', title: '紧急联系人电话', dataType: 'string', importable: true, computed: false },
@@ -284,6 +445,40 @@ export const PERSONNEL_FIELDS = [
   { key: 'graduationDate', title: '毕业时间', dataType: 'date', importable: true, computed: false },
   { key: 'major', title: '专业', dataType: 'string', importable: true, computed: false },
 ] as const;
+
+export type PersonnelTransferFormat = 'XLSX' | 'CSV';
+export const PERSONNEL_TRANSFER_FORMATS = ['XLSX', 'CSV'] as const;
+export type PersonnelTransferFieldKey = (typeof PERSONNEL_FIELDS)[number]['key'];
+
+export interface EmployeeExportInput {
+  format: PersonnelTransferFormat;
+  fields: PersonnelTransferFieldKey[];
+  employeeIds?: string[];
+  query?: Pick<EmployeeListQuery, 'keyword' | 'organizationId' | 'status'> & {
+    startDateFrom?: string;
+    startDateTo?: string;
+    entryDateFrom?: string;
+    entryDateTo?: string;
+    lastWorkingDateFrom?: string;
+    lastWorkingDateTo?: string;
+  };
+}
+
+export interface EmployeeTransferRowResult {
+  rowNumber: number;
+  employeeNo: string | null;
+  action: 'CREATED' | 'UPDATED' | 'SKIPPED' | 'FAILED';
+  errors: string[];
+  warnings?: string[];
+}
+
+export interface EmployeeImportResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  rows: EmployeeTransferRowResult[];
+}
 
 export const PERSONNEL_FIELD_CONTRACT_VERSION = '1.0.0';
 
@@ -569,6 +764,215 @@ export interface OfferListQuery {
   view?: OfferListView;
   page?: number;
   pageSize?: number;
+}
+
+/** A selectable directory entry for the new internship Offer form. */
+export interface InternOfferOption {
+  id: string;
+  name: string;
+  /** Present for department directory entries so the frontend can render a hierarchy. */
+  parentId?: string | null;
+  /** Present for position directory entries; preserves the company position number. */
+  code?: string;
+  organizationId?: string | null;
+  /** Available for workplace directory entries. Address is display-only/derived for Offers. */
+  address?: string | null;
+}
+
+/** Employee option that intentionally contains only the fields needed to choose a direct manager. */
+export interface InternOfferManagerOption extends InternOfferOption {
+  employeeNo: string;
+}
+
+/**
+ * MySQL-only directory data for the new internship Offer form. Managers honor
+ * the current employee data scope; workplaces expose their directory address
+ * for derived display only.
+ */
+export interface InternOfferFormOptions {
+  organizations: InternOfferOption[];
+  positions: InternOfferOption[];
+  workplaces: InternOfferOption[];
+  employingCompanies: InternOfferOption[];
+  managers: InternOfferManagerOption[];
+}
+
+export interface CandidateIdentityDocumentInput {
+  documentType: IdentityDocumentType;
+  documentNumber: string;
+  isPrimary?: boolean;
+  expiryDate?: string;
+}
+
+export interface CandidateEducationExperienceInput {
+  schoolName: string;
+  educationLevel: EducationLevel;
+  major?: string;
+  graduationDate?: string;
+  isHighestEducation?: boolean;
+}
+
+/** Decimal values cross the HTTP boundary as canonical non-negative decimal strings. */
+export interface OfferCompensationSnapshotInput {
+  salaryPackage?: string;
+  salaryRemark?: string;
+  preConfirmationBaseSalary?: string;
+  postConfirmationBaseSalary?: string;
+  preConfirmationMonthlyPerformance?: string;
+  postConfirmationMonthlyPerformance?: string;
+  preConfirmationMonthlyManagementPerformance?: string;
+  postConfirmationMonthlyManagementPerformance?: string;
+  fullTimeContractSalary?: string;
+  annualPerformance?: string;
+}
+
+export interface OfferPartTimeSnapshotInput {
+  positionName?: string;
+  hourlyRate?: string;
+}
+
+/**
+ * Typed Offer and Candidate snapshots. The server always fixes
+ * employmentRelationship to INTERN and never creates Employee, assignment,
+ * reporting, agreement, or approval records from this request.
+ */
+export interface CreateInternOfferInput {
+  name: string;
+  mobile: string;
+  personalEmail: string;
+  source: PersonnelSource;
+  gender?: Gender;
+  birthDate?: string;
+  workStartDate?: string;
+  identityDocument?: CandidateIdentityDocumentInput;
+  educationExperience?: CandidateEducationExperienceInput;
+  organizationId: string;
+  positionId: string;
+  workplaceId?: string;
+  proposedEntryDate: string;
+  probationMonths?: number;
+  jobLevel?: JobLevel;
+  employeeLevel?: EmployeeLevel;
+  personnelCategory?: PersonnelCategory;
+  workArrangement?: WorkArrangement;
+  directManagerEmployeeId?: string;
+  employingCompanyId?: string;
+  agreementType?: AgreementType;
+  contractTermType?: ContractTermType;
+  contractMonths?: number;
+  contractEndDate?: string;
+  isSeparatelySigned?: boolean;
+  compensationSnapshot?: OfferCompensationSnapshotInput;
+  partTimeSnapshot?: OfferPartTimeSnapshotInput;
+}
+
+export interface CreatedCandidateIdentityDocument {
+  id: string;
+  documentType: IdentityDocumentType;
+  documentNumber: string;
+  isPrimary: boolean;
+  expiryDate: string | null;
+}
+
+export interface CreatedCandidateEducationExperience {
+  id: string;
+  schoolName: string;
+  educationLevel: EducationLevel;
+  major: string | null;
+  graduationDate: string | null;
+  isHighestEducation: boolean;
+}
+
+export interface CreatedOfferCompensationSnapshot {
+  salaryPackage: string | null;
+  salaryRemark: string | null;
+  preConfirmationBaseSalary: string | null;
+  postConfirmationBaseSalary: string | null;
+  preConfirmationMonthlyPerformance: string | null;
+  postConfirmationMonthlyPerformance: string | null;
+  preConfirmationMonthlyManagementPerformance: string | null;
+  postConfirmationMonthlyManagementPerformance: string | null;
+  fullTimeContractSalary: string | null;
+  annualPerformance: string | null;
+}
+
+export interface CreatedOfferPartTimeSnapshot {
+  positionName: string | null;
+  hourlyRate: string | null;
+}
+
+/** Full persisted snapshot returned when a DRAFT internship Offer is created. */
+export interface CreatedInternOffer {
+  id: string;
+  offerNo: string;
+  candidate: {
+    id: string;
+    name: string;
+    mobile: string;
+    personalEmail: string;
+    source: PersonnelSource;
+    gender: Gender | null;
+    birthDate: string | null;
+    workStartDate: string | null;
+    identityDocument: CreatedCandidateIdentityDocument | null;
+    educationExperience: CreatedCandidateEducationExperience | null;
+  };
+  organizationId: string;
+  positionId: string;
+  workplaceId: string | null;
+  proposedEntryDate: string;
+  probationMonths: number | null;
+  jobLevel: JobLevel | null;
+  employeeLevel: EmployeeLevel | null;
+  personnelCategory: PersonnelCategory | null;
+  workArrangement: WorkArrangement | null;
+  directManagerEmployeeId: string | null;
+  employingCompanyId: string | null;
+  agreementType: AgreementType | null;
+  contractTermType: ContractTermType | null;
+  contractMonths: number | null;
+  contractEndDate: string | null;
+  isSeparatelySigned: boolean | null;
+  compensationSnapshot: CreatedOfferCompensationSnapshot | null;
+  partTimeSnapshot: CreatedOfferPartTimeSnapshot | null;
+  employmentRelationship: 'INTERN';
+  status: 'DRAFT';
+  issueDate: null;
+}
+
+/** A selectable current intern in the caller's current organization scope. */
+export interface InternConversionEmployeeOption {
+  id: string;
+  name: string;
+  employeeNo: string;
+}
+
+/**
+ * Read-only values mapped from a current, scoped intern. Null means the
+ * employee data has no confirmed source for the corresponding Offer field.
+ * The client may edit every value before direct Offer creation.
+ */
+export interface InternConversionOfferPrefill {
+  name: string;
+  mobile: string;
+  personalEmail: string | null;
+  source: PersonnelSource | null;
+  gender: Gender | null;
+  birthDate: string | null;
+  identityDocument: CandidateIdentityDocumentInput | null;
+  educationExperience: CandidateEducationExperienceInput | null;
+  organizationId: string | null;
+  positionId: string | null;
+  workplaceId: string | null;
+  jobLevel: JobLevel | null;
+  employeeLevel: EmployeeLevel | null;
+  personnelCategory: PersonnelCategory | null;
+  workArrangement: WorkArrangement | null;
+  directManagerEmployeeId: string | null;
+  employingCompanyId: string | null;
+  agreementType: AgreementType | null;
+  contractTermType: ContractTermType | null;
+  contractEndDate: string | null;
 }
 
 export interface OfferViewCounts {
@@ -1080,7 +1484,10 @@ export interface CreateEmployeeInput {
   employeeLevel: EmployeeLevel;
   /** Required EmployingCompany for the EmployeeAgreement created with this employee. */
   agreementEmployingCompanyId: string;
+  nativePlaceRegionCode?: string;
   householdType: HouseholdType;
+  householdRegionCode?: string;
+  residentialRegionCode?: string;
   bankName: BankName;
   bankBranchName: string;
   bankAccountNumber: string;
@@ -1115,6 +1522,7 @@ export interface EmployeeFormOption {
 }
 
 export interface EmployeePositionOption extends EmployeeFormOption {
+  code: string;
   organizationId: string | null;
 }
 
@@ -1133,10 +1541,28 @@ export interface EmployeeFormOptions {
   employingCompanies?: EmployeeDirectoryOption[];
 }
 
+export interface InitialEmploymentInput {
+  organizationId: string;
+  entryDate: string;
+  employmentRelationship: EmploymentRelationship;
+  workArrangement: WorkArrangement;
+  employmentStatus: EmploymentStatus;
+  personnelCategory?: PersonnelCategory;
+  personnelSource?: PersonnelSource;
+  personnelPosition?: PersonnelPosition;
+  employeeLevel?: EmployeeLevel;
+  positionId?: string;
+  jobLevel?: JobLevel;
+  workplaceId?: string;
+}
+
 export interface UpdateEmployeeInput {
   employeeNo?: string;
   name?: string;
+  /** Set only when changing an existing primary assignment. */
   organizationId?: string;
+  /** Required with the initial-assignment fields when no current primary assignment exists. */
+  initialEmployment?: InitialEmploymentInput;
   employmentStatus?: EmploymentStatus;
   workEmail?: string;
   personalEmail?: string;
@@ -1147,8 +1573,11 @@ export interface UpdateEmployeeInput {
   maritalStatus?: MaritalStatus;
   politicalStatus?: PoliticalStatus;
   nativePlace?: string;
+  nativePlaceRegionCode?: string;
   householdType?: HouseholdType;
+  householdRegionCode?: string;
   householdAddress?: string;
+  residentialRegionCode?: string;
   residentialAddress?: string;
   bankName?: BankName;
   bankBranchName?: string;
@@ -1170,6 +1599,245 @@ export interface UpdateEmployeeInput {
   employmentRelationship?: EmploymentRelationship;
   personnelSource?: PersonnelSource;
   workArrangement?: WorkArrangement;
+}
+
+export interface PerformanceExecutorDefinition {
+  type: PerformanceExecutorType;
+  userId?: string;
+  directoryType?: PerformanceDirectoryType;
+  directoryId?: string;
+}
+
+export interface PerformanceRuleNode {
+  op: 'constant' | 'field' | 'add' | 'subtract' | 'multiply' | 'divide' | 'min' | 'max' | 'if';
+  value?: number;
+  field?: string;
+  args?: PerformanceRuleNode[];
+  condition?: { field: string; operator: '<' | '<=' | '>' | '>=' | '=' | '!='; value: number };
+  then?: PerformanceRuleNode;
+  otherwise?: PerformanceRuleNode;
+}
+
+export interface PerformanceIndicatorDefinition {
+  id: string;
+  name: string;
+  description: string;
+  standards: string[];
+  weight: number;
+  dataField?: string;
+  rule?: PerformanceRuleNode;
+}
+
+export interface PerformanceModuleDefinition {
+  id: string;
+  name: string;
+  type: PerformanceModuleType;
+  enabled: boolean;
+  participatesInTotal: boolean;
+  weight: number | null;
+  description: string;
+  executor: PerformanceExecutorDefinition;
+  indicators: PerformanceIndicatorDefinition[];
+  adjustmentDirection?: PerformanceAdjustmentDirection;
+  adjustmentMin?: number;
+  adjustmentMax?: number;
+  requireComment?: boolean;
+  requireAttachment?: boolean;
+}
+
+export interface PerformanceTemplateDefinition {
+  schemaVersion: 1;
+  name: string;
+  description?: string;
+  modules: PerformanceModuleDefinition[];
+}
+
+export interface PerformanceTemplateVersionSummary {
+  id: string;
+  versionNo: number;
+  status: PerformanceVersionStatus;
+  sourceName: string | null;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface PerformanceTemplateListItem {
+  id: string;
+  name: string;
+  description: string | null;
+  status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'CANCELLED';
+  latestVersion: PerformanceTemplateVersionSummary | null;
+  moduleCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PerformanceTemplateDetail extends PerformanceTemplateListItem {
+  versions: Array<PerformanceTemplateVersionSummary & {
+    sourceMarkdown: string;
+    definition: PerformanceTemplateDefinition;
+  }>;
+}
+
+export interface PerformanceParseError {
+  path: string;
+  message: string;
+}
+
+export interface PerformanceTemplateParseResult {
+  sourceName: string | null;
+  sourceMarkdown: string;
+  definition: PerformanceTemplateDefinition | null;
+  errors: PerformanceParseError[];
+}
+
+export interface PerformanceDirectoryOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface PerformanceUserOption {
+  id: string;
+  username: string;
+  displayName: string;
+  employeeId: string | null;
+}
+
+export interface PerformanceOptions {
+  users: PerformanceUserOption[];
+  positions: PerformanceDirectoryOption[];
+  jobTitles: PerformanceDirectoryOption[];
+}
+
+export interface PerformanceCycleListItem {
+  id: string;
+  name: string;
+  periodStart: string;
+  periodEnd: string;
+  templateName: string;
+  templateVersionNo: number;
+  status: ProcessStatus;
+  instanceCount: number;
+  completedInstanceCount: number;
+  createdAt: string;
+}
+
+export interface PerformanceTaskListItem {
+  id: string;
+  cycleId: string;
+  cycleName: string;
+  instanceId: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNo: string;
+  moduleId: string;
+  moduleName: string;
+  moduleType: PerformanceModuleType;
+  moduleOrder: number;
+  moduleWeight: number | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  executorName: string | null;
+  isCurrent: boolean;
+  canSubmit: boolean;
+  completedAt: string | null;
+}
+
+export interface PerformanceTaskDetail extends PerformanceTaskListItem {
+  moduleSnapshot: PerformanceModuleDefinition;
+  rawData: unknown;
+  calculationDetails: unknown;
+  submission: { score?: number; adjustment?: number; comment?: string; attachmentIds?: string[] } | null;
+  moduleScore: number | null;
+  previousResults: Array<{ moduleName: string; moduleScore: number | null; rawData: unknown; calculationDetails: unknown; submission: unknown }>;
+}
+
+export interface PerformanceResultRevision {
+  id: string;
+  revisionNo: number;
+  previousScore: number;
+  nextScore: number;
+  scoreDelta: number;
+  previousAmount: number | null;
+  nextAmount: number | null;
+  reason: string;
+  modifiedByName: string | null;
+  modifiedAt: string;
+}
+
+export interface PerformanceResultListItem {
+  id: string;
+  cycleId: string;
+  cycleName: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNo: string;
+  finalScore: number | null;
+  amountBaseSnapshot: number | null;
+  actualAmount: number | null;
+  status: ProcessStatus;
+  revisionCount: number;
+}
+
+export interface PerformanceResultDetail extends PerformanceResultListItem {
+  fixedWeightedScore: number | null;
+  adjustmentScore: number;
+  rawFinalScore: number | null;
+  calculationFormula: string | null;
+  moduleResults: Array<{ moduleName: string; moduleType: PerformanceModuleType; moduleWeight: number | null; moduleScore: number | null; details: unknown }>;
+  revisions: PerformanceResultRevision[];
+  definitionSnapshot: PerformanceTemplateDefinition;
+}
+
+export interface PerformanceDashboardSummary {
+  templateCount: number;
+  activeTaskCount: number;
+  pendingResultCount: number;
+}
+
+export interface PerformanceAmountBase {
+  id: string;
+  versionNo: number;
+  amount: number;
+  previousAmount: number | null;
+  effectiveAt: string;
+  changedByName: string | null;
+  changeReason: string;
+  createdAt: string;
+}
+
+export interface PerformanceCreateTemplateInput {
+  name: string;
+  description?: string;
+  sourceName?: string;
+  sourceMarkdown: string;
+  definition: PerformanceTemplateDefinition;
+}
+
+export interface PerformanceCreateCycleInput {
+  name: string;
+  periodStart: string;
+  periodEnd: string;
+  templateVersionId: string;
+  employeeIds: string[];
+}
+
+export interface PerformanceTaskSubmissionInput {
+  score?: number;
+  adjustment?: number;
+  comment?: string;
+  attachmentIds?: string[];
+}
+
+export interface PerformanceResultModificationInput {
+  finalScore: number;
+  reason: string;
+}
+
+export interface PerformanceAmountBaseInput {
+  amount: number;
+  effectiveAt: string;
+  reason: string;
 }
 
 export interface LoginResponse {

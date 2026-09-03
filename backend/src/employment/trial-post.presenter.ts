@@ -8,7 +8,7 @@ export interface TrialPostPresentationRow {
   endDate: Date | null;
   result: string | null;
   status: ProcessStatus;
-  employee: { employeeNo: string; name: string };
+  employee: { employeeNo: string; name: string | null };
   targetPosition: { organization: { id: string; name: string } | null };
 }
 
@@ -28,7 +28,7 @@ export function presentTrialPost(
     id: row.id,
     employeeId: row.employeeId,
     employeeNo: row.employee.employeeNo,
-    employeeName: row.employee.name,
+    employeeName: row.employee.name ?? '--',
     startDate: row.startDate.toISOString().slice(0, 10),
     endDate: row.endDate?.toISOString().slice(0, 10) ?? null,
     movementTypeName: null,

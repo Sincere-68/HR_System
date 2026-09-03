@@ -132,7 +132,7 @@ export class ContractsService {
         return {
           id: row.id,
           employeeNo: row.employee.employeeNo,
-          employeeName: row.employee.name,
+          employeeName: row.employee.name ?? '--',
           departmentName: assignment?.organization.name ?? null,
           entryDate: formatDate(row.employmentPeriod?.entryDate ?? null),
           fullTimeCompany: row.employingCompany?.name ?? null,

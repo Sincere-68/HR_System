@@ -1,7 +1,12 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EmployeeDetail, EmployeeFormOptions } from '@hr-demo/shared';
-import { EmployeeForm, matchesJobLevelSearch } from './EmployeeForm';
+import { buildOrganizationTreeData } from '../../components/OrganizationTreeSelect';
+import {
+  EmployeeForm,
+  matchesJobLevelSearch,
+  matchesPositionSearch,
+} from './EmployeeForm';
 
 const employee: EmployeeDetail = {
   id: 'employee-1',
@@ -39,8 +44,11 @@ const employee: EmployeeDetail = {
   maritalStatus: 'UNMARRIED',
   politicalStatus: 'NON_PARTY',
   nativePlace: '虚构籍贯',
+  nativePlaceRegionCode: null,
   householdType: 'LOCAL_URBAN',
+  householdRegionCode: null,
   householdAddress: '虚构户籍地址',
+  residentialRegionCode: null,
   residentialAddress: '虚构联系地址',
   emergencyContactName: '虚构联系人',
   emergencyContactRelationship: '家属',
@@ -64,13 +72,23 @@ const employee: EmployeeDetail = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
-const organizations = [{ id: 'org-1', code: 'PRODUCT', name: '产品研发部', parentId: null }];
+const organizations = [
+  { id: 'org-company', code: 'COMPANY', name: '上海宜信电子商务有限公司', parentId: null },
+  { id: 'org-ceo', code: 'CEO', name: 'CEO陈锐', parentId: 'org-company' },
+  { id: 'org-1', code: 'SECOND', name: '二部', parentId: 'org-ceo' },
+  { id: 'org-team', code: 'SECOND_TMALL', name: '二部天猫超市组', parentId: 'org-1' },
+];
 const formOptions: EmployeeFormOptions = {
-  positions: [{ id: 'position-1', name: '软件工程师', organizationId: 'org-1' }],
+  positions: [
+    { id: 'position-1', code: '00105', name: 'web前端工程师', organizationId: null },
+    { id: 'position-2', code: '00427', name: '开发工程师', organizationId: null },
+  ],
   workplaces: [{ id: 'workplace-1', name: '虚构园区' }],
   managers: [{ id: 'manager-1', name: '虚构经理甲', employeeNo: 'FAKE-M001' }],
   employingCompanies: [{ id: 'company-1', name: '虚构公司', code: 'COMPANY_001' }],
 };
+
+afterEach(() => cleanup());
 
 describe('EmployeeForm', () => {
   it('matches job levels by code substring, including numeric suffixes', () => {
@@ -82,7 +100,95 @@ describe('EmployeeForm', () => {
     expect(matchesJobLevelSearch('s', { label: 'S1', value: 'S1' })).toBe(true);
   });
 
-  it('renders all required personnel creation fields in their sections', () => {
+  it('matches position options separately by position code and name', () => {
+    const option = { code: '00105', name: 'web前端工程师' };
+    expect(matchesPositionSearch('00105', option)).toBe(true);
+    expect(matchesPositionSearch('前端工程师', option)).toBe(true);
+    expect(matchesPositionSearch('开发工程师', option)).toBe(false);
+  });
+
+  it('uses the full confirmed identity-document list with Chinese labels', () => {
+    render(
+      <EmployeeForm
+        formId="document-form"
+        organizations={organizations}
+        formOptions={formOptions}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const documentTypeControl = screen.getAllByRole('combobox')
+      .find((control) => control.getAttribute('id') === 'documentType')!;
+    fireEvent.change(documentTypeControl, { target: { value: '新加坡亚籍（EP）' } });
+    expect(screen.getByRole('option', { name: '新加坡亚籍（EP）' })).toBeInTheDocument();
+    fireEvent.change(documentTypeControl, { target: { value: '马来西亚技工培训准证' } });
+    expect(screen.getByRole('option', { name: '马来西亚技工培训准证' })).toBeInTheDocument();
+    fireEvent.change(documentTypeControl, { target: { value: '香港特别行政区签证身份书（黄本）' } });
+    expect(screen.getByRole('option', { name: '香港特别行政区签证身份书（黄本）' })).toBeInTheDocument();
+  });
+
+  it('renders administrative-region cascaders and restores selected code paths', async () => {
+    render(
+      <EmployeeForm
+        formId="region-form"
+        employee={{
+          ...employee,
+          nativePlaceRegionCode: '310115',
+          householdRegionCode: '110105',
+          residentialRegionCode: '440305',
+        }}
+        organizations={organizations}
+        formOptions={formOptions}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const regionControls = document.querySelectorAll<HTMLInputElement>('.ant-cascader input');
+    expect(regionControls).toHaveLength(3);
+    expect(screen.getByText('籍贯地区')).toBeInTheDocument();
+    expect(screen.getByText('户籍所在地地区')).toBeInTheDocument();
+    expect(screen.getByText('联系地址地区')).toBeInTheDocument();
+  });
+
+  it('builds a nested organization tree from parent identifiers', () => {
+    expect(buildOrganizationTreeData(organizations)).toEqual([{
+      key: 'org-company',
+      value: 'org-company',
+      title: '上海宜信电子商务有限公司',
+      children: [{
+        key: 'org-ceo',
+        value: 'org-ceo',
+        title: 'CEO陈锐',
+        children: [{
+          key: 'org-1',
+          value: 'org-1',
+          title: '二部',
+          children: [{
+            key: 'org-team',
+            value: 'org-team',
+            title: '二部天猫超市组',
+          }],
+        }],
+      }],
+    }]);
+  });
+
+  it('keeps globally selectable positions available when the department changes', () => {
+    render(
+      <EmployeeForm
+        formId="position-form"
+        organizations={organizations}
+        formOptions={formOptions}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.mouseDown(screen.getAllByRole('combobox').find((control) => control.getAttribute('id') === 'positionId')!);
+    expect(screen.getByText('00105 - web前端工程师')).toBeInTheDocument();
+    expect(screen.getByText('00427 - 开发工程师')).toBeInTheDocument();
+  });
+
+  it('renders the confirmed employee creation fields in their sections', () => {
     render(
       <EmployeeForm
         formId="create-form"
@@ -93,23 +199,40 @@ describe('EmployeeForm', () => {
     );
 
     expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
-      '员工信息', '任职信息', '紧急联系人', '银行资料', '教育经历', '试用期信息', '汇报关系', '合同协议',
+      '任职信息', '试用期信息', '汇报关系', '合同协议',
     ]);
     const labels = [...document.querySelectorAll('.employee-form-label')].map((label) => label.textContent?.replace('*', ''));
     expect(labels).toEqual(expect.arrayContaining([
-      '姓名', '企业邮箱', '个人邮箱', '手机号码', '性别', '出生日期', '民族', '婚姻状况',
-      '政治面貌', '籍贯', '户口类别', '户籍所在地', '联系地址', '证件类型', '证件号码',
-      '证件截止日期', '入职日期', '工号', '部门', '人员定位', '员工层级', '人员类别',
-      '雇佣关系', '人员来源', '用工形式', '全日制公司', '紧急联系人', '与本人关系',
-      '紧急联系人电话', '银行', '开户行支行', '银行账号', '毕业学校名称', '院校类型',
-      '最高学历', '毕业时间', '专业',
+      '姓名', '电子邮件', '证件类型', '证件号码', '手机号码', '性别', '籍贯地区', '户籍所在地地区', '联系地址地区', '邀请激活账号',
+      '入职日期', '工号', '部门', '职位', '职级', '是否部门负责人', '工作地点', '用工形式',
+      '是否有试用期', '试用期(月)', '预计试用结束日期', '直接经理', '公司', '期限类型',
+      '合同期限(月)', '终止日期',
     ]));
     expect(screen.getAllByRole('combobox').length).toBeGreaterThan(0);
     const sections = [...document.querySelectorAll('.employee-form-section')];
     const assignmentSection = sections.find((section) => section.querySelector('h2')?.textContent === '任职信息')!;
     const agreementSection = sections.find((section) => section.querySelector('h2')?.textContent === '合同协议')!;
-    expect(assignmentSection.textContent).not.toContain('全日制公司');
-    expect(agreementSection.textContent).toContain('全日制公司');
+    expect(assignmentSection.textContent).not.toContain('公司');
+    expect(agreementSection.textContent).toContain('公司');
+  });
+
+  it('requires the initial employment fields when a partial employee is saved', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <EmployeeForm
+        formId="partial-required-form"
+        employee={{ ...employee, assignmentId: null, organizationId: '' }}
+        organizations={organizations}
+        formOptions={formOptions}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.submit(document.getElementById('partial-required-form')!);
+
+    expect(await screen.findByText('请选择部门')).toBeInTheDocument();
+    expect(screen.getByText('请选择入职日期')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('fills complete employee values into editable inputs', async () => {
@@ -126,5 +249,12 @@ describe('EmployeeForm', () => {
     expect(screen.getByDisplayValue('110101199203181021')).toBeInTheDocument();
     expect(screen.getByText('前台')).toBeInTheDocument();
     expect(screen.getByText('员工级')).toBeInTheDocument();
+    const departmentControl = screen.getAllByRole('combobox')
+      .find((control) => control.getAttribute('id') === 'organizationId')!;
+    expect(departmentControl).not.toBeDisabled();
+    fireEvent.mouseDown(departmentControl);
+    expect(screen.getByText('上海宜信电子商务有限公司')).toBeInTheDocument();
+    expect(screen.queryByText('组织架构')).not.toBeInTheDocument();
+    expect(screen.queryByText('CEO陈锐')).not.toBeInTheDocument();
   });
 });

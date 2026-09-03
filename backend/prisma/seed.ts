@@ -19,6 +19,7 @@ import {
   RecordStatus,
   WorkArrangement,
 } from '@prisma/client';
+import { ORGANIZATION_CATALOG } from '@hr-demo/shared';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -36,6 +37,12 @@ const permissionDefinitions = [
   ['employee.update', '编辑员工'],
   ['employee.data.all', '查看全部部门员工'],
   ['organization.read', '查看组织'],
+  ['performance.read', '查看绩效'],
+  ['performance.template.manage', '管理绩效模板'],
+  ['performance.cycle.manage', '管理绩效周期'],
+  ['performance.task.handle', '处理绩效任务'],
+  ['performance.result.modify', '修改绩效结果'],
+  ['performance.amount-base.manage', '管理绩效金额基数'],
 ] as const;
 
 const roleDefinitions = [
@@ -47,12 +54,12 @@ const roleDefinitions = [
   {
     code: 'DEPT_ADMIN',
     name: '部门管理员',
-    permissions: ['employee.read', 'employee.create', 'employee.update', 'organization.read'],
+    permissions: ['employee.read', 'employee.create', 'employee.update', 'organization.read', 'performance.read', 'performance.cycle.manage', 'performance.task.handle'],
   },
   {
     code: 'VIEWER',
     name: '普通查看者',
-    permissions: ['employee.read', 'organization.read'],
+    permissions: ['employee.read', 'organization.read', 'performance.read', 'performance.task.handle'],
   },
 ] as const;
 
@@ -105,26 +112,101 @@ async function main() {
     roles.set(role.code, await upsertRole(role.code, role.name, role.permissions));
   }
 
-  const headquarters = await prisma.organization.upsert({
-    where: { code: 'HQ' },
-    update: { name: '总部' },
-    create: { code: 'HQ', name: '总部' },
+  const organizationsByCode = new Map<string, { id: string }>();
+  for (const entry of ORGANIZATION_CATALOG) {
+    const id = `organization-${entry.code.toLocaleLowerCase()}`;
+    const parentId = entry.parentCode
+      ? organizationsByCode.get(entry.parentCode)?.id
+      : undefined;
+    if (entry.parentCode && !parentId) {
+      throw new Error(`组织目录父节点未先创建：${entry.parentCode}`);
+    }
+    const organization = await prisma.organization.upsert({
+      where: { code: entry.code },
+      update: {
+        name: entry.name,
+        parentId: parentId ?? null,
+        sortOrder: entry.sortOrder,
+        status: RecordStatus.ACTIVE,
+        archivedAt: null,
+        archivedById: null,
+        archiveReason: null,
+      },
+      create: {
+        id,
+        code: entry.code,
+        name: entry.name,
+        parentId: parentId ?? null,
+        sortOrder: entry.sortOrder,
+        status: RecordStatus.ACTIVE,
+      },
+      select: { id: true },
+    });
+    organizationsByCode.set(entry.code, organization);
+  }
+  const organization = (code: string) => {
+    const result = organizationsByCode.get(code);
+    if (!result) throw new Error(`组织目录缺少编码：${code}`);
+    return result.id;
+  };
+  const legacyOrganizations = await prisma.organization.findMany({
+    where: { code: { notIn: ORGANIZATION_CATALOG.map(({ code }) => code) } },
+    select: { id: true },
   });
-  const product = await prisma.organization.upsert({
-    where: { code: 'PRODUCT' },
-    update: { name: '产品研发部', parentId: headquarters.id },
-    create: { code: 'PRODUCT', name: '产品研发部', parentId: headquarters.id },
-  });
-  const operations = await prisma.organization.upsert({
-    where: { code: 'OPERATIONS' },
-    update: { name: '运营部', parentId: headquarters.id },
-    create: { code: 'OPERATIONS', name: '运营部', parentId: headquarters.id },
-  });
-  const sales = await prisma.organization.upsert({
-    where: { code: 'SALES' },
-    update: { name: '销售部', parentId: headquarters.id },
-    create: { code: 'SALES', name: '销售部', parentId: headquarters.id },
-  });
+  const legacyOrganizationIds = legacyOrganizations.map(({ id }) => id);
+  const legacyAssignments = legacyOrganizationIds.length > 0
+    ? await prisma.employeeAssignment.findMany({
+        where: { organizationId: { in: legacyOrganizationIds } },
+        select: { id: true },
+      })
+    : [];
+  if (legacyAssignments.length > 0) {
+    await prisma.employeeFieldChangeLog.deleteMany({
+      where: { assignmentId: { in: legacyAssignments.map(({ id }) => id) } },
+    });
+    await prisma.employeeAssignment.deleteMany({
+      where: { id: { in: legacyAssignments.map(({ id }) => id) } },
+    });
+  }
+  if (legacyOrganizationIds.length > 0) {
+    await prisma.userDataScope.deleteMany({ where: { organizationId: { in: legacyOrganizationIds } } });
+    await prisma.employee.updateMany({
+      where: { organizationId: { in: legacyOrganizationIds } },
+      data: { organizationId: organization('COMPANY_SHANGHAI_YIXIN') },
+    });
+    await prisma.position.updateMany({
+      where: { organizationId: { in: legacyOrganizationIds } },
+      data: { organizationId: null },
+    });
+    await prisma.jobTitle.updateMany({
+      where: { organizationId: { in: legacyOrganizationIds } },
+      data: { organizationId: null },
+    });
+    await prisma.offer.updateMany({
+      where: { organizationId: { in: legacyOrganizationIds } },
+      data: { organizationId: null },
+    });
+    await prisma.employeeMovement.updateMany({
+      where: {
+        OR: [
+          { fromOrganizationId: { in: legacyOrganizationIds } },
+          { toOrganizationId: { in: legacyOrganizationIds } },
+        ],
+      },
+      data: { fromOrganizationId: null, toOrganizationId: null },
+    });
+    await prisma.staffingPlan.deleteMany({ where: { organizationId: { in: legacyOrganizationIds } } });
+    await prisma.organization.updateMany({
+      where: { id: { in: legacyOrganizationIds } },
+      data: { parentId: null },
+    });
+    // Delete individually after detaching every legacy child. MySQL can reject
+    // a bulk delete of self-referencing organization rows even after parentId
+    // is cleared because it does not guarantee a child-first delete order.
+    for (const legacyOrganizationId of legacyOrganizationIds) {
+      await prisma.organization.deleteMany({ where: { id: legacyOrganizationId } });
+    }
+  }
 
   const userDefinitions = [
     {
@@ -139,14 +221,14 @@ async function main() {
       displayName: '部门管理员',
       roleCode: 'DEPT_ADMIN',
       password: process.env.SEED_DEPT_ADMIN_PASSWORD ?? 'Demo@123',
-      scopeOrganizationIds: [product.id, operations.id],
+      scopeOrganizationIds: [organization('CEO_CHEN_RUI')],
     },
     {
       username: 'viewer',
       displayName: '普通查看者',
       roleCode: 'VIEWER',
       password: process.env.SEED_VIEWER_PASSWORD ?? 'Demo@123',
-      scopeOrganizationIds: [sales.id],
+      scopeOrganizationIds: [organization('CHAIRMAN_CUSTOMER_SERVICE')],
     },
   ];
 
@@ -183,7 +265,7 @@ async function main() {
       name: '林知夏',
       mobile: '13800001001',
       idCardNo: '110101199203181021',
-      organizationId: product.id,
+      organizationId: organization('CEO_SECOND_TMALL_SUPERMARKET'),
       status: EmploymentStatus.REGULAR,
     },
     {
@@ -191,7 +273,7 @@ async function main() {
       name: '周予安',
       mobile: '13800001002',
       idCardNo: '310101199507092036',
-      organizationId: product.id,
+      organizationId: organization('CEO_SECOND_TMALL_SUPERMARKET'),
       status: EmploymentStatus.REGULAR,
     },
     {
@@ -199,7 +281,7 @@ async function main() {
       name: '陈嘉禾',
       mobile: '13800002001',
       idCardNo: '440101198911262412',
-      organizationId: operations.id,
+      organizationId: organization('CEO_STORAGE'),
       status: EmploymentStatus.RESIGNED,
     },
     {
@@ -207,7 +289,7 @@ async function main() {
       name: '许星澜',
       mobile: '13800003001',
       idCardNo: '510101199604112527',
-      organizationId: sales.id,
+      organizationId: organization('CHAIRMAN_CUSTOMER_SERVICE'),
       status: EmploymentStatus.REGULAR,
     },
   ];

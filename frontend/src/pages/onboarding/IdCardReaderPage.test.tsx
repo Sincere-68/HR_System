@@ -63,7 +63,7 @@ describe('IdCardReaderPage', () => {
     ]);
     expect(screen.getByText('虚构员工甲')).toBeInTheDocument();
     expect(screen.getByText('女')).toBeInTheDocument();
-    expect(screen.getByText('居民身份证')).toBeInTheDocument();
+    expect(screen.getByText('身份证')).toBeInTheDocument();
     expect(screen.getByText(documentNumber)).toBeInTheDocument();
     expect(screen.queryByText('1101012345671021')).not.toBeInTheDocument();
     expect(screen.getByText('1990-02-03')).toBeInTheDocument();

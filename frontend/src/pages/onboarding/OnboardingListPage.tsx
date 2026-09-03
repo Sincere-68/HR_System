@@ -1,9 +1,10 @@
-import { SolutionOutlined } from '@ant-design/icons';
+import { ExportOutlined, SolutionOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Table, Typography } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { Paginated } from '@hr-demo/shared';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { TableExportDialog, type TableExportField } from '../../features/employees/TableExportDialog';
 import { Link } from 'react-router-dom';
 
 export function renderNullable(value: string | number | null | undefined) {
@@ -28,6 +29,10 @@ export interface OnboardingListPageProps<T extends { id: string }> {
   scrollX: number;
   emptyText: string;
   headingTabs?: Array<{ label: string; to: string; active: boolean }>;
+  exportConfig?: {
+    fields: TableExportField[];
+    onExport: (input: { format: 'XLSX' | 'CSV'; fields: string[]; employeeIds?: string[] }) => Promise<void>;
+  };
 }
 
 export function OnboardingListPage<T extends { id: string }>({
@@ -40,8 +45,11 @@ export function OnboardingListPage<T extends { id: string }>({
   scrollX,
   emptyText,
   headingTabs,
+  exportConfig,
 }: OnboardingListPageProps<T>) {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportFields = useMemo(() => exportConfig?.fields ?? [], [exportConfig]);
 
   const handleTableChange = (pagination: TablePaginationConfig) => {
     onPageChange(pagination.current ?? 1, pagination.pageSize ?? pageSize);
@@ -63,14 +71,26 @@ export function OnboardingListPage<T extends { id: string }>({
                   {index === 0 ? <h1 id="onboarding-list-heading">{tab.label}</h1> : tab.label}
                 </Link>
               ))}
+              {exportConfig ? <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>导出</Button> : null}
             </nav>
           </div>
         </header>
       ) : (
         <header className="onboarding-page-heading">
           <Typography.Title id="onboarding-list-heading" level={1}>{title}</Typography.Title>
+          {exportConfig ? <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>导出</Button> : null}
         </header>
       )}
+      {exportConfig ? (
+        <TableExportDialog
+          open={exportOpen}
+          title={`导出${title}`}
+          fields={exportFields}
+          selectedRowIds={selectedRowKeys.map(String)}
+          onClose={() => setExportOpen(false)}
+          onExport={exportConfig.onExport}
+        />
+      ) : null}
       {query.isError ? (
         <Alert
           className="onboarding-content-alert"

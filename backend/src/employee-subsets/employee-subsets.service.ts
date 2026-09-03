@@ -95,7 +95,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -177,7 +177,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -254,7 +254,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -329,7 +329,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -408,7 +408,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -485,7 +485,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -561,7 +561,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -639,7 +639,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -715,7 +715,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
@@ -790,7 +790,7 @@ export class EmployeeSubsetsService {
       data: rows.map((row) => ({
         id: row.id,
         employeeId: row.employeeId,
-        employeeName: row.employee.name,
+        employeeName: row.employee.name ?? '--',
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,

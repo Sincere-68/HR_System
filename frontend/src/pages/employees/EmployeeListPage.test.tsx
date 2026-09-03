@@ -22,6 +22,7 @@ vi.mock('../../features/employees/api', () => ({
   useRegularEmployees: (query: unknown) => useRegularEmployees(query),
   usePersonnelLaborWorkers: (query: unknown) => usePersonnelLaborWorkers(query),
   usePersonnelResigned: (query: unknown) => usePersonnelResigned(query),
+  downloadEmployeeExport: vi.fn(),
 }));
 
 vi.mock('../../features/employment/api', () => ({
@@ -67,8 +68,11 @@ const employees = [
     maritalStatus: null,
     politicalStatus: null,
     nativePlace: null,
+    nativePlaceRegionCode: null,
     householdType: null,
+    householdRegionCode: null,
     householdAddress: null,
+    residentialRegionCode: null,
     residentialAddress: null,
     emergencyContactName: null,
     emergencyContactRelationship: null,
@@ -181,7 +185,8 @@ const allBusinessHeadings = [
   '工作地点', '企业邮箱', '个人邮箱', '手机号码', '人员类别', '人员来源', '人员状态',
   '全日制公司', '雇佣关系', '用工形式', '直线经理', '直线经理邮箱', '累计工龄（年）',
   '累计司龄（年）', '证件类型', '证件号码', '证件截止日期', '出生日期', '年龄', '民族',
-  '婚姻状况', '政治面貌', '籍贯', '户口类别', '户籍所在地', '联系地址', '紧急联系人',
+  '婚姻状况', '政治面貌', '籍贯地区', '籍贯详细说明', '户口类别', '户籍所在地地区', '户籍详细地址',
+  '联系地址地区', '联系详细地址', '紧急联系人',
   '与本人关系', '紧急联系人电话', '银行', '开户行支行', '银行账号', '毕业学校名称',
   '院校类型', '最高学历', '毕业时间', '专业',
 ];
@@ -213,10 +218,27 @@ describe('EmployeeListPage', () => {
 
   afterEach(cleanup);
 
+  it('renders newly confirmed document types with their Chinese labels', () => {
+    useEmployees.mockReturnValue(queryResult([{ ...employees[0], documentType: 'SINGAPORE_EP' as const }]));
+
+    renderPage();
+
+    expect(screen.getByText('新加坡亚籍（EP）')).toBeInTheDocument();
+  });
+
   it('keeps the existing all-personnel business column order and view link', () => {
+    useEmployees.mockReturnValue(queryResult([{
+      ...employees[0],
+      nativePlaceRegionCode: '310115',
+      householdRegionCode: '110105',
+      residentialRegionCode: '440305',
+    }]));
     renderPage();
 
     expect(getHeadings()).toEqual([...allBusinessHeadings, '操作']);
+    expect(within(screen.getByRole('table')).getByText('上海市 / 市辖区 / 浦东新区')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('北京市 / 市辖区 / 朝阳区')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('广东省 / 深圳市 / 南山区')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '虚构员工甲' })).toHaveAttribute(
       'href',
       '/personnel/employees/employee-1',
@@ -229,6 +251,16 @@ describe('EmployeeListPage', () => {
     expect(within(screen.getByRole('table')).queryByText('FRONT_OFFICE')).not.toBeInTheDocument();
     expect(within(screen.getByRole('table')).queryByText('STAFF')).not.toBeInTheDocument();
     expect(within(screen.getByRole('table')).getAllByText('--').length).toBeGreaterThan(0);
+  });
+
+  it('opens a field-selectable export dialog for the selected personnel', () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /导出/ }));
+    expect(screen.getByText('导出人员数据')).toBeInTheDocument();
+    expect(screen.getByText('当前未勾选人员，将导出当前筛选条件下的全部人员。')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '工号' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '专业' })).toBeChecked();
   });
 
   it('renders five clickable personnel cards and switches URL view state', () => {
@@ -323,8 +355,8 @@ describe('EmployeeListPage', () => {
       status: 'REGULAR', page: 2, pageSize: 20,
     }));
 
-    fireEvent.click(screen.getByRole('button', { name: '部门' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '产品研发部' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '筛选部门' }));
+    fireEvent.click(within(screen.getByRole('tree')).getByText('产品研发部'));
 
     expect(useEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
       organizationId: 'org-1', status: 'REGULAR', page: 1, pageSize: 20,

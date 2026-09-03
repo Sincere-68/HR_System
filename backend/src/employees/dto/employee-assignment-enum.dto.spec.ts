@@ -45,8 +45,33 @@ describe('Employee assignment fixed-enum DTO validation', () => {
     ]));
   });
 
-  it('accepts confirmed fixed codes and rejects unsupported codes on update', async () => {
+  it('accepts a newly confirmed document type and rejects an unknown one', async () => {
+    const validDto = plainToInstance(CreateEmployeeDto, { documentType: 'SINGAPORE_EP' });
+    const invalidDto = plainToInstance(UpdateEmployeeDto, { documentType: 'UNCONFIRMED_DOCUMENT' });
+
+    expect(await validate(validDto, { skipMissingProperties: true })).toHaveLength(0);
+    expect(await validate(invalidDto)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ property: 'documentType' }),
+    ]));
+  });
+
+  it('accepts a complete initial-employment payload on update', async () => {
+    const dto = plainToInstance(UpdateEmployeeDto, {
+      initialEmployment: {
+        organizationId: 'organization-target-1',
+        entryDate: '2026-09-02',
+        employmentRelationship: 'INTERNAL_EMPLOYEE',
+        workArrangement: 'CONTRACT_EMPLOYMENT',
+        employmentStatus: 'REGULAR',
+      },
+    });
+
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
+  it('accepts confirmed fixed codes and a target organization ID on update', async () => {
     const validDto = plainToInstance(UpdateEmployeeDto, {
+      organizationId: 'organization-target-1',
       personnelPosition: 'MIDDLE_OFFICE',
       employeeLevel: 'MANAGER',
     });

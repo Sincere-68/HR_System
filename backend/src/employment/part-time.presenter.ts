@@ -9,7 +9,7 @@ interface PartTimePresentationRow {
   status: AssignmentStatus;
   employee: {
     employeeNo: string;
-    name: string;
+    name: string | null;
   };
   organization: { name: string };
   jobTitle: { name: string } | null;
@@ -22,7 +22,7 @@ export function presentPartTime(
   return {
     id: row.id,
     employeeId: row.employeeId,
-    employeeName: row.employee.name,
+    employeeName: row.employee.name ?? '--',
     employeeNo: row.employee.employeeNo,
     partTimeType: null,
     startDate: row.startDate.toISOString().slice(0, 10),

@@ -1,5 +1,6 @@
-import { EyeOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
+import { ExportOutlined, EyeOutlined, ImportOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import {
+  formatChinaAdministrativeRegion,
   PERMISSIONS,
   type EmployeeListItem,
   type EmployeeListQuery,
@@ -18,6 +19,7 @@ import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckboxFilterDropdown } from '../../components/CheckboxFilterDropdown';
+import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 import {
   bankNameLabels,
   educationLevelLabels,
@@ -26,6 +28,7 @@ import {
   ethnicityLabels,
   householdTypeLabels,
   institutionTypeLabels,
+  identityDocumentTypeLabels,
   maritalStatusLabels,
   personnelCategoryLabels,
   personnelPositionLabels,
@@ -34,6 +37,10 @@ import {
   workArrangementLabels,
 } from '../../config/personnel-fields';
 import { useAuth } from '../../features/auth/auth-context';
+import { PersonnelExportDialog } from '../../features/employees/PersonnelExportDialog';
+import { TableExportDialog } from '../../features/employees/TableExportDialog';
+import { PersonnelImportDialog } from '../../features/employees/PersonnelImportDialog';
+import { downloadTableExport } from '../../features/employees/download';
 import {
   useEmployees,
   useOrganizations,
@@ -69,15 +76,6 @@ const genderLabels: Record<string, string> = {
   MALE: '男',
   FEMALE: '女',
   UNDISCLOSED: '保密',
-};
-
-const documentTypeLabels: Record<string, string> = {
-  NATIONAL_ID: '居民身份证',
-  PASSPORT: '护照',
-  HK_MACAO_PERMIT: '港澳通行证',
-  TAIWAN_PERMIT: '台湾通行证',
-  RESIDENCE_PERMIT: '居住证',
-  OTHER: '其他证件',
 };
 
 function displayValue(value: string | number | null | undefined) {
@@ -147,7 +145,7 @@ const employeeColumns: ColumnsType<EmployeeListItem> = [
     title: '证件类型',
     dataIndex: 'documentType',
     width: 130,
-    render: (value) => displayValue(value ? documentTypeLabels[value] : null),
+    render: (value) => displayValue(value ? identityDocumentTypeLabels[value as keyof typeof identityDocumentTypeLabels] ?? value : null),
   },
   { title: '证件号码', dataIndex: 'documentNumber', width: 200, render: displayValue },
   { title: '证件截止日期', dataIndex: 'documentExpiryDate', width: 140, render: displayValue },
@@ -156,10 +154,13 @@ const employeeColumns: ColumnsType<EmployeeListItem> = [
   { title: '民族', dataIndex: 'ethnicity', width: 100, render: (value) => displayValue(value ? ethnicityLabels[value as keyof typeof ethnicityLabels] ?? value : null) },
   { title: '婚姻状况', dataIndex: 'maritalStatus', width: 110, render: (value) => displayValue(value ? maritalStatusLabels[value as keyof typeof maritalStatusLabels] ?? value : null) },
   { title: '政治面貌', dataIndex: 'politicalStatus', width: 120, render: (value) => displayValue(value ? politicalStatusLabels[value as keyof typeof politicalStatusLabels] ?? value : null) },
-  { title: '籍贯', dataIndex: 'nativePlace', width: 130, render: displayValue },
+  { title: '籍贯地区', dataIndex: 'nativePlaceRegionCode', width: 200, render: (value) => displayValue(formatChinaAdministrativeRegion(value)) },
+  { title: '籍贯详细说明', dataIndex: 'nativePlace', width: 160, render: displayValue },
   { title: '户口类别', dataIndex: 'householdType', width: 120, render: (value) => displayValue(value ? householdTypeLabels[value as keyof typeof householdTypeLabels] ?? value : null) },
-  { title: '户籍所在地', dataIndex: 'householdAddress', width: 240, render: displayValue },
-  { title: '联系地址', dataIndex: 'residentialAddress', width: 240, render: displayValue },
+  { title: '户籍所在地地区', dataIndex: 'householdRegionCode', width: 200, render: (value) => displayValue(formatChinaAdministrativeRegion(value)) },
+  { title: '户籍详细地址', dataIndex: 'householdAddress', width: 240, render: displayValue },
+  { title: '联系地址地区', dataIndex: 'residentialRegionCode', width: 200, render: (value) => displayValue(formatChinaAdministrativeRegion(value)) },
+  { title: '联系详细地址', dataIndex: 'residentialAddress', width: 240, render: displayValue },
   { title: '紧急联系人', dataIndex: 'emergencyContactName', width: 130, render: displayValue },
   { title: '与本人关系', dataIndex: 'emergencyContactRelationship', width: 120, render: displayValue },
   { title: '紧急联系人电话', dataIndex: 'emergencyContactMobile', width: 160, render: displayValue },
@@ -269,6 +270,9 @@ export function EmployeeListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [secondaryExportOpen, setSecondaryExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const view: PersonnelView = isPersonnelView(requestedView) ? requestedView : 'all';
   const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') ?? '');
@@ -315,6 +319,8 @@ export function EmployeeListPage() {
   const resignedEmployees = usePersonnelResigned(resignedQuery);
   const organizations = useOrganizations();
   const canCreate = Boolean(user?.permissions.includes(PERMISSIONS.EMPLOYEE_CREATE));
+  const canExport = Boolean(user?.permissions.includes(PERMISSIONS.EMPLOYEE_READ));
+  const canImport = Boolean(user?.permissions.includes(PERMISSIONS.EMPLOYEE_UPDATE));
 
   useEffect(() => {
     setSelectedRowKeys([]);
@@ -355,10 +361,6 @@ export function EmployeeListPage() {
     patchSearch({ page: pagination.current ?? 1, pageSize: pagination.pageSize ?? 10 });
   };
 
-  const departmentOptions = (organizations.data ?? []).map((organization) => ({
-    label: organization.name,
-    value: organization.id,
-  }));
   const statusOptions = Object.entries(employmentStatusLabels).map(([value, label]) => ({
     label,
     value,
@@ -378,6 +380,18 @@ export function EmployeeListPage() {
           ? laborWorkers
           : resignedEmployees;
   const activeLabel = personnelViewCards.find((card) => card.view === view)?.label ?? '人员';
+  const secondaryExportColumns = view === 'regular' ? regularEmployeeColumns
+    : view === 'intern' ? internColumns
+      : view === 'labor' ? personnelLaborWorkerColumns
+        : personnelResignedColumns;
+  const secondaryExportFields = secondaryExportColumns
+    .flatMap((column) => ('dataIndex' in column && typeof column.title === 'string' && typeof column.dataIndex === 'string'
+      ? [{ key: column.dataIndex, title: column.title }]
+      : []));
+  const secondaryExportEndpoint = view === 'regular' ? '/employees/regular/export'
+    : view === 'intern' ? '/employment/interns/export'
+      : view === 'labor' ? '/employment/personnel-labor-workers/export'
+        : '/employment/personnel-resigned/export';
   const cardTotals: Record<PersonnelView, number | string> = {
     all: employees.data?.meta.total ?? '--',
     regular: regularEmployees.data?.meta.total ?? '--',
@@ -425,11 +439,15 @@ export function EmployeeListPage() {
                 patchSearch({ keyword: latestEmployee?.employeeNo, page: 1 });
               }}
             />
-            <CheckboxFilterDropdown
-              label="部门"
-              options={departmentOptions}
-              value={employeeQuery.organizationId ? [employeeQuery.organizationId] : []}
-              onChange={(values) => patchSearch({ organizationId: values.at(-1), page: 1 })}
+            <OrganizationTreeSelect
+              aria-label="筛选部门"
+              className="department-filter-tree-select"
+              variant="borderless"
+              allowClear
+              organizations={organizations.data ?? []}
+              placeholder="部门"
+              value={employeeQuery.organizationId}
+              onChange={(organizationId) => patchSearch({ organizationId, page: 1 })}
             />
             <CheckboxFilterDropdown
               label="人员状态"
@@ -453,11 +471,15 @@ export function EmployeeListPage() {
         <div className="employee-filter-toolbar personnel-view-filter-toolbar">
           <div className="personnel-view-filter-controls">
             {searchInput('搜索正式人员', '搜索姓名或工号')}
-            <CheckboxFilterDropdown
-              label="部门"
-              options={departmentOptions}
-              value={regularQuery.organizationId ? [regularQuery.organizationId] : []}
-              onChange={(values) => patchSearch({ organizationId: values.at(-1), page: 1 })}
+            <OrganizationTreeSelect
+              aria-label="筛选部门"
+              className="department-filter-tree-select"
+              variant="borderless"
+              allowClear
+              organizations={organizations.data ?? []}
+              placeholder="部门"
+              value={regularQuery.organizationId}
+              onChange={(organizationId) => patchSearch({ organizationId, page: 1 })}
             />
           </div>
           <Typography.Text type="secondary">共 {regularEmployees.data?.meta.total ?? 0} 条</Typography.Text>
@@ -626,12 +648,49 @@ export function EmployeeListPage() {
           <span className="employee-title-icon" aria-hidden="true"><TeamOutlined /></span>
           <h1 id="employees-heading">人员</h1>
         </div>
-        {canCreate ? (
-          <Link to="/personnel/employees/new">
-            <Button type="primary" icon={<PlusOutlined />}>新增人员</Button>
-          </Link>
-        ) : null}
+        <div className="employee-page-actions">
+          {view === 'all' && canImport ? (
+            <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
+          ) : null}
+          {canExport ? (
+            <Button icon={<ExportOutlined />} onClick={() => view === 'all' ? setExportOpen(true) : setSecondaryExportOpen(true)}>导出</Button>
+          ) : null}
+          {canCreate ? (
+            <Link to="/personnel/employees/new">
+              <Button type="primary" icon={<PlusOutlined />}>新增人员</Button>
+            </Link>
+          ) : null}
+        </div>
       </header>
+
+      {view !== 'all' ? (
+        <TableExportDialog
+          open={secondaryExportOpen}
+          title={`导出${activeLabel}`}
+          fields={secondaryExportFields}
+          selectedRowIds={selectedRowKeys.map(String)}
+          onClose={() => setSecondaryExportOpen(false)}
+          onExport={(input) => downloadTableExport(secondaryExportEndpoint, {
+            ...input,
+            query: (view === 'regular' ? regularQuery : view === 'intern' ? internQuery : view === 'labor' ? laborQuery : resignedQuery) as Record<string, string | number | undefined>,
+          }, `${activeLabel}导出`)}
+        />
+      ) : null}
+      <PersonnelImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => activeQuery.refetch()}
+      />
+      <PersonnelExportDialog
+        open={exportOpen}
+        selectedEmployeeIds={selectedRowKeys.map(String)}
+        query={{
+          keyword: employeeQuery.keyword,
+          organizationId: employeeQuery.organizationId,
+          status: employeeQuery.status,
+        }}
+        onClose={() => setExportOpen(false)}
+      />
 
       <div className="employee-overview" aria-label="人员分类">
         {personnelViewCards.map((card) => (

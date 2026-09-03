@@ -66,22 +66,25 @@ erDiagram
 | --- | --- | --- | --- |
 | `id` | String | 是 | 内部主键 |
 | `employee_no` | String | 是 | 全系统唯一；重新入职沿用；离职后不可复用 |
-| `name` | String | 是 | 当前姓名 |
+| `name` | String? | 完整新增是；导入否 | 当前姓名；导入待完善人员可为空，页面显示 `--` |
 | `former_name` | String | 否 | 曾用名 |
 | `english_name` | String | 否 | 英文名 |
 | `gender` | Enum (`Gender`) | 否（新增必填） | 男、女、保密 |
 | `birth_date` | Date | 否 | 出生日期 |
 | `nationality` | String | 否 | 国籍 |
 | `ethnicity` | Enum (`Ethnicity`) | 否 | 民族；取 Prisma `Ethnicity` 枚举值 |
-| `native_place` | String | 否 | 籍贯 |
+| `native_place` | String | 否 | 籍贯详细说明；历史自由文本保持原值，不自动拆分 |
+| `native_place_region_code` | VarChar(12) | 否 | 籍贯所选 GB/T 2260 兼容行政区划代码；由共享静态目录校验 |
 | `political_status` | Enum (`PoliticalStatus`) | 否 | 政治面貌；取 Prisma `PoliticalStatus` 枚举值 |
 | `marital_status` | Enum (`MaritalStatus`) | 否 | 婚姻状况；取 Prisma `MaritalStatus` 枚举值 |
-| `mobile` | String | 是 | 当前兼容 API 使用 |
+| `mobile` | String? | 完整新增是；导入否 | 当前兼容 API 使用；导入待完善人员可为空，页面显示 `--` |
 | `personal_email` | String | 否 | 个人邮箱 |
 | `work_email` | String | 否 | 工作邮箱 |
 | `household_type` | Enum (`HouseholdType`) | 否 | 户口类别；取 Prisma `HouseholdType` 枚举值 |
-| `household_address` | Text | 否 | 户籍地址 |
-| `residential_address` | Text | 否 | 现居地址 |
+| `household_region_code` | VarChar(12) | 否 | 户籍所在地所选 GB/T 2260 兼容行政区划代码 |
+| `household_address` | Text | 否 | 户籍详细地址；历史自由文本保持原值，不自动拆分 |
+| `residential_region_code` | VarChar(12) | 否 | 联系地址所选 GB/T 2260 兼容行政区划代码 |
+| `residential_address` | Text | 否 | 联系详细地址；历史自由文本保持原值，不自动拆分 |
 | `bank_name` | Enum (`BankName`) | 否 | 银行名称；当前 Prisma 仅确认 `ICBC` |
 | `bank_branch_name` | String | 否 | 开户行支行 |
 | `bank_account_number` | VarChar(19) | 否 | 银行账号 |
@@ -89,24 +92,25 @@ erDiagram
 | `record_status` | Enum (`RecordStatus`) | 是 | 档案有效、停用或归档；人员类别、雇佣关系和用工形式不放在员工主档案中 |
 | `archived_at/by/reason` | Date/User/Text | 否 | 归档审计信息 |
 | `id_card_no` | String? | 兼容 | 仅当前主要证件为居民身份证时同步；其他证件号码只保存在证件表 |
-| `organization_id` | String | 兼容 | 旧 API 使用；目标结构改用任职表 |
+| `organization_id` | String? | 兼容 | 旧 API 使用；目标结构改用任职表。导入创建的待完善人员可暂缺该字段，不代表存在部门任职；后续同工号导入同时提供完整任职字段时，会补建首段任职并同步该字段。 |
 
 ### 5.2 `organizations`：中心和部门组织树
 
 | 字段 | 类型 | 必填 | 规则/说明 |
 | --- | --- | --- | --- |
 | `code` / `name` | String | 是 | 组织编码唯一，名称可重复 |
-| `parent_id` | String | 否 | 指向上级组织，形成不限层级树；不使用固定组织类型枚举 |
+| `parent_id` | String | 否 | 指向上级组织，形成不限层级树；当前测试目录为四层：上海宜信电子商务有限公司、CEO/董事长负责人分组、部门/业务组、团队；不使用固定组织类型枚举。无冒号的复合名称按原文作为一个节点。|
 | `sort_order` | Int | 是 | 同级排序 |
 | `effective_date` / `expiry_date` | Date | 否 | 组织有效期 |
-| `status` / `archived_at` | Enum (`RecordStatus`)/Date | 是/否 | 停用或归档，不删除历史组织 |
+| `status` / `archived_at` | Enum (`RecordStatus`)/Date | 是/否 | 正式业务组织停用或归档，不删除历史组织；当前仅为测试数据的旧组织可由受保护的测试目录替换脚本直接删除 |
 | `description` | Text | 否 | 组织说明 |
 
 ### 5.3 基础目录表
 
 | 表 | 主要字段 | 用途 |
 | --- | --- | --- |
-| `positions` | code、name、organization_id、category、status | 岗位，例如软件工程师 |
+| `positions` | code、name、organization_id、category、status、archived_at | 公司内部职位目录；当前以用户提供的 434 条五位编号/名称为唯一标准。每个编号独立，即使名称相同也不合并；新业务选择只使用有效、未归档项。 |
+| `employee_identity_documents` | document_type、document_number、is_primary、expiry_date、status | 证件类型使用用户确认的 60 项 `IdentityDocumentType`；只有 `NATIONAL_ID` 同步迁移期 `employees.id_card_no`，其余证件号码仅保存在规范证件记录。 |
 | `employee_assignments.job_level` | `JobLevelCode` enum | 固定职级 code：`S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`；通过新迁移从旧目录精确回填 |
 | `employing_companies` | code、name、status | 全日制公司目录；仅内部合同协议通过该目录关联，不写入部门任职；外部履历和项目经历的公司文字字段保持原语义 |
 | `job_titles` | code、name、organization_id、status | 职务，例如部门经理 |
@@ -130,7 +134,7 @@ erDiagram
 
 ### 5.5 `employee_assignments`：部门任职历史
 
-人员页面的部门任职记录包含人员定位、固定职级、员工层级、人员类别、雇佣关系、人员来源和六类用工形式；不再存储全日制公司。人员定位为固定 `PersonnelPosition` enum（`FRONT_OFFICE`、`MIDDLE_OFFICE`、`BACK_OFFICE`），职级为固定 `JobLevelCode` enum（`S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`），员工层级为固定 `EmployeeLevel` enum（`STAFF`、`SUPERVISOR`、`MANAGER`、`DIRECTOR`、`PRESIDENT`、`EXPERT`）；三者直接保存为每条 `EmployeeAssignment` 的当时 code，不使用可维护目录。全日制公司改由 `EmployeeAgreement.employingCompany` 关联独立目录并随协议保留历史；人员列表和详情从当前任职周期的当前有效协议读取目录 `name`，没有可确认协议或目录关系时返回 `null` 并显示 `--`。用户确认人员定位、员工层级、人员类别、雇佣关系、人员来源和用工形式可在人员编辑页直接更新当前主要任职，并通过 `employee_field_change_logs` 保存 stable code 和中文标签快照；全日制公司须通过合同协议业务流程维护。部门、岗位、职级、地点和状态等原有历史字段仍遵循结束旧记录、新建历史记录的规则。
+人员页面的部门任职记录包含人员定位、固定职级、员工层级、人员类别、雇佣关系、人员来源和六类用工形式；不再存储全日制公司。人员定位为固定 `PersonnelPosition` enum（`FRONT_OFFICE`、`MIDDLE_OFFICE`、`BACK_OFFICE`），职级为固定 `JobLevelCode` enum（`S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`），员工层级为固定 `EmployeeLevel` enum（`STAFF`、`SUPERVISOR`、`MANAGER`、`DIRECTOR`、`PRESIDENT`、`EXPERT`）；三者直接保存为每条 `EmployeeAssignment` 的当时 code，不使用可维护目录。全日制公司改由 `EmployeeAgreement.employingCompany` 关联独立目录并随协议保留历史；人员列表和详情从当前任职周期的当前有效协议读取目录 `name`，没有可确认协议或目录关系时返回 `null` 并显示 `--`。用户确认人员定位、员工层级、人员类别、雇佣关系、人员来源和用工形式可在人员编辑页直接更新当前主要任职，并通过 `employee_field_change_logs` 保存 stable code 和中文标签快照；全日制公司须通过合同协议业务流程维护。人员编辑页允许直接变更部门：服务端以本次 UTC 日历日结束旧主要任职、创建继承岗位/职级/职务/地点及其余任职快照的新主要任职，并同步迁移期 `employees.organization_id` 与组织目录值日志；部门变更不自动修改职位。部门、岗位、职级、地点和状态等原有历史字段仍遵循结束旧记录、新建历史记录的规则。
 
 员工主档增加户口类别及单账户银行信息；人员列表和详情直接读取这些主档字段，未录入时返回 `null` 并显示 `--`。最高教育记录采用固定最高学历和院校类型枚举，人员列表和详情从有效教育记录中优先读取标记为最高学历的记录。人员页面与人员子集页面没有接口或表格依赖，只按同一底层记录各自查询。员工名册是独立的 MySQL 组合查询：当前实现不读取户口类别、人员来源、银行字段或院校类型，不能将人员列表的来源能力直接套用到名册。
 
@@ -178,6 +182,12 @@ erDiagram
 | 新员工融入 | `onboarding_integration_records` | 导师、计划、日期和反馈 |
 | 新员工入职介绍 | `employee_introductions` | 需要保存发布稿时使用；否则可组合员工资料 |
 | 读取身份证 | 不单独建业务表 | 识别结果填入证件表；原始读取操作记审计，不默认保存识别原文 |
+
+### 6.2.1 Offer 直接创建快照
+
+`candidates` 与 `offers` 支持直接创建实习 Offer。创建事务可保存 Candidate 主快照、`candidate_identity_documents`、`candidate_education_experiences`、`offer_compensation_snapshots` 和 `offer_part_time_snapshots`，但不会创建员工、任职、汇报关系、协议、入职单或审批记录。`Offer.workplace_id` 为可空；未选择工作地点时保存 `null`。Offer 固定保存 `employment_relationship=INTERN`，而人员来源仅保存于 `Candidate.source`，不保存创建路径 enum。
+
+系统不设持久化 Offer 模板、版本、配置或工时制度模型/字段。前端“Offer创建”入口是路径选择 UI：新增人员直接填写，实习生转正只从当前有效、受组织范围约束的实习员工读取预填数据；预填不创建任何记录，用户保存前可以编辑全部 Offer 表单字段。
 
 ### 6.3 任职管理
 

@@ -1,9 +1,10 @@
 import type { OnboardingListQuery } from '@hr-demo/shared';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useOnboardingEntries } from '../../features/onboarding/api';
+import { downloadOnboardingExport, useOnboardingEntries } from '../../features/onboarding/api';
 import { OnboardingListPage } from './OnboardingListPage';
 import { entryColumns } from './onboarding-table-configs';
+import { fieldsFromColumns, onboardingExportQuery } from './export-fields';
 
 function positiveInt(value: string | null, fallback: number) {
   const parsed = Number(value);
@@ -35,6 +36,10 @@ export function EntriesPage() {
       onPageChange={handlePageChange}
       scrollX={3_100}
       emptyText="暂无入职记录"
+      exportConfig={{
+        fields: fieldsFromColumns(entryColumns),
+        onExport: (input) => downloadOnboardingExport('entries', { ...input, query: onboardingExportQuery(query) }, '入职管理导出'),
+      }}
     />
   );
 }

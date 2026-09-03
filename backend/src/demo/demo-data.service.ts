@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuditAction, EmploymentStatus } from '@prisma/client';
 import {
   PERMISSIONS,
+  ORGANIZATION_CATALOG,
   type AuthUser,
   type Organization,
   type UpdateEmployeeInput,
@@ -35,12 +36,14 @@ interface DemoAuditRecord {
   createdAt: Date;
 }
 
-const organizations: Organization[] = [
-  { id: 'demo-org-hq', code: 'HQ', name: '总部', parentId: null },
-  { id: 'demo-org-product', code: 'PRODUCT', name: '产品研发部', parentId: 'demo-org-hq' },
-  { id: 'demo-org-operations', code: 'OPERATIONS', name: '运营部', parentId: 'demo-org-hq' },
-  { id: 'demo-org-sales', code: 'SALES', name: '销售部', parentId: 'demo-org-hq' },
-];
+const organizations: Organization[] = ORGANIZATION_CATALOG.map(({ code, name, parentCode }) => ({
+  id: `demo-org-${code.toLocaleLowerCase()}`,
+  code,
+  name,
+  parentId: parentCode ? `demo-org-${parentCode.toLocaleLowerCase()}` : null,
+}));
+
+const organizationId = (code: string) => `demo-org-${code.toLocaleLowerCase()}`;
 
 const accounts: DemoAccount[] = [
   {
@@ -65,8 +68,14 @@ const accounts: DemoAccount[] = [
       PERMISSIONS.EMPLOYEE_CREATE,
       PERMISSIONS.EMPLOYEE_UPDATE,
       PERMISSIONS.ORGANIZATION_READ,
+      PERMISSIONS.PERFORMANCE_READ,
+      PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE,
+      PERMISSIONS.PERFORMANCE_CYCLE_MANAGE,
+      PERMISSIONS.PERFORMANCE_TASK_HANDLE,
+      PERMISSIONS.PERFORMANCE_RESULT_MODIFY,
+      PERMISSIONS.PERFORMANCE_AMOUNT_BASE_MANAGE,
     ],
-    organizationIds: ['demo-org-product', 'demo-org-operations'],
+    organizationIds: [organizationId('CEO_CHEN_RUI')],
   },
   {
     id: 'demo-user-viewer',
@@ -75,8 +84,13 @@ const accounts: DemoAccount[] = [
     displayName: '普通查看者',
     role: 'VIEWER',
     roleName: '普通查看者',
-    permissions: [PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.ORGANIZATION_READ],
-    organizationIds: ['demo-org-sales'],
+    permissions: [
+      PERMISSIONS.EMPLOYEE_READ,
+      PERMISSIONS.ORGANIZATION_READ,
+      PERMISSIONS.PERFORMANCE_READ,
+      PERMISSIONS.PERFORMANCE_TASK_HANDLE,
+    ],
+    organizationIds: [organizationId('CHAIRMAN_CHEN_GANG')],
   },
 ];
 
@@ -87,7 +101,7 @@ const initialEmployees = [
     name: '林知夏',
     mobile: '13800001001',
     idCardNo: '110101199203181021',
-    organizationId: 'demo-org-product',
+    organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
     status: EmploymentStatus.REGULAR,
   },
   {
@@ -96,7 +110,7 @@ const initialEmployees = [
     name: '周予安',
     mobile: '13800001002',
     idCardNo: '310101199507092036',
-    organizationId: 'demo-org-product',
+    organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
     status: EmploymentStatus.REGULAR,
   },
   {
@@ -105,7 +119,7 @@ const initialEmployees = [
     name: '陈嘉禾',
     mobile: '13800002001',
     idCardNo: '440101198911262412',
-    organizationId: 'demo-org-operations',
+    organizationId: organizationId('CEO_STORAGE'),
     status: EmploymentStatus.RESIGNED,
   },
   {
@@ -114,7 +128,7 @@ const initialEmployees = [
     name: '许星澜',
     mobile: '13800003001',
     idCardNo: '510101199604112527',
-    organizationId: 'demo-org-sales',
+    organizationId: organizationId('CHAIRMAN_CUSTOMER_SERVICE'),
     status: EmploymentStatus.REGULAR,
   },
 ] as const;
@@ -154,6 +168,10 @@ export class DemoDataService {
 
   getOrganizations() {
     return organizations.map((organization) => ({ ...organization }));
+  }
+
+  getOrganizationId(code: string) {
+    return organizationId(code);
   }
 
   organizationExists(organizationId: string) {

@@ -89,6 +89,15 @@ export function EmployeeFormPage() {
             description={mutation.error.message}
           />
         ) : null}
+        {editing && employee.data?.assignmentId === null ? (
+          <Alert
+            className="employee-editor-error"
+            type="info"
+            showIcon
+            message="该人员尚未建立任职记录"
+            description="请在本页一次性补齐部门、入职日期、雇佣关系、用工形式和人员状态；保存后将创建首段任职周期、主要任职和人员状态记录。"
+          />
+        ) : null}
         <EmployeeForm
           formId={FORM_ID}
           employee={employee.data}

@@ -16,7 +16,7 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (user) return <Navigate to="/personnel/employees" replace />;
+  if (user) return <Navigate to="/" replace />;
 
   const handleSubmit = async (values: LoginValues) => {
     setError('');
@@ -24,7 +24,7 @@ export function LoginPage() {
     try {
       await login(values.username, values.password);
       const destination = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(destination ?? '/personnel/employees', { replace: true });
+      navigate(destination ?? '/', { replace: true });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '登录失败，请稍后重试');
     } finally {

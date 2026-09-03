@@ -3,6 +3,7 @@ import {
   BankName,
   EducationLevel,
   EmploymentRelationship,
+  EmploymentStatus,
   Ethnicity,
   Gender,
   HouseholdType,
@@ -16,19 +17,85 @@ import {
   EmployeeLevel,
   WorkArrangement,
 } from '@prisma/client';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEmail,
   IsEnum,
   IsOptional,
   IsString,
+  ValidateNested,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+
+export class InitialEmploymentDto {
+  @ApiPropertyOptional({ description: '首段任职部门 ID' })
+  @Transform(trim)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(191)
+  organizationId: string;
+
+  @ApiPropertyOptional({ description: '首段任职入职日期，格式 YYYY-MM-DD' })
+  @IsDateString({ strict: true })
+  entryDate: string;
+
+  @ApiPropertyOptional({ enum: PersonnelCategory })
+  @IsOptional()
+  @IsEnum(PersonnelCategory)
+  personnelCategory?: PersonnelCategory;
+
+  @ApiPropertyOptional({ enum: EmploymentRelationship })
+  @IsEnum(EmploymentRelationship)
+  employmentRelationship: EmploymentRelationship;
+
+  @ApiPropertyOptional({ enum: PersonnelSource })
+  @IsOptional()
+  @IsEnum(PersonnelSource)
+  personnelSource?: PersonnelSource;
+
+  @ApiPropertyOptional({ enum: WorkArrangement })
+  @IsEnum(WorkArrangement)
+  workArrangement: WorkArrangement;
+
+  @ApiPropertyOptional({ enum: EmploymentStatus })
+  @IsEnum(EmploymentStatus)
+  employmentStatus: EmploymentStatus;
+
+  @ApiPropertyOptional({ enum: PersonnelPosition })
+  @IsOptional()
+  @IsEnum(PersonnelPosition)
+  personnelPosition?: PersonnelPosition;
+
+  @ApiPropertyOptional({ enum: EmployeeLevel })
+  @IsOptional()
+  @IsEnum(EmployeeLevel)
+  employeeLevel?: EmployeeLevel;
+
+  @ApiPropertyOptional({ description: '职位 ID' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  positionId?: string;
+
+  @ApiPropertyOptional({ description: '职级固定 code' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  jobLevel?: string;
+
+  @ApiPropertyOptional({ description: '工作地点 ID' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  workplaceId?: string;
+}
 
 export class UpdateEmployeeDto {
   @ApiPropertyOptional({ example: 'DEMO-1005' })
@@ -47,6 +114,20 @@ export class UpdateEmployeeDto {
   @MinLength(1)
   @MaxLength(50)
   name?: string;
+
+  @ApiPropertyOptional({ description: '目标部门组织 ID；变更时结束当前主要任职并创建新的任职历史' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(191)
+  organizationId?: string;
+
+  @ApiPropertyOptional({ description: '未建立任职记录时一次性补齐首段任职信息' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InitialEmploymentDto)
+  initialEmployment?: InitialEmploymentDto;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -101,10 +182,31 @@ export class UpdateEmployeeDto {
   @MaxLength(191)
   nativePlace?: string;
 
+  @ApiPropertyOptional({ description: '籍贯行政区划代码（GB/T 2260 兼容）', maxLength: 12 })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(12)
+  nativePlaceRegionCode?: string;
+
   @ApiPropertyOptional({ enum: HouseholdType })
   @IsOptional()
   @IsEnum(HouseholdType)
   householdType?: HouseholdType;
+
+  @ApiPropertyOptional({ description: '户籍所在地行政区划代码（GB/T 2260 兼容）', maxLength: 12 })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(12)
+  householdRegionCode?: string;
+
+  @ApiPropertyOptional({ description: '联系地址行政区划代码（GB/T 2260 兼容）', maxLength: 12 })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(12)
+  residentialRegionCode?: string;
 
   @ApiPropertyOptional({ maxLength: 191 })
   @IsOptional()

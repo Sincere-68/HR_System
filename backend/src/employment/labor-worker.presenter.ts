@@ -6,7 +6,7 @@ export interface LaborWorkerPresentationRow {
   entryDate: Date;
   employee: {
     employeeNo: string;
-    name: string;
+    name: string | null;
     workEmail: string | null;
   };
   assignments: Array<{
@@ -30,7 +30,7 @@ export function presentLaborWorker(
   return {
     id: row.id,
     employeeId: row.employeeId,
-    employeeName: row.employee.name,
+    employeeName: row.employee.name ?? '--',
     workEmail: row.employee.workEmail,
     employeeNo: row.employee.employeeNo,
     entryDate: row.entryDate.toISOString().slice(0, 10),

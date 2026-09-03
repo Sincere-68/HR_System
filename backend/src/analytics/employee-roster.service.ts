@@ -277,7 +277,7 @@ export class EmployeeRosterService {
 
     return {
       id: row.id,
-      name: row.name,
+      name: row.name ?? '--',
       workEmail: row.workEmail,
       employeeNo: row.employeeNo,
       gender: row.gender,
