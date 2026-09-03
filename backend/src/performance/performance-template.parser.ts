@@ -151,6 +151,37 @@ export class PerformanceTemplateParser {
 
   private parseLegacyMarkdown(markdown: string): PerformanceTemplateDefinition | null {
     const lines = markdown.split(/\r?\n/);
+    const overviewRows = lines
+      .filter((line) => line.trim().startsWith('|'))
+      .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
+    const overviewHeaderIndex = overviewRows.findIndex((row) => row.includes('目标分类') && row.includes('目标维度') && row.includes('权重占比'));
+    if (overviewHeaderIndex >= 0) {
+      const overviewModules = new Map<string, PerformanceModuleDefinition>();
+      for (const [index, row] of overviewRows.slice(overviewHeaderIndex + 2).entries()) {
+        const category = (row[0] ?? '').replace(/（[^）]*）|\([^)]*\)/g, '').trim();
+        const indicatorName = row[1]?.trim();
+        const weightMatch = row[2]?.match(/(\d+(?:\.\d+)?)\s*%/);
+        if (!category || !indicatorName || !weightMatch) continue;
+        const weight = Number(weightMatch[1]);
+        const moduleId = `legacy-${overviewModules.size + 1}`;
+        const existing = overviewModules.get(category);
+        const module = existing ?? {
+          id: moduleId,
+          name: category,
+          type: /指标|运营|业务/.test(category) ? 'METRIC' as const : 'EVALUATION' as const,
+          enabled: true,
+          participatesInTotal: true,
+          weight: 0,
+          description: '',
+          executor: { type: /指标|运营|业务/.test(category) ? 'AUTO' as const : 'USER' as const },
+          indicators: [],
+        };
+        module.weight = (module.weight ?? 0) + weight;
+        module.indicators.push({ id: `legacy-indicator-${module.id}-${index + 1}`, name: indicatorName, description: row[3] ?? '', standards: [], weight });
+        overviewModules.set(category, module);
+      }
+      if (overviewModules.size > 0) return { schemaVersion: 1, name: (markdown.match(/^#\s+(.+)$/m)?.[1] ?? '未命名绩效模板').trim(), modules: [...overviewModules.values()] };
+    }
     const modules: PerformanceModuleDefinition[] = [];
     let currentModule: PerformanceModuleDefinition | null = null;
     let currentIndicator: PerformanceModuleDefinition['indicators'][number] | null = null;
@@ -176,7 +207,7 @@ export class PerformanceTemplateParser {
       const levelTwo = line.match(/^##\s+(.+?)\s*$/);
       if (levelTwo) {
         const rawName = levelTwo[1] ?? '';
-        if (/使用说明|考核指标总览|绩效设计核心逻辑|HRBP 分工总览|绩效设计核心逻辑/.test(rawName)) continue;
+        if (/使用说明|考核指标总览|绩效设计核心逻辑|HRBP 分工总览|HRBP 分工及绩效/.test(rawName)) continue;
         flushModule();
         const name = cleanHeading(rawName);
         const weight = percent(rawName);

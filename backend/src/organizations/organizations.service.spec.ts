@@ -42,7 +42,7 @@ describe('OrganizationsService', () => {
     ]);
   });
 
-  it('filters archived organizations in the MySQL query', async () => {
+  it('filters archived organizations in the database query', async () => {
     const { service, prisma } = createService(false);
     await service.findAll(admin);
     expect(prisma.organization.findMany).toHaveBeenCalledWith({

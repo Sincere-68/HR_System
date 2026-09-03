@@ -32,7 +32,7 @@ export class EmployeeRosterService {
     query: QueryEmployeeRosterDto | EmployeeRosterListQuery,
   ): Promise<Paginated<EmployeeRosterListItem>> {
     if (this.demo.enabled) {
-      throw new ConflictException('员工名册仅支持 MySQL 模式');
+      throw new ConflictException('员工名册仅支持数据库模式');
     }
 
     const page = query.page ?? 1;

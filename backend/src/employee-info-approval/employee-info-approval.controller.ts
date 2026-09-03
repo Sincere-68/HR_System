@@ -15,7 +15,7 @@ export class EmployeeInfoApprovalController {
 
   @Get()
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询员工信息审批（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询员工信息审批（仅数据库模式）' })
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryEmployeeInfoApprovalDto) {
     return this.service.findAll(user, query);
   }

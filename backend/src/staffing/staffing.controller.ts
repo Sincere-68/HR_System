@@ -13,7 +13,7 @@ export class StaffingController {
 
   @Get('transfer-types')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询调动类型（仅 MySQL 模式，只读）' })
+  @ApiOperation({ summary: '分页查询调动类型（仅数据库模式，只读）' })
   findTransferTypes(@Query() query: QueryTransferTypesDto) {
     return this.service.findTransferTypes(query);
   }

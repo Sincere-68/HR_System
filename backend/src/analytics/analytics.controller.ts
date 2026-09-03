@@ -15,7 +15,7 @@ export class AnalyticsController {
 
   @Get('roster')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询当前在职员工名册（仅 MySQL 模式，只读）' })
+  @ApiOperation({ summary: '分页查询当前在职员工名册（仅数据库模式，只读）' })
   findRoster(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryEmployeeRosterDto,

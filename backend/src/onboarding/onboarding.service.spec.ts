@@ -98,7 +98,7 @@ describe('OnboardingService', () => {
     expect(prisma.employeeIdentityDocument.findMany).not.toHaveBeenCalled();
   });
 
-  it.each(methods)('returns an empty page for %s in MySQL mode', async (method) => {
+  it.each(methods)('returns an empty page for %s in database mode', async (method) => {
     const { service, prisma } = createService(false);
 
     await expect(service[method](user, method === 'findOffers' ? query : onboardingQuery)).resolves.toEqual(

@@ -15,7 +15,7 @@ export class ContractsController {
 
   @Get()
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询当前有效合同（仅 MySQL 模式，只读）' })
+  @ApiOperation({ summary: '分页查询当前有效合同（仅数据库模式，只读）' })
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryContractsDto) {
     return this.service.findAll(user, query);
   }

@@ -66,7 +66,7 @@ function createService({
 }
 
 describe('PersonnelResignedService', () => {
-  it('returns an empty page in demo mode without querying MySQL read-model tables', async () => {
+  it('returns an empty page in demo mode without querying database read-model tables', async () => {
     const { service, terminationFindMany, queryRaw, assignmentFindFirst, agreementFindFirst } = createService({ demo: true });
 
     await expect(service.findAll(user, { page: 2, pageSize: 20 })).resolves.toEqual({

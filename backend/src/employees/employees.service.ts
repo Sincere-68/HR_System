@@ -390,7 +390,7 @@ export class EmployeesService {
   }
 
   /**
-   * Read-only MySQL view for current regular employees. A row is rooted at an
+   * Read-only database view for current regular employees. A row is rooted at an
    * active employee and its current active REGULAR employment period, which
    * must have one current primary assignment in the authorized organization
    * scope. Demo data intentionally has no equivalent relational snapshot.
@@ -493,7 +493,7 @@ export class EmployeesService {
     auditContext: AuditContext,
   ): Promise<EmployeeImportResult> {
     if (!file) throw new BadRequestException('请选择要导入的 XLSX 或 CSV 文件');
-    if (this.demo.enabled) throw new ConflictException('人员导入仅支持 MySQL 模式');
+    if (this.demo.enabled) throw new ConflictException('人员导入仅支持数据库模式');
 
     const extension = file.originalname.split('.').pop()?.toLocaleLowerCase();
     if (extension !== 'xlsx' && extension !== 'csv') {
@@ -750,7 +750,7 @@ export class EmployeesService {
   async create(user: AuthenticatedUser, dto: CreateEmployeeDto, auditContext: AuditContext) {
     await this.access.assertOrganizationAccess(user, dto.organizationId);
     if (this.demo.enabled) {
-      throw new ConflictException('完整新增人员仅支持 MySQL 模式');
+      throw new ConflictException('完整新增人员仅支持数据库模式');
     }
 
     await this.validateCreateRelations(user, dto);

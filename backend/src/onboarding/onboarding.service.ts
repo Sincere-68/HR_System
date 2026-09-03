@@ -534,7 +534,7 @@ export class OnboardingService {
   }
 
   async findOffers(user: AuthenticatedUser, query: QueryOffersDto): Promise<PaginatedOfferList> {
-    this.assertMysqlMode();
+    this.assertDatabaseMode();
 
     const hasAllEmployeeData = this.access.hasAllEmployeeData(user);
     const baseWhere: Prisma.OfferWhereInput = { archivedAt: null };
@@ -648,7 +648,7 @@ export class OnboardingService {
   }
 
   async findEntries(user: AuthenticatedUser, query: QueryOnboardingListDto): Promise<Paginated<OnboardingEntryListItem>> {
-    this.assertMysqlMode();
+    this.assertDatabaseMode();
 
     const hasAllEmployeeData = this.access.hasAllEmployeeData(user);
     const where: Prisma.OnboardingCaseWhereInput = { archivedAt: null };
@@ -780,7 +780,7 @@ export class OnboardingService {
   }
 
   async findIntegration(user: AuthenticatedUser, query: QueryOnboardingListDto): Promise<Paginated<OnboardingIntegrationListItem>> {
-    this.assertMysqlMode();
+    this.assertDatabaseMode();
 
     const hasAllEmployeeData = this.access.hasAllEmployeeData(user);
     const organizationIds = hasAllEmployeeData
@@ -881,7 +881,7 @@ export class OnboardingService {
   }
 
   async findIntroduction(user: AuthenticatedUser, query: QueryOnboardingListDto): Promise<Paginated<EmployeeIntroductionListItem>> {
-    this.assertMysqlMode();
+    this.assertDatabaseMode();
 
     const hasAllEmployeeData = this.access.hasAllEmployeeData(user);
     const organizationIds = hasAllEmployeeData
@@ -970,7 +970,7 @@ export class OnboardingService {
   }
 
   async findIdCardReader(user: AuthenticatedUser, query: QueryOnboardingListDto): Promise<Paginated<IdCardReadListItem>> {
-    this.assertMysqlMode();
+    this.assertDatabaseMode();
 
     const hasAllEmployeeData = this.access.hasAllEmployeeData(user);
     const now = new Date();
@@ -1170,12 +1170,12 @@ export class OnboardingService {
     ].map(([key, title]) => ({ key: key!, title: title! }));
   }
 
-  private assertMysqlMode() {
-    if (this.demo.enabled) throw new ConflictException('录用入职模块仅支持 MySQL 模式');
+  private assertDatabaseMode() {
+    if (this.demo.enabled) throw new ConflictException('录用入职模块仅支持数据库模式');
   }
 
   private assertInternOfferMysqlMode() {
-    if (this.demo.enabled) throw new ConflictException('新建实习Offer仅支持 MySQL 模式');
+    if (this.demo.enabled) throw new ConflictException('新建实习Offer仅支持数据库模式');
   }
 
 

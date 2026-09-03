@@ -152,7 +152,7 @@ export function presentEmployee(
 /**
  * Demo mode has no relation records. Keep its API shape stable while marking
  * every relationship-backed personnel field as unavailable instead of
- * inventing MySQL-only data.
+ * inventing database-only data.
  */
 export function presentDemoEmployeeListItem(
   employee: EmployeeWithCurrentRecord,

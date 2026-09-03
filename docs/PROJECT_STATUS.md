@@ -7,11 +7,11 @@
 ## 一、项目概况
 
 - 前端：React 19、TypeScript、Vite、Ant Design、React Router、TanStack Query。
-- 后端：NestJS、Prisma ORM、MySQL、JWT、DTO 校验和 Swagger。
+- 后端：NestJS、Prisma ORM、PostgreSQL、JWT、DTO 校验和 Swagger。
 - 共享层：[`shared/src/index.ts`](../shared/src/index.ts) 定义前后端共用的查询参数、分页结构、列表字段和枚举。
 - npm workspaces：`frontend`、`backend`、`shared`。
 - REST API 全局前缀：`/api/v1`；Swagger 路径：`/api/docs`。
-- `DEMO_MODE=true` 仅为免数据库精简演示，完整 HR 模块和字段以 MySQL 模式为准。
+- `DEMO_MODE=true` 仅为免数据库精简演示，完整 HR 模块和字段以 PostgreSQL 数据库模式为准。
 - 前端基础表格页面的格式、布局、间距、交互样式和字体大小统一以“人员”页面为标准；新列表优先复用其筛选栏、表格、勾选、分页、空状态和操作列样式。
 
 ## 二、事实来源与字段实现规则
@@ -243,7 +243,7 @@
 - Offer 管理待发视图同时提供“新建实习Offer”直接入口和“创建Offer”路径选择入口。`/onboarding/offers/templates` 仅是创建路径选择页，保留历史 URL 以便路由稳定；它不再读取、保存或显示持久化 Offer 模板、版本、配置、审批按钮或工时制度。
 - **新增人员**进入 `/onboarding/offers/new?source=new-hire`，以空白直接表单创建 Offer。**实习生转正**先选择当前权限范围内有效的 `INTERN` 员工，调用 `GET /onboarding/intern-conversion-options/:employeeId` 获取只读预填，再进入同一直接表单；预填的所有字段都可编辑。
 - 预填只查询当前、在范围内、未离职的实习员工主档、主要有效证件、最高有效学历、当前周期主要任职/有效协议，以及当前主要行政汇报关系。无可靠来源返回 `null`，不借用近似值；直线经理只有主要 `ADMINISTRATIVE` 当前关系时才返回。预填不创建任何记录。
-- 接口：`GET /onboarding/intern-offer-form-options`、`GET /onboarding/intern-conversion-options`、`GET /onboarding/intern-conversion-options/:employeeId`、`POST /onboarding/intern-offers`，均需 `employee.create`，仅支持 MySQL；Demo 模式统一返回 `409`“新建实习Offer仅支持 MySQL 模式”。
+- 接口：`GET /onboarding/intern-offer-form-options`、`GET /onboarding/intern-conversion-options`、`GET /onboarding/intern-conversion-options/:employeeId`、`POST /onboarding/intern-offers`，均需 `employee.create`，仅支持 PostgreSQL；Demo 模式统一返回 `409`“新建实习Offer仅支持数据库模式”。
 - 直接创建保存 Candidate、可选候选人证件/教育快照、Offer 及可选薪资/兼职快照。`Candidate.source` 是唯一保存的人员来源；不保存新增/转正创建路径 enum。Offer 固定 `INTERN + DRAFT + issueDate=null`，不会创建员工、任职周期/关系、汇报关系、合同、入职单或审批记录。
 - 录用部门和职位必填并验证有效性及组织范围；工作地点为可选，提供时才验证有效性，未选保存 `null`、办公地址显示 `--`。职位和部门仍是独立维度。审批流程尚待确认，当前没有预览审批人或提交审批。
 
@@ -549,7 +549,7 @@
 - 人员定位和员工层级已确认改为 `EmployeeAssignment` 上的固定 enum code，保留每条任职的历史值；后续纠正性 migration 会先从旧目录外键回填 code，遇到未知非空目录 code 明确阻断，再删除旧目录表与外键。该 migration 仅静态审查，尚未运行或连接数据库；全日制公司仍是独立目录。
 - 职级已改为 `JobLevelCode` 固定 enum：`S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`。当前/历史任职直接保存 `job_level` code，异动保存 `from_job_level`、`to_job_level` 快照；`20260828130000_convert_job_levels_to_fixed_enum` 会先校验旧目录关联及 code，再精确回填、删除旧外键/列/`job_levels` 表。该 migration 仅静态审查，尚未运行或连接数据库；新增职级下拉由 shared 固定数组提供，输入 `1` 可匹配四个系列的一级 code，PATCH 仍不支持直接修改职级。
 - 人员编辑页部门选择已启用：`PATCH /employees/:id` 接受有权限的有效 `organizationId`，仅从对应任职周期的 `EmploymentPeriod.entryDate` 已不晚于当前业务日的有效主要任职中选择记录，以 UTC 业务日结束旧主要任职并复制任职快照创建新主要任职，同时同步兼容 `employees.organization_id` 并记录目录值变更日志；部门变更不自动修改职位。对于先前仅创建主档案而没有任职记录的人员，编辑页要求一次性补齐部门、入职日期、雇佣关系、用工形式、人员状态，保存时创建首段任职周期、主要任职和人员状态记录。人员 PATCH 已移除旧 `idCardNo` 输入，只接受规范证件字段。证件类型已按用户确认扩展为 60 项；仅居民身份证 `NATIONAL_ID` 同步迁移期兼容字段，任一其他证件类型均令其为 `null`。切换证件类型、仅改号码及仅改截止日期都会在同一事务中同步规范记录与兼容字段；完整证件记录缺失时必须一并给出类型和号码。旧泛化 `RESIDENCE_PERMIT` 在未来迁移中保守转换为 `OTHER`，不得猜测为港澳或台湾居民居住证。
-- 人员字段变更日志已覆盖主档、单账户银行资料、当前紧急联系人、主要证件、最高教育以及当前任职字段；更新当前关联记录或按完整字段创建缺失的当前关联记录都会写日志。目录和已确认枚举字段记录稳定 code/ID 与修改当时中文标签快照。Demo 详情改为返回完整 `EmployeeDetail` 结构，不伪造 MySQL 任职、银行、联系人或教育关系资料；仅将精简虚构主档已有的旧 `idCardNo` 兼容投影为 `NATIONAL_ID` 证件字段。
+- 人员字段变更日志已覆盖主档、单账户银行资料、当前紧急联系人、主要证件、最高教育以及当前任职字段；更新当前关联记录或按完整字段创建缺失的当前关联记录都会写日志。目录和已确认枚举字段记录稳定 code/ID 与修改当时中文标签快照。Demo 详情改为返回完整 `EmployeeDetail` 结构，不伪造 PostgreSQL 任职、银行、联系人或教育关系资料；仅将精简虚构主档已有的旧 `idCardNo` 兼容投影为 `NATIONAL_ID` 证件字段。
 - 新增人员表单的银行账号正则已修正为 1–19 位数字校验；新增与编辑共用完整 `EmployeeDetail` 回填契约。
 
 ## 九、最近一次聚焦验证结果
@@ -582,7 +582,7 @@
 | 组织目录替换 | 用户确认的四层、44 节点组织树已固化为 shared 目录，根为上海宜信电子商务有限公司，负责人分组为 CEO陈锐/董事长陈钢；Demo、seed、组织范围和组织列表已同步，旧组织属于测试数据，替换脚本会直接删除。组织 service、AccessControl、DemoData、employees 聚焦后端测试 33/33，shared 目录断言、shared build/typecheck、backend/frontend typecheck（前端通过）及 `git diff --check` 已执行；组织替换脚本未执行、未连接数据库。 |
 | 人员导入导出 | “全部在职”表格右上角已增加导入、导出按钮。导出弹窗可勾选字段并选择 XLSX/CSV；首列勾选人员时导出勾选项，未勾选时按当前关键词/部门/状态筛选导出全部有权人员。导入按中文业务表头读取 XLSX/CSV、以工号创建或局部更新并返回逐行结果；新工号可创建待完善主档，后续同工号导入同时提供部门、入职日期、雇佣关系、用工形式、人员状态时补建首段任职。职位/工作地点无法唯一匹配时作为提示而不猜测写入。完整新增页面仍维持必填任职/合同规则。后端 `POST /employees/export`、`POST /employees/import-template`、`POST /employees/import` 使用共享 `PERSONNEL_FIELDS` 注册表。 |
 
-本次文档整理没有启动应用、连接 MySQL、运行 migration/seed，也没有写入业务数据库。
+本次文档整理没有启动应用、连接 PostgreSQL、运行 migration/seed，也没有写入业务数据库。
 
 ## 十、已知限制与后续事项
 
@@ -591,7 +591,7 @@
 3. 职责转交只有前端静态交互，没有后端 controller 或可用接收人数据，不是完整业务流程。
 4. Offer 管理支持新增人员与实习生转正两条直接创建路径；其余录用入职页面、合同和调动类型目前均为只读列表，操作按钮禁用；不要在文档中推断不存在的维护能力。
 5. 多个页面仍有明确的 `null/--` 字段，必须先确认模型和业务含义再新增字段或迁移，不能为填满列表使用近似值。
-6. 枚举对齐 migration 仅做了静态审查和文件修改，尚未在真实 MySQL 上执行或验证；实际执行前必须备份。旧 `FULL_TIME` 测试值将在人员字段 migration 中转换为 `CONTRACT_EMPLOYMENT` 后收窄，不进入 Prisma、shared 或应用 API。
+6. 枚举对齐 migration 仅做了静态审查和文件修改，尚未在真实 PostgreSQL 上执行或验证；实际执行前必须备份。旧 `FULL_TIME` 测试值将在人员字段 migration 中转换为 `CONTRACT_EMPLOYMENT` 后收窄，不进入 Prisma、shared 或应用 API。
 7. PATCH 当前只支持“省略 = 保持不变”；显式 `null` 清空范围、空字符串规范化与 `expectedVersion` 并发控制尚未确定或实现，不能自行扩展清空语义。
 8. 编辑仍不支持直接经理变更；经理关系循环校验、结束旧关系并新建历史关系，以及跨部门经理候选人在不泄露范围外人员资料前提下的展示方案仍待实现或确认。
 9. [`docs/DATA_MODEL.md`](DATA_MODEL.md) 的“当前实现状态”表已经滞后，仍写着新模块 API 尚未实现、前端仍为占位；当前进展以本文和代码为准，后续如要同步该文档应单独处理。

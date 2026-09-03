@@ -15,7 +15,7 @@ export class BlacklistController {
 
   @Get()
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询黑名单（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询黑名单（仅数据库模式）' })
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryBlacklistDto) {
     return this.service.findAll(user, query);
   }

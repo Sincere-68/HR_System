@@ -262,7 +262,7 @@ describe('EmployeeSubsetsService', () => {
     await expect(service[method](user, query)).resolves.toEqual(emptyPage);
   });
 
-  it.each(methods)('%s returns the requested page in MySQL mode with a minimal employee select', async (method) => {
+  it.each(methods)('%s returns the requested page in database mode with a minimal employee select', async (method) => {
     const facts = {
       findEducation: 'education',
       findWorkHistory: 'work',

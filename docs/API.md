@@ -138,7 +138,7 @@ Authorization: Bearer <accessToken>
 
 ### GET `/employees/regular`
 
-需要 `employee.read`，仅支持 MySQL 模式；Demo 模式返回空分页，不伪造关系型人员数据。
+需要 `employee.read`，仅支持数据库模式；Demo 模式返回空分页，不伪造关系型人员数据。
 
 查询参数：`keyword`（姓名或工号）、`organizationId`（组织及全部下级组织）、`page`、`pageSize`。
 
@@ -148,7 +148,7 @@ Authorization: Bearer <accessToken>
 
 ### GET `/employees/:id`
 
-返回完整的人员详情契约（含 46 列业务字段和当前关系 ID）；成功查看后写入 `DETAIL_VIEW` 审计。`agreementEmployingCompanyId` 是当前任职周期当前有效合同协议的全日制公司 ID，不属于任职关系字段。Demo 模式没有完整的 MySQL 关系型人员资料，因此会返回同一详情结构，任职、银行、联系人和教育等关系字段为 `null`，不会伪造对应记录。为兼容精简演示数据，若其虚构主档保留旧 `idCardNo`，详情会将其投影为 `NATIONAL_ID` 的证件类型和号码；这不是一条 MySQL 证件关系记录。越权资源统一返回“员工不存在或不在当前数据范围内”，不向请求者确认该 ID 是否真实存在。
+返回完整的人员详情契约（含 46 列业务字段和当前关系 ID）；成功查看后写入 `DETAIL_VIEW` 审计。`agreementEmployingCompanyId` 是当前任职周期当前有效合同协议的全日制公司 ID，不属于任职关系字段。Demo 模式没有完整的 PostgreSQL 关系型人员资料，因此会返回同一详情结构，任职、银行、联系人和教育等关系字段为 `null`，不会伪造对应记录。为兼容精简演示数据，若其虚构主档保留旧 `idCardNo`，详情会将其投影为 `NATIONAL_ID` 的证件类型和号码；这不是一条 PostgreSQL 证件关系记录。越权资源统一返回“员工不存在或不在当前数据范围内”，不向请求者确认该 ID 是否真实存在。
 
 ### GET `/employees/form-options`
 
@@ -224,7 +224,7 @@ Authorization: Bearer <accessToken>
 
 ### GET `/onboarding/offers`
 
-需要 `employee.read`，仅支持 MySQL 模式；Demo 模式返回 `409`，不使用精简演示数据伪造 Offer 宽表。接口按当前账号的组织数据范围查询未归档 Offer；没有 `employee.data.all` 时，后端仅返回录用部门在授权组织及其下级组织范围内的记录。
+需要 `employee.read`，仅支持数据库模式；Demo 模式返回 `409`，不使用精简演示数据伪造 Offer 宽表。接口按当前账号的组织数据范围查询未归档 Offer；没有 `employee.data.all` 时，后端仅返回录用部门在授权组织及其下级组织范围内的记录。
 
 查询参数：
 
@@ -242,7 +242,7 @@ Authorization: Bearer <accessToken>
 
 ### Offer 直接创建路径
 
-Offer 创建均需要 `employee.create` 且仅支持 MySQL；Demo 模式返回 `409`“新建实习Offer仅支持 MySQL 模式”。不存在持久化 Offer 模板、版本、配置或模板 API，也不保存“新增人员/实习生转正”这一创建路径枚举。
+Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返回 `409`“新建实习Offer仅支持数据库模式”。不存在持久化 Offer 模板、版本、配置或模板 API，也不保存“新增人员/实习生转正”这一创建路径枚举。
 
 `/onboarding/offers/templates` 是前端创建入口页的历史 URL：只提供两个路径选择，不保存任何模板数据。待发 Offer 页面也直接提供“新建实习Offer”入口。
 
@@ -273,7 +273,7 @@ Offer 创建均需要 `employee.create` 且仅支持 MySQL；Demo 模式返回 `
 
 ### GET `/employment/personnel-labor-workers`
 
-需要 `employee.read`，仅支持 MySQL 模式；Demo 模式返回空分页。查询参数：`keyword`、`entryDateFrom`、`entryDateTo`、`page`、`pageSize`。
+需要 `employee.read`，仅支持数据库模式；Demo 模式返回空分页。查询参数：`keyword`、`entryDateFrom`、`entryDateTo`、`page`、`pageSize`。
 
 该接口仅供人员页“劳务人员”卡片使用，不替代 `GET /employment/labor-workers`。一行是当前有效主要任职关联的当前劳务任职周期：周期必须为 `employmentRelationship=LABOR_WORKER`、状态为试用/正式/非正式、未实际离职、员工和周期有效未归档；部门范围在后端按当前主要任职所属组织及其全部下级强制执行。
 
@@ -281,7 +281,7 @@ Offer 创建均需要 `employee.create` 且仅支持 MySQL；Demo 模式返回 `
 
 ### GET `/employment/personnel-resigned`
 
-需要 `employee.read`，仅支持 MySQL 模式；Demo 模式返回空分页。查询参数：`keyword`、`lastWorkingDateFrom`、`lastWorkingDateTo`、`page`、`pageSize`。
+需要 `employee.read`，仅支持数据库模式；Demo 模式返回空分页。查询参数：`keyword`、`lastWorkingDateFrom`、`lastWorkingDateTo`、`page`、`pageSize`。
 
 一行是未归档且 `COMPLETED` 的 `TerminationRecord`。部门范围按该离职记录实际最后工作日（没有时计划最后工作日）所在日期、同一任职周期的有效主要任职及组织子树强制判断，不使用员工当前部门。为保留历史，该查询不会因关联员工主档已停用或归档而隐藏仍未归档的完成离职记录。
 
@@ -291,7 +291,7 @@ Offer 创建均需要 `employee.create` 且仅支持 MySQL；Demo 模式返回 `
 
 ### GET `/analytics/roster`
 
-需要 `employee.read`，仅支持 MySQL 模式。Demo 模式返回 `409`，不会用精简演示员工伪造宽表字段。
+需要 `employee.read`，仅支持数据库模式。Demo 模式返回 `409`，不会用精简演示员工伪造宽表字段。
 
 查询参数：
 

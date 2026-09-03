@@ -82,12 +82,12 @@ export class PerformanceService {
   }
 
   parseTemplate(dto: ParsePerformanceTemplateDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     return this.parser.parse(dto.sourceMarkdown, dto.sourceName ?? null);
   }
 
   async listTemplates(_user: AuthenticatedUser) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const rows = await this.prisma.performanceTemplate.findMany({
       where: { status: RecordStatus.ACTIVE, archivedAt: null },
       include: { versions: { orderBy: { versionNo: 'desc' }, take: 1 } },
@@ -97,7 +97,7 @@ export class PerformanceService {
   }
 
   async getTemplate(id: string) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const row = await this.prisma.performanceTemplate.findFirst({
       where: { id, status: RecordStatus.ACTIVE, archivedAt: null },
       include: { versions: { orderBy: { versionNo: 'desc' } } },
@@ -107,7 +107,7 @@ export class PerformanceService {
   }
 
   async createTemplate(user: AuthenticatedUser, dto: CreatePerformanceTemplateDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const definition = this.assertTemplatePayload(dto);
     const row = await this.prisma.$transaction(async (tx) => {
       const template = await tx.performanceTemplate.create({
@@ -130,7 +130,7 @@ export class PerformanceService {
   }
 
   async createTemplateVersion(user: AuthenticatedUser, templateId: string, dto: CreatePerformanceTemplateDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const template = await this.prisma.performanceTemplate.findFirst({ where: { id: templateId, status: RecordStatus.ACTIVE, archivedAt: null } });
     if (!template) throw new NotFoundException('绩效模板不存在');
     const definition = this.assertTemplatePayload(dto);
@@ -154,7 +154,7 @@ export class PerformanceService {
   }
 
   async publishTemplateVersion(user: AuthenticatedUser, templateId: string, versionId: string) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const version = await this.prisma.performanceTemplateVersion.findFirst({ where: { id: versionId, templateId } });
     if (!version) throw new NotFoundException('绩效模板版本不存在');
     const result = await this.prisma.$transaction(async (tx) => {
@@ -167,7 +167,7 @@ export class PerformanceService {
   }
 
   async getOptions() {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const [users, positions, jobTitles] = await this.prisma.$transaction([
       this.prisma.user.findMany({ where: { status: RecordStatus.ACTIVE, archivedAt: null }, select: { id: true, username: true, displayName: true, employeeId: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }] }),
       this.prisma.position.findMany({ where: { status: RecordStatus.ACTIVE, archivedAt: null }, select: { id: true, code: true, name: true }, orderBy: [{ name: 'asc' }, { code: 'asc' }] }),
@@ -177,7 +177,7 @@ export class PerformanceService {
   }
 
   async createCycle(user: AuthenticatedUser, dto: CreatePerformanceCycleDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const version = await this.prisma.performanceTemplateVersion.findFirst({ where: { id: dto.templateVersionId, status: PerformanceVersionStatus.PUBLISHED }, include: { template: true } });
     if (!version) throw new BadRequestException('只能使用已发布的绩效模板版本');
     const definition = this.parser.assertValidDefinition(version.definition, true);
@@ -222,7 +222,7 @@ export class PerformanceService {
   }
 
   async startCycle(user: AuthenticatedUser, cycleId: string) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const cycle = await this.prisma.performanceCycle.findUnique({ where: { id: cycleId }, include: { instances: true } });
     if (!cycle) throw new NotFoundException('绩效周期不存在');
     await this.assertCycleScope(user, cycle.instances);
@@ -251,7 +251,7 @@ export class PerformanceService {
   }
 
   async listCycles(user: AuthenticatedUser, query: QueryPerformanceDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const scope = await this.access.getAccessibleOrganizationIds(user);
     const where: Prisma.PerformanceCycleWhereInput = {
       ...(query.status ? { status: query.status } : {}),
@@ -265,7 +265,7 @@ export class PerformanceService {
   }
 
   async getCycle(id: string, user?: AuthenticatedUser) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const row = await this.prisma.performanceCycle.findUnique({ where: { id }, include: { template: true, templateVersion: true, instances: { include: { employee: { select: { name: true, employeeNo: true } }, tasks: { orderBy: { moduleOrder: 'asc' } } } } } });
     if (!row) throw new NotFoundException('绩效周期不存在');
     if (user) await this.assertCycleScope(user, row.instances);
@@ -273,7 +273,7 @@ export class PerformanceService {
   }
 
   async listTasks(user: AuthenticatedUser, query: QueryPerformanceDto, mine = false) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const scope = await this.access.getAccessibleOrganizationIds(user);
     const where: Prisma.PerformanceModuleTaskWhereInput = {
       ...(mine ? { executorUserId: user.id } : {}),
@@ -288,7 +288,7 @@ export class PerformanceService {
   }
 
   async getTask(user: AuthenticatedUser, id: string) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const task = await this.prisma.performanceModuleTask.findUnique({ where: { id }, include: { instance: { include: { cycle: true, employee: { select: { name: true, employeeNo: true } }, tasks: { orderBy: { moduleOrder: 'asc' } } } }, executorUser: { select: { displayName: true, username: true } } } });
     if (!task) throw new NotFoundException('绩效任务不存在');
     const current = task.instance.currentModuleOrder === task.moduleOrder && task.status === TaskStatus.IN_PROGRESS;
@@ -298,7 +298,7 @@ export class PerformanceService {
   }
 
   async submitTask(user: AuthenticatedUser, id: string, dto: PerformanceTaskSubmissionDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const task = await this.prisma.performanceModuleTask.findUnique({
       where: { id },
       include: { instance: { include: { cycle: true, tasks: { orderBy: { moduleOrder: 'asc' } } } } },
@@ -319,7 +319,7 @@ export class PerformanceService {
   }
 
   async listResults(user: AuthenticatedUser, query: QueryPerformanceDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const scope = await this.access.getAccessibleOrganizationIds(user);
     const where: Prisma.PerformanceInstanceWhereInput = {
       ...(query.status ? { status: query.status } : {}),
@@ -333,7 +333,7 @@ export class PerformanceService {
   }
 
   async getResult(id: string, user?: AuthenticatedUser) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const row = await this.prisma.performanceInstance.findUnique({
       where: { id },
       include: {
@@ -352,7 +352,7 @@ export class PerformanceService {
   }
 
   async modifyResult(user: AuthenticatedUser, id: string, dto: ModifyPerformanceResultDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     if (!Number.isFinite(dto.finalScore)) throw new BadRequestException('最终分数必须是有限数字');
     const row = await this.prisma.performanceInstance.findUnique({ where: { id } });
     if (!row || row.finalScore === null) throw new NotFoundException('绩效结果不存在或尚未生成');
@@ -372,19 +372,19 @@ export class PerformanceService {
   }
 
   async getAmountBase() {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const row = await this.prisma.performanceAmountBaseVersion.findFirst({ orderBy: { versionNo: 'desc' }, include: { changedBy: { select: { displayName: true } } } });
     return row ? this.presentAmountBase(row) : null;
   }
 
   async listAmountBaseHistory() {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const rows = await this.prisma.performanceAmountBaseVersion.findMany({ orderBy: [{ versionNo: 'desc' }], include: { changedBy: { select: { displayName: true } } } });
     return rows.map((row) => this.presentAmountBase(row));
   }
 
   async updateAmountBase(user: AuthenticatedUser, dto: UpdatePerformanceAmountBaseDto) {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const latest = await this.prisma.performanceAmountBaseVersion.findFirst({ orderBy: { versionNo: 'desc' } });
     const row = await this.prisma.$transaction(async (tx) => {
       const version = await tx.performanceAmountBaseVersion.create({ data: { versionNo: (latest?.versionNo ?? 0) + 1, amount: MONEY(dto.amount), previousAmount: latest?.amount ?? null, effectiveAt: new Date(dto.effectiveAt), changedById: user.id, changeReason: dto.reason.trim() } });
@@ -395,7 +395,7 @@ export class PerformanceService {
   }
 
   async getDashboard() {
-    this.assertMysql();
+    this.assertDatabaseMode();
     const [templateCount, activeTaskCount, pendingResultCount] = await this.prisma.$transaction([
       this.prisma.performanceTemplate.count({ where: { status: RecordStatus.ACTIVE, archivedAt: null } }),
       this.prisma.performanceModuleTask.count({ where: { status: TaskStatus.IN_PROGRESS } }),
@@ -537,6 +537,6 @@ export class PerformanceService {
   private number(value: Prisma.Decimal | null | undefined) { return value === null || value === undefined ? null : Number(value); }
   private date(value: Date) { return value.toISOString().slice(0, 10); }
   private parseDate(value: string) { const date = new Date(`${value}T00:00:00.000Z`); if (Number.isNaN(date.getTime())) throw new BadRequestException('日期格式无效'); return date; }
-  private assertMysql() { if (this.demo.enabled) throw new ConflictException('绩效模块仅支持 MySQL 模式'); }
+  private assertDatabaseMode() { if (this.demo.enabled) throw new ConflictException('绩效模块仅支持数据库模式'); }
   private isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 }

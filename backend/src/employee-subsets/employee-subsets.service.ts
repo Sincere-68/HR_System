@@ -919,7 +919,7 @@ export class EmployeeSubsetsService {
   private assertDemoOrReturnEmpty<T>(query: QueryEmployeeSubsetDto): Paginated<T> {
     if (this.demo.enabled) return this.emptyPage(query);
 
-    // MySQL mappings are added per subset in a later stage. Keeping this gate
+    // Database mappings are added per subset in a later stage. Keeping this gate
     // explicit prevents either runtime mode from returning inferred records.
     return this.emptyPage(query);
   }

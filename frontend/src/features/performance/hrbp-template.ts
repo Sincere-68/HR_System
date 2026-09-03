@@ -207,6 +207,27 @@ function getSectionAfter(markdown: string, marker: string) {
   return nextHeadingIndex < 0 ? afterMarker : afterMarker.slice(0, nextHeadingIndex);
 }
 
+function getFirstTableWithHeaders(markdown: string, requiredHeaders: string[]) {
+  const lines = markdown.split(/\r?\n/);
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const headerLine = lines[index]?.trim() ?? '';
+    const separatorLine = lines[index + 1]?.trim() ?? '';
+    if (!headerLine.startsWith('|') || !/^\|(?:\\s*:?-+:?\\s*\|)+$/.test(separatorLine)) continue;
+    const parseLine = (line: string) => line.split('|').slice(1, -1).map((cell) => cell.trim());
+    const headers = parseLine(headerLine);
+    if (!requiredHeaders.every((header) => headers.includes(header))) continue;
+    const rows: string[][] = [];
+    for (let rowIndex = index + 2; rowIndex < lines.length; rowIndex += 1) {
+      const line = lines[rowIndex]?.trim() ?? '';
+      if (!line.startsWith('|')) break;
+      const row = parseLine(line);
+      if (row.length === headers.length) rows.push(row);
+    }
+    return { headers, rows };
+  }
+  return null;
+}
+
 function getTableAfter(markdown: string, marker: string): MarkdownTable {
   const section = getSectionAfter(markdown, marker);
   const lines = section.split('\n');
@@ -224,6 +245,39 @@ function getTableAfter(markdown: string, marker: string): MarkdownTable {
   const headers = parseLine(tableLines[0] ?? '');
   const rows = tableLines.slice(2).map(parseLine).filter((row) => row.length === headers.length);
   return { headers, rows };
+}
+
+function parseGenericPerformanceMarkdown(markdown: string): ParsedPerformanceTemplate | null {
+  const overview = getFirstTableWithHeaders(markdown, ['目标分类', '目标维度', '权重占比']);
+  if (!overview || overview.rows.length === 0) return null;
+  const modules = new Map<string, PerformanceTemplateModule>();
+  for (const [index, row] of overview.rows.entries()) {
+    const category = row[0]?.replace(/（[^）]*）|\([^)]*\)/g, '').trim() ?? '';
+    const indicatorName = row[1]?.trim() ?? '';
+    const weight = Number(row[2]?.replace('%', '').trim() ?? 0);
+    if (!category || !indicatorName || !Number.isFinite(weight)) continue;
+    const moduleId = `generic-${category}`;
+    const type: PerformanceModuleKind = /指标|运营|业务/.test(category) ? 'metric' : 'evaluation';
+    const module = modules.get(moduleId) ?? {
+      id: moduleId,
+      name: category,
+      type,
+      responsibleRole: type === 'metric' ? '系统自动计算' : '待指定执行人',
+      executor: { type: type === 'metric' ? 'AUTO' : 'USER' },
+      enabled: true,
+      participatesInTotal: true,
+      weight: 0,
+      description: '',
+      indicators: [],
+    };
+    module.weight = (module.weight ?? 0) + weight;
+    module.indicators.push({ id: `generic-indicator-${index + 1}`, name: indicatorName, description: row[3] ?? '', standards: [], weightLabel: `${weight}%`, weight, source: '考核指标总览' });
+    modules.set(moduleId, module);
+  }
+  const result = [...modules.values()];
+  const total = result.reduce((sum, module) => sum + (module.weight ?? 0), 0);
+  if (!result.length || total <= 0) return null;
+  return { id: 'generic-performance-template', name: (markdown.match(/^#\s+(.+)$/m)?.[1] ?? '未命名绩效模板').trim(), sourceName: 'Markdown', sourceMarkdown: markdown, modules: result };
 }
 
 function findFormulaWeight(markdown: string, metric: string, fallback: number) {
@@ -294,6 +348,8 @@ export function reorderPerformanceModules(
  * output remains editable in the template workbench before a template is saved.
  */
 export function parseHrbpPerformanceMarkdown(markdown: string): ParsedPerformanceTemplate {
+  const generic = parseGenericPerformanceMarkdown(markdown);
+  if (generic) return generic;
   const businessRules = getTableAfter(markdown, '### 1. 计分规则');
   const businessConditions = getTableAfter(markdown, '### 2. 特殊口径');
   const businessOwnerDimensions = getTableAfter(markdown, '### 1. 评价结构');

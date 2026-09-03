@@ -69,28 +69,28 @@ export class OnboardingController {
 
   @Get('intern-offer-form-options')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_CREATE)
-  @ApiOperation({ summary: '获取新建实习 Offer 表单选项（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '获取新建实习 Offer 表单选项（仅数据库模式）' })
   getInternOfferFormOptions(@CurrentUser() user: AuthenticatedUser) {
     return this.service.getInternOfferFormOptions(user);
   }
 
   @Post('intern-offers')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_CREATE)
-  @ApiOperation({ summary: '新建实习 Offer 草稿（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '新建实习 Offer 草稿（仅数据库模式）' })
   createInternOffer(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateInternOfferDto) {
     return this.service.createInternOffer(user, dto);
   }
 
   @Get('intern-conversion-options')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_CREATE)
-  @ApiOperation({ summary: '获取当前范围内可选的实习转正员工（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '获取当前范围内可选的实习转正员工（仅数据库模式）' })
   getInternConversionOptions(@CurrentUser() user: AuthenticatedUser) {
     return this.service.getInternConversionOptions(user);
   }
 
   @Get('intern-conversion-options/:employeeId')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_CREATE)
-  @ApiOperation({ summary: '读取当前实习生转正 Offer 预填值（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '读取当前实习生转正 Offer 预填值（仅数据库模式）' })
   getInternConversionOfferPrefill(
     @CurrentUser() user: AuthenticatedUser,
     @Param('employeeId') employeeId: string,
@@ -100,35 +100,35 @@ export class OnboardingController {
 
   @Get('offers')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询录用列表（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询录用列表（仅数据库模式）' })
   findOffers(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryOffersDto) {
     return this.service.findOffers(user, query);
   }
 
   @Get('entries')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询入职列表（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询入职列表（仅数据库模式）' })
   findEntries(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryOnboardingListDto) {
     return this.service.findEntries(user, query);
   }
 
   @Get('integration')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询融入列表（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询融入列表（仅数据库模式）' })
   findIntegration(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryOnboardingListDto) {
     return this.service.findIntegration(user, query);
   }
 
   @Get('introduction')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询入职介绍列表（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询入职介绍列表（仅数据库模式）' })
   findIntroduction(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryOnboardingListDto) {
     return this.service.findIntroduction(user, query);
   }
 
   @Get('id-card-reader')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询身份证读取列表（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询身份证读取列表（仅数据库模式）' })
   findIdCardReader(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryOnboardingListDto) {
     return this.service.findIdCardReader(user, query);
   }

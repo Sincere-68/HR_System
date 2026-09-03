@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -1526,7 +1526,7 @@ model PerformanceTemplateVersion {
   templateId     String                   @map("template_id")
   versionNo      Int                      @map("version_no")
   sourceName     String?                  @map("source_name")
-  sourceMarkdown String                   @map("source_markdown") @db.LongText
+  sourceMarkdown String                   @map("source_markdown") @db.Text
   definition     Json
   status         PerformanceVersionStatus @default(DRAFT)
   publishedAt    DateTime?                @map("published_at")
@@ -1568,7 +1568,7 @@ model PerformanceInstance {
   id                  String                        @id @default(cuid())
   cycleId             String                        @map("cycle_id")
   employeeId          String                        @map("employee_id")
-  sourceMarkdown      String                        @map("source_markdown") @db.LongText
+  sourceMarkdown      String                        @map("source_markdown") @db.Text
   definitionSnapshot  Json                          @map("definition_snapshot")
   organizationId      String?                       @map("organization_id")
   currentModuleOrder  Int?                          @map("current_module_order")

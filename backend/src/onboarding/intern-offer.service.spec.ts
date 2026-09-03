@@ -114,10 +114,10 @@ describe('OnboardingService direct internship Offer creation', () => {
 
   it('rejects direct Offer reads and creation in demo mode without accessing Prisma', async () => {
     const { service, prisma } = createService(true);
-    await expect(service.getInternOfferFormOptions(user)).rejects.toEqual(expect.objectContaining({ status: 409, message: '新建实习Offer仅支持 MySQL 模式' }));
+    await expect(service.getInternOfferFormOptions(user)).rejects.toEqual(expect.objectContaining({ status: 409, message: '新建实习Offer仅支持数据库模式' }));
     await expect(service.getInternConversionOptions(user)).rejects.toBeInstanceOf(ConflictException);
     await expect(service.getInternConversionOfferPrefill(user, 'intern-1')).rejects.toBeInstanceOf(ConflictException);
-    await expect(service.createInternOffer(user, input as never)).rejects.toEqual(expect.objectContaining({ status: 409, message: '新建实习Offer仅支持 MySQL 模式' }));
+    await expect(service.createInternOffer(user, input as never)).rejects.toEqual(expect.objectContaining({ status: 409, message: '新建实习Offer仅支持数据库模式' }));
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

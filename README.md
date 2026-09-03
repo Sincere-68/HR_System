@@ -12,7 +12,7 @@
 
 ## 先看这里
 
-- **默认不需要安装 MySQL，也不需要创建数据库。**
+- **默认不需要安装 PostgreSQL，也不需要创建数据库。**
 - 登录页面已经填好管理员账号，点击“直接进入演示系统”即可。
 - 项目中的姓名、手机号和身份证号都是虚构的演示数据。
 - 新增或修改的数据只会临时保存在正在运行的后端中。**关闭并重新启动后端后，数据会恢复到最初状态。**
@@ -284,7 +284,7 @@ npm run setup
 
 - 前端：React 19、TypeScript、Vite、Ant Design、React Router、TanStack Query
 - 后端：NestJS、TypeScript、Prisma、REST API、Swagger
-- 可选数据库：MySQL 8
+- 可选数据库：PostgreSQL 14 或更高版本
 - 代码目录：`frontend/`、`backend/`、`shared/`
 - 本项目不使用 Docker、Redis、MinIO、消息队列或微服务
 
@@ -302,28 +302,23 @@ DEMO_MODE=true
 - 员工分页、搜索、筛选、详情、新增和编辑均可使用。
 - 管理员、部门管理员、查看者的数据范围仍由后端执行；授权范围内的人员字段正常显示。
 - 数据不会写入硬盘，后端重启后恢复。
-- 即使电脑未安装或未启动 MySQL，后端也可以启动。
+- 即使电脑未安装或未启动 PostgreSQL，后端也可以启动。
 
-## 可选：使用 MySQL 保存数据
+## 可选：使用 PostgreSQL 保存数据
 
 只有需要让新增和修改在重启后继续保留时，才需要这部分。
 
-### 1. 准备 MySQL
+### 1. 准备 PostgreSQL
 
-安装 MySQL 8，然后在 MySQL 客户端中创建开发库、测试库和专用账号。请把示例密码换成本机密码：
+安装 PostgreSQL 14 或更高版本，然后使用拥有创建角色和数据库权限的管理员账号，在 `psql` 中依次创建专用账号、开发库和测试库。请把示例密码换成本机密码：
 
 ```sql
-CREATE DATABASE IF NOT EXISTS hr_personnel_demo
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-CREATE DATABASE IF NOT EXISTS hr_personnel_demo_test
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-
-CREATE USER IF NOT EXISTS 'hr_demo'@'localhost'
-  IDENTIFIED BY 'change_this_local_password';
-GRANT ALL PRIVILEGES ON hr_personnel_demo.* TO 'hr_demo'@'localhost';
-GRANT ALL PRIVILEGES ON hr_personnel_demo_test.* TO 'hr_demo'@'localhost';
-FLUSH PRIVILEGES;
+CREATE ROLE hr_demo LOGIN PASSWORD 'change_this_local_password';
+CREATE DATABASE hr_personnel_demo OWNER hr_demo;
+CREATE DATABASE hr_personnel_demo_test OWNER hr_demo;
 ```
+
+> 云端已有空 PostgreSQL 数据库时，不要重复创建数据库；只需确保连接账号拥有目标 schema 的建表、建类型和建索引权限。首次部署会执行仓库内的 PostgreSQL 初始 migration；旧数据库版本的迁移已移至 `backend/prisma/mysql-migrations-archive/`，不会被部署命令读取。
 
 ### 2. 创建后端设置文件
 
@@ -343,8 +338,8 @@ cp backend/.env.example backend/.env
 
 ```env
 DEMO_MODE=false
-DATABASE_URL="mysql://hr_demo:你的密码@localhost:3306/hr_personnel_demo"
-DATABASE_URL_TEST="mysql://hr_demo:你的密码@localhost:3306/hr_personnel_demo_test"
+DATABASE_URL="postgresql://hr_demo:你的密码@localhost:5432/hr_personnel_demo?schema=public"
+DATABASE_URL_TEST="postgresql://hr_demo:你的密码@localhost:5432/hr_personnel_demo_test?schema=public"
 JWT_SECRET="至少32个字符、仅本机使用的随机字符串"
 ```
 
@@ -406,5 +401,5 @@ npm run build
 - 后端会再次检查员工是否属于当前账号可访问的部门。
 - 本系统仅供 HR 使用，不设置独立的敏感字段读取权限；授权组织范围内的人员字段按正常值返回。
 - 编辑页面直接回填手机号和身份证号，不使用星号掩码。
-- MySQL 模式下，详情、新增和编辑会记录审计，但不会在审计记录中保存手机号、身份证号、密码或 JWT。
+- PostgreSQL 模式下，详情、新增和编辑会记录审计，但不会在审计记录中保存手机号、身份证号、密码或 JWT。
 - 默认 CORS 只允许 `http://localhost:5173`，可通过 `FRONTEND_URL` 调整。

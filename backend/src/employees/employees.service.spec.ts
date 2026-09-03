@@ -70,7 +70,7 @@ describe('EmployeesService in demo mode', () => {
       organizationId: 'demo-org-chairman_customer_service',
       hasProbation: false,
       employmentStatus: EmploymentStatus.REGULAR,
-    } as never, auditContext)).rejects.toThrow('完整新增人员仅支持 MySQL 模式');
+    } as never, auditContext)).rejects.toThrow('完整新增人员仅支持数据库模式');
   });
 
   it('returns complete values without a separate field permission', async () => {

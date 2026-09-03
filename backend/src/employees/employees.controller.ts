@@ -31,7 +31,7 @@ export class EmployeesController {
 
   @Get('regular')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询当前正式人员（仅 MySQL 模式，只读）' })
+  @ApiOperation({ summary: '分页查询当前正式人员（仅数据库模式，只读）' })
   findRegularEmployees(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryRegularEmployeesDto,

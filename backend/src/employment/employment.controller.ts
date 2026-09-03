@@ -60,28 +60,28 @@ export class EmploymentController {
 
   @Get('records')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询任职记录（仅 MySQL 模式；默认当前有效记录）' })
+  @ApiOperation({ summary: '分页查询任职记录（仅数据库模式；默认当前有效记录）' })
   findEmploymentRecords(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryEmploymentRecordsDto) {
     return this.service.findEmploymentRecords(user, query);
   }
 
   @Get('interns')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询当前实习任职周期（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询当前实习任职周期（仅数据库模式）' })
   findInterns(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryInternsDto) {
     return this.service.findInterns(user, query);
   }
 
   @Get('labor-workers')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询当前劳务人员任职周期（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询当前劳务人员任职周期（仅数据库模式）' })
   findLaborWorkers(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryLaborWorkersDto) {
     return this.service.findLaborWorkers(user, query);
   }
 
   @Get('personnel-labor-workers')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询人员页当前劳务人员（仅 MySQL 模式，只读）' })
+  @ApiOperation({ summary: '分页查询人员页当前劳务人员（仅数据库模式，只读）' })
   findPersonnelLaborWorkers(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryPersonnelLaborWorkersDto,
@@ -91,7 +91,7 @@ export class EmploymentController {
 
   @Get('personnel-resigned')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询人员页已完成离职人员（仅 MySQL 模式，只读）' })
+  @ApiOperation({ summary: '分页查询人员页已完成离职人员（仅数据库模式，只读）' })
   findPersonnelResigned(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryPersonnelResignedDto,
@@ -101,42 +101,42 @@ export class EmploymentController {
 
   @Get('part-time')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询当前兼职任职关系（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询当前兼职任职关系（仅数据库模式）' })
   findPartTime(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryPartTimeDto) {
     return this.service.findPartTime(user, query);
   }
 
   @Get('probation')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询试用管理列表（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询试用管理列表（仅数据库模式）' })
   findProbation(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryProbationDto) {
     return this.service.findProbation(user, query);
   }
 
   @Get('movements')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询员工异动记录（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询员工异动记录（仅数据库模式）' })
   findMovements(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryEmployeeMovementsDto) {
     return this.service.findMovements(user, query);
   }
 
   @Get('trial-posts')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询试岗期记录（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询试岗期记录（仅数据库模式）' })
   findTrialPosts(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryTrialPostDto) {
     return this.service.findTrialPosts(user, query);
   }
 
   @Get('terminations')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询离职记录（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询离职记录（仅数据库模式）' })
   findTerminations(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryTerminationsDto) {
     return this.service.findTerminations(user, query);
   }
 
   @Get('retirements')
   @RequirePermissions(PERMISSIONS.EMPLOYEE_READ)
-  @ApiOperation({ summary: '分页查询退休记录（仅 MySQL 模式）' })
+  @ApiOperation({ summary: '分页查询退休记录（仅数据库模式）' })
   findRetirements(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryRetirementsDto) {
     return this.service.findRetirements(user, query);
   }
