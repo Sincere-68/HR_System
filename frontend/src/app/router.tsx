@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { AdministratorRoute } from '../features/auth/administrator-route';
 import { ProtectedRoute } from '../features/auth/protected-route';
 import { AppLayout } from '../layouts/AppLayout';
 import { PerformanceLayout } from '../layouts/PerformanceLayout';
@@ -56,6 +57,7 @@ export function AppRouter() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
+        <Route element={<AdministratorRoute />}>
         <Route index element={<SystemSelectionPage />} />
         <Route path="performance" element={<PerformanceLayout />}>
           <Route index element={<PerformanceDashboardPage />} />
@@ -128,6 +130,7 @@ export function AppRouter() {
             />
           ))}
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
         </Route>
       </Route>
     </Routes>

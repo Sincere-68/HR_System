@@ -33,7 +33,7 @@ describe('DemoDataService', () => {
     expect(service.getOrganizations().find(({ name }) => name === '二部天猫超市组')?.parentId).toBe('demo-org-ceo_second_department');
     expect(departmentAdmin?.permissions).toContain(PERMISSIONS.EMPLOYEE_UPDATE);
     expect(viewer?.organizationIds).toEqual(['demo-org-chairman_chen_gang']);
-    expect(viewer?.permissions).not.toContain(PERMISSIONS.EMPLOYEE_CREATE);
+    expect(viewer?.permissions).toEqual([]);
   });
 
   it('creates and updates in-memory employees', () => {

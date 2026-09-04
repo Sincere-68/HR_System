@@ -386,12 +386,27 @@ export interface EmployeeListItem extends Employee {
 export interface EmployeeDetail extends EmployeeListItem {
   assignmentId: string | null;
   positionId: string | null;
-  workplaceId: string | null;
   /** Current effective EmployeeAgreement.employingCompany ID, never an assignment field. */
   agreementEmployingCompanyId: string | null;
   primaryDocumentId: string | null;
   emergencyContactId: string | null;
   highestEducationId: string | null;
+  nationality: string | null;
+  workStartDate: string | null;
+  birthdayPreference: 'SOLAR' | 'LUNAR' | null;
+  lunarBirthDate: string | null;
+  fullTimeDutyDescription: string | null;
+  partTimePositionName: string | null;
+  partTimeHourlyRate: string | null;
+  hasCompanyEquity: boolean;
+  assignmentStartDate: string | null;
+  confirmationDate: string | null;
+  trialPostEndDate: string | null;
+  movementTypeId: string | null;
+  movementTypeName: string | null;
+  changeReason: string | null;
+  changeDescription: string | null;
+  managerEmployeeId: string | null;
 }
 
 export const PERSONNEL_FIELDS = [
@@ -404,7 +419,7 @@ export const PERSONNEL_FIELDS = [
   { key: 'personnelPosition', title: '人员定位', dataType: 'enum', importable: true, computed: false },
   { key: 'jobLevel', title: '职级', dataType: 'enum', importable: true, computed: false },
   { key: 'employeeLevel', title: '员工层级', dataType: 'enum', importable: true, computed: false },
-  { key: 'workplaceName', title: '工作地点', dataType: 'relation', importable: true, computed: false },
+  { key: 'workplaceName', title: '工作地点', dataType: 'string', importable: true, computed: false },
   { key: 'workEmail', title: '企业邮箱', dataType: 'string', importable: true, computed: false },
   { key: 'personalEmail', title: '个人邮箱', dataType: 'string', importable: true, computed: false },
   { key: 'mobile', title: '手机号码', dataType: 'string', importable: true, computed: false },
@@ -775,8 +790,6 @@ export interface InternOfferOption {
   /** Present for position directory entries; preserves the company position number. */
   code?: string;
   organizationId?: string | null;
-  /** Available for workplace directory entries. Address is display-only/derived for Offers. */
-  address?: string | null;
 }
 
 /** Employee option that intentionally contains only the fields needed to choose a direct manager. */
@@ -785,14 +798,13 @@ export interface InternOfferManagerOption extends InternOfferOption {
 }
 
 /**
- * MySQL-only directory data for the new internship Offer form. Managers honor
- * the current employee data scope; workplaces expose their directory address
- * for derived display only.
+ * Database-mode directory data for the new internship Offer form. Managers
+ * honor the current employee data scope. Working location is free text and is
+ * deliberately not a directory option.
  */
 export interface InternOfferFormOptions {
   organizations: InternOfferOption[];
   positions: InternOfferOption[];
-  workplaces: InternOfferOption[];
   employingCompanies: InternOfferOption[];
   managers: InternOfferManagerOption[];
 }
@@ -848,7 +860,7 @@ export interface CreateInternOfferInput {
   educationExperience?: CandidateEducationExperienceInput;
   organizationId: string;
   positionId: string;
-  workplaceId?: string;
+  workplaceName?: string;
   proposedEntryDate: string;
   probationMonths?: number;
   jobLevel?: JobLevel;
@@ -919,7 +931,7 @@ export interface CreatedInternOffer {
   };
   organizationId: string;
   positionId: string;
-  workplaceId: string | null;
+  workplaceName: string | null;
   proposedEntryDate: string;
   probationMonths: number | null;
   jobLevel: JobLevel | null;
@@ -963,7 +975,7 @@ export interface InternConversionOfferPrefill {
   educationExperience: CandidateEducationExperienceInput | null;
   organizationId: string | null;
   positionId: string | null;
-  workplaceId: string | null;
+  workplaceName: string | null;
   jobLevel: JobLevel | null;
   employeeLevel: EmployeeLevel | null;
   personnelCategory: PersonnelCategory | null;
@@ -1479,7 +1491,7 @@ export interface CreateEmployeeInput {
   organizationId: string;
   positionId?: string;
   jobLevel?: JobLevel;
-  workplaceId?: string;
+  workplaceName?: string;
   personnelPosition: PersonnelPosition;
   employeeLevel: EmployeeLevel;
   /** Required EmployingCompany for the EmployeeAgreement created with this employee. */
@@ -1536,9 +1548,9 @@ export interface EmployeeDirectoryOption extends EmployeeFormOption {
 
 export interface EmployeeFormOptions {
   positions: EmployeePositionOption[];
-  workplaces: EmployeeFormOption[];
   managers: EmployeeManagerOption[];
   employingCompanies?: EmployeeDirectoryOption[];
+  movementTypes?: EmployeeDirectoryOption[];
 }
 
 export interface InitialEmploymentInput {
@@ -1553,16 +1565,21 @@ export interface InitialEmploymentInput {
   employeeLevel?: EmployeeLevel;
   positionId?: string;
   jobLevel?: JobLevel;
-  workplaceId?: string;
+  workplaceName?: string;
 }
 
 export interface UpdateEmployeeInput {
-  employeeNo?: string;
   name?: string;
   /** Set only when changing an existing primary assignment. */
   organizationId?: string;
   /** Required with the initial-assignment fields when no current primary assignment exists. */
   initialEmployment?: InitialEmploymentInput;
+  /** Current primary assignment's position; a change is retained in the assignment audit history. */
+  positionId?: string;
+  /** Current primary assignment's fixed job-level code. */
+  jobLevel?: JobLevel;
+  /** Current primary assignment's working location text. */
+  workplaceName?: string;
   employmentStatus?: EmploymentStatus;
   workEmail?: string;
   personalEmail?: string;
@@ -1599,6 +1616,23 @@ export interface UpdateEmployeeInput {
   employmentRelationship?: EmploymentRelationship;
   personnelSource?: PersonnelSource;
   workArrangement?: WorkArrangement;
+  nationality?: string;
+  workStartDate?: string;
+  birthdayPreference?: 'SOLAR' | 'LUNAR';
+  lunarBirthDate?: string;
+  fullTimeDutyDescription?: string;
+  partTimePositionName?: string;
+  partTimeHourlyRate?: string;
+  hasCompanyEquity?: boolean;
+  assignmentStartDate?: string;
+  entryDate?: string;
+  confirmationDate?: string;
+  trialPostEndDate?: string;
+  movementTypeId?: string;
+  changeReason?: string;
+  changeDescription?: string;
+  managerEmployeeId?: string;
+  agreementEmployingCompanyId?: string;
 }
 
 export interface PerformanceExecutorDefinition {

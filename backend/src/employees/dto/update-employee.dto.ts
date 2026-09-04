@@ -20,6 +20,7 @@ import {
 import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -89,24 +90,15 @@ export class InitialEmploymentDto {
   @MaxLength(8)
   jobLevel?: string;
 
-  @ApiPropertyOptional({ description: '工作地点 ID' })
+  @ApiPropertyOptional({ description: '工作地点（自由文本）', maxLength: 191 })
   @IsOptional()
   @Transform(trim)
   @IsString()
   @MaxLength(191)
-  workplaceId?: string;
+  workplaceName?: string;
 }
 
 export class UpdateEmployeeDto {
-  @ApiPropertyOptional({ example: 'DEMO-1005' })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(32)
-  @Matches(/^[A-Za-z0-9_-]+$/, { message: '工号只能包含字母、数字、下划线和连字符' })
-  employeeNo?: string;
-
   @ApiPropertyOptional({ example: '测试员工' })
   @IsOptional()
   @Transform(trim)
@@ -114,6 +106,54 @@ export class UpdateEmployeeDto {
   @MinLength(1)
   @MaxLength(50)
   name?: string;
+
+  @ApiPropertyOptional({ maxLength: 64, description: '国籍（地区）' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(64)
+  nationality?: string;
+
+  @ApiPropertyOptional({ description: '参加工作日期，格式 YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  workStartDate?: string;
+
+  @ApiPropertyOptional({ enum: ['SOLAR', 'LUNAR'] })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(SOLAR|LUNAR)$/)
+  birthdayPreference?: 'SOLAR' | 'LUNAR';
+
+  @ApiPropertyOptional({ description: '农历生日，格式 YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  lunarBirthDate?: string;
+
+  @ApiPropertyOptional({ description: '全日制岗位职责说明' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(32766)
+  fullTimeDutyDescription?: string;
+
+  @ApiPropertyOptional({ maxLength: 191, description: '非全时岗位名称' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  partTimePositionName?: string;
+
+  @ApiPropertyOptional({ description: '非全时薪资（元/小时）' })
+  @IsOptional()
+  @Transform(trim)
+  @Matches(/^\d+(?:\.\d{1,2})?$/, { message: '非全时薪资最多保留两位小数' })
+  partTimeHourlyRate?: string;
+
+  @ApiPropertyOptional({ description: '是否有公司资质权限' })
+  @IsOptional()
+  @IsBoolean()
+  hasCompanyEquity?: boolean;
 
   @ApiPropertyOptional({ description: '目标部门组织 ID；变更时结束当前主要任职并创建新的任职历史' })
   @IsOptional()
@@ -128,6 +168,81 @@ export class UpdateEmployeeDto {
   @ValidateNested()
   @Type(() => InitialEmploymentDto)
   initialEmployment?: InitialEmploymentDto;
+
+  @ApiPropertyOptional({ description: '当前主要任职的职位 ID' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  positionId?: string;
+
+  @ApiPropertyOptional({ description: '当前主要任职的职级固定 code' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  jobLevel?: string;
+
+  @ApiPropertyOptional({ description: '当前主要任职的工作地点（自由文本）', maxLength: 191 })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  workplaceName?: string;
+
+  @ApiPropertyOptional({ description: '当前任职开始日期，格式 YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  assignmentStartDate?: string;
+
+  @ApiPropertyOptional({ description: '当前任职入职日期，格式 YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  entryDate?: string;
+
+  @ApiPropertyOptional({ description: '转正日期，格式 YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  confirmationDate?: string;
+
+  @ApiPropertyOptional({ description: '试岗结束日期，格式 YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  trialPostEndDate?: string;
+
+  @ApiPropertyOptional({ description: '异动类型 ID' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  movementTypeId?: string;
+
+  @ApiPropertyOptional({ description: '变动原因' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(32766)
+  changeReason?: string;
+
+  @ApiPropertyOptional({ description: '变动说明' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(32766)
+  changeDescription?: string;
+
+  @ApiPropertyOptional({ description: '直接经理员工 ID' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  managerEmployeeId?: string;
+
+  @ApiPropertyOptional({ description: '当前合同机构 ID' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(191)
+  agreementEmployingCompanyId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

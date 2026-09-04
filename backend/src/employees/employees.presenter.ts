@@ -39,6 +39,14 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
   workEmail: string | null;
   personalEmail: string | null;
   birthDate: Date | null;
+  nationality?: string | null;
+  workStartDate?: Date | null;
+  birthdayPreference?: string | null;
+  lunarBirthDate?: Date | null;
+  fullTimeDutyDescription?: string | null;
+  partTimePositionName?: string | null;
+  partTimeHourlyRate?: { toString(): string } | null;
+  hasCompanyEquity?: boolean;
   ethnicity: string | null;
   maritalStatus: string | null;
   politicalStatus: string | null;
@@ -59,6 +67,8 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
     entryDate: Date;
     actualExitDate: Date | null;
     agreements?: Array<{
+      id?: string;
+      employingCompanyId?: string | null;
       employingCompany: { id: string; code: string; name: string } | null;
     }>;
   }>;
@@ -68,21 +78,26 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
     status: 'ACTIVE' | 'ENDED';
     positionId?: string | null;
     jobLevel?: JobLevel | null;
-    workplaceId?: string | null;
+    workplaceName?: string | null;
     position: { id: string; name: string } | null;
-    workplace: { id: string; name: string } | null;
     personnelPosition?: PersonnelPosition | null;
     employeeLevel?: EmployeeLevel | null;
     personnelCategory?: PersonnelCategory | null;
     employmentRelationship?: EmploymentRelationship | null;
     personnelSource?: PersonnelSource | null;
     workArrangement: WorkArrangement | string;
+    confirmationDate?: Date | null;
+    trialPostEndDate?: Date | null;
+    movementTypeId?: string | null;
+    movementType?: { id: string; name: string } | null;
+    changeReason?: string | null;
+    changeDescription?: string | null;
     isPrimary: boolean;
     startDate: Date;
     endDate: Date | null;
   }>;
   reportingAsEmployee: Array<{
-    manager: { name: string | null; workEmail: string | null };
+    manager: { id?: string; name: string | null; workEmail: string | null };
     isPrimary: boolean;
     startDate: Date;
     endDate: Date | null;
@@ -217,11 +232,26 @@ export function presentDemoEmployeeDetail(
     ...presentDemoEmployeeListItem(employee, visibleOrganizationIds),
     assignmentId: null,
     positionId: null,
-    workplaceId: null,
     agreementEmployingCompanyId: null,
     primaryDocumentId: null,
     emergencyContactId: null,
     highestEducationId: null,
+    nationality: null,
+    workStartDate: null,
+    birthdayPreference: null,
+    lunarBirthDate: null,
+    fullTimeDutyDescription: null,
+    partTimePositionName: null,
+    partTimeHourlyRate: null,
+    hasCompanyEquity: false,
+    assignmentStartDate: null,
+    confirmationDate: null,
+    trialPostEndDate: null,
+    movementTypeId: null,
+    movementTypeName: null,
+    changeReason: null,
+    changeDescription: null,
+    managerEmployeeId: null,
   };
 }
 
@@ -256,6 +286,16 @@ function calculateAge(birthDate: Date | null, now: Date) {
     || (now.getUTCMonth() === birthDate.getUTCMonth() && now.getUTCDate() < birthDate.getUTCDate());
   if (beforeBirthday) age -= 1;
   return age;
+}
+
+/** Keeps list pagination stable while putting the most recently onboarded employees first. */
+export function sortEmployeeListByEntryDateDesc(rows: EmployeeListItem[]) {
+  return [...rows].sort((left, right) => {
+    const entryDateComparison = (right.entryDate ?? '').localeCompare(left.entryDate ?? '');
+    if (entryDateComparison !== 0) return entryDateComparison;
+    const employeeNoComparison = left.employeeNo.localeCompare(right.employeeNo);
+    return employeeNoComparison !== 0 ? employeeNoComparison : left.id.localeCompare(right.id);
+  });
 }
 
 export function presentEmployeeListItem(
@@ -295,7 +335,7 @@ export function presentEmployeeListItem(
     personnelPosition: currentAssignment?.personnelPosition ?? null,
     jobLevel: currentAssignment?.jobLevel ?? null,
     employeeLevel: currentAssignment?.employeeLevel ?? null,
-    workplaceName: currentAssignment?.workplace?.name ?? null,
+    workplaceName: currentAssignment?.workplaceName ?? null,
     workEmail: employee.workEmail,
     personalEmail: employee.personalEmail,
     personnelCategory: currentAssignment?.personnelCategory ?? currentPeriod?.personnelCategory ?? null,
@@ -356,6 +396,11 @@ export function presentEmployeeDetail(
   const assignment = allowedAssignments.find((candidate) => candidate.isPrimary) ?? allowedAssignments[0] ?? null;
   const currentPeriod = employee.employmentPeriods[0] ?? null;
   const currentAgreement = currentPeriod?.agreements?.[0] ?? null;
+  const currentManager = assignment
+    ? (employee.reportingAsEmployee.find((relationship) => relationship.isPrimary)
+      ?? employee.reportingAsEmployee[0]
+      ?? null)
+    : null;
   const document = employee.identityDocuments.find((candidate) => candidate.isPrimary) ?? employee.identityDocuments[0] ?? null;
   const emergencyContact = employee.familyMembers.find((candidate) => candidate.isEmergencyContact) ?? null;
   const highestEducation = employee.educationExperiences.find((candidate) => candidate.isHighestEducation)
@@ -366,10 +411,27 @@ export function presentEmployeeDetail(
     ...item,
     assignmentId: assignment?.id ?? null,
     positionId: assignment?.position?.id ?? null,
-    workplaceId: assignment?.workplace?.id ?? null,
     agreementEmployingCompanyId: currentAgreement?.employingCompany?.id ?? null,
     primaryDocumentId: document?.id ?? null,
     emergencyContactId: emergencyContact?.id ?? null,
     highestEducationId: highestEducation?.id ?? null,
+    nationality: employee.nationality ?? null,
+    workStartDate: formatDate(employee.workStartDate),
+    birthdayPreference: employee.birthdayPreference === 'SOLAR' || employee.birthdayPreference === 'LUNAR'
+      ? employee.birthdayPreference
+      : null,
+    lunarBirthDate: formatDate(employee.lunarBirthDate),
+    fullTimeDutyDescription: employee.fullTimeDutyDescription ?? null,
+    partTimePositionName: employee.partTimePositionName ?? null,
+    partTimeHourlyRate: employee.partTimeHourlyRate?.toString() ?? null,
+    hasCompanyEquity: employee.hasCompanyEquity ?? false,
+    assignmentStartDate: formatDate(assignment?.startDate),
+    confirmationDate: formatDate(assignment?.confirmationDate),
+    trialPostEndDate: formatDate(assignment?.trialPostEndDate),
+    movementTypeId: assignment?.movementTypeId ?? null,
+    movementTypeName: assignment?.movementType?.name ?? null,
+    changeReason: assignment?.changeReason ?? null,
+    changeDescription: assignment?.changeDescription ?? null,
+    managerEmployeeId: currentManager?.manager.id ?? null,
   };
 }

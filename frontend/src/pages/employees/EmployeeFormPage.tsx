@@ -70,7 +70,7 @@ export function EmployeeFormPage() {
   return (
     <section className="employee-editor-page" aria-labelledby="employee-form-heading">
       <header className="employee-editor-header">
-        <h1 id="employee-form-heading">{editing ? '编辑员工' : '新增员工'}</h1>
+        <h1 id="employee-form-heading">{editing ? '编辑人员' : '新增员工'}</h1>
         <Button
           type="text"
           className="employee-editor-close"
@@ -80,6 +80,15 @@ export function EmployeeFormPage() {
         />
       </header>
       <main className="employee-editor-content">
+        {editing ? (
+          <Alert
+            className="employee-editor-note"
+            type="info"
+            showIcon
+            closable
+            message="此处仅支持编辑员工信息、任职记录和银行卡信息字段，如需编辑子集信息，请到相关子集中进行编辑"
+          />
+        ) : null}
         {mutation.isError ? (
           <Alert
             className="employee-editor-error"

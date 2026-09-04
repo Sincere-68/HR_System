@@ -74,6 +74,7 @@ export function SubsetsListPage<T extends { id: string }>({
           columns={columns}
           dataSource={query.data?.data ?? []}
           scroll={{ x: scrollX }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} /> }}
           pagination={{
             current: page,

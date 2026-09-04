@@ -125,6 +125,7 @@ export function LaborWorkerManagementPage() {
           columns={laborWorkerColumns}
           dataSource={laborWorkers.data?.data ?? []}
           scroll={{ x: 1_450 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的当前劳务人员任职记录" /> }}
           pagination={{
             current: query.page,

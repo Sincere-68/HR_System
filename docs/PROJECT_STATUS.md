@@ -32,7 +32,7 @@
 - 禁止用编码、创建时间或其他相似字段冒充缺失字段。
 - 普通列表“邮箱/电子邮箱”默认读取 `Employee.workEmail`（`employees.work_email`）。
 - “个人邮箱”读取 `Employee.personalEmail`；“直线经理邮箱”读取主要经理的 `Employee.workEmail`；Offer 候选人个人邮箱读取 `Candidate.email`。
-- 本系统仅供 HR 使用，不设置独立的字段级敏感权限；有可靠来源的字段按正常值返回，仍受员工读取权限和组织数据范围约束。
+- 本系统仅供 HR 使用，不设置独立的字段级敏感权限；有可靠来源的字段按正常值返回，仍受员工读取权限和组织数据范围约束。当前普通账户可登录但不开放业务信息访问，管理员和已授权的部门管理员按各自权限访问。
 
 ## 三、核心数据模型口径
 
@@ -144,7 +144,7 @@
 | 工号、姓名 | `employeeNo`、`name` | `Employee.employeeNo`、`Employee.name`。姓名链接人员详情。 |
 | 部门 | `organizationName` | 当前主要 `EmployeeAssignment.organization.name`；迁移兼容时可回退 `Employee.organization`。 |
 | 入职日期 | `entryDate` | 当前 `EmploymentPeriod.entryDate`。 |
-| 职位、职级、工作地点 | `positionName`、`jobLevel`、`workplaceName` | 当前主要任职关联的 `Position`、固定 `JobLevelCode` code、`Workplace`；职位目录当前以用户提供的 434 条五位编号/名称为唯一标准，选择时显示“编号 - 名称”并支持两个维度搜索，部门与职位独立；职级允许 `S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`。 |
+| 职位、职级、工作地点 | `positionName`、`jobLevel`、`workplaceName` | 当前主要任职关联的 `Position`、固定 `JobLevelCode` code、`EmployeeAssignment.workplaceName` 自由文本；职位目录当前以用户提供的 434 条五位编号/名称为唯一标准，选择时显示“编号 - 名称”并支持两个维度搜索，部门与职位独立；职级允许 `S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`。 |
 | 性别 | `gender` | `Employee.gender`。 |
 | 人员定位、员工层级 | `personnelPosition`、`employeeLevel` | 当前主要 `EmployeeAssignment.personnelPosition`、`EmployeeAssignment.employeeLevel` 固定 enum code；API 返回 code，前端映射中文标签。无当前值时返回 `null/--`。 |
 | 企业邮箱 | `workEmail` | `Employee.workEmail`。 |
@@ -229,7 +229,7 @@
 | 录用部门/部门 | `organizationName` | `Offer.organization.name`，不以员工入职后的当前部门替代。 |
 | 应聘职位 | `appliedPositionName` | 当前没有已确认的外部职位字段，固定 `null/--`。 |
 | 录用职位 | `offeredPositionName` | 公司内部 `Offer.position.name`。 |
-| 工作地点、拟入职日期、试用期（月） | `workplaceName`、`proposedEntryDate`、`probationMonths` | `Offer.workplace.name`、`Offer.proposedEntryDate`、`Offer.probationMonths`。 |
+| 工作地点、拟入职日期、试用期（月） | `workplaceName`、`proposedEntryDate`、`probationMonths` | `Offer.workplaceName` 自由文本、`Offer.proposedEntryDate`、`Offer.probationMonths`。 |
 | Offer 发送日期、接受 Offer 日期、拒绝原因备注 | `issueDate`、`acceptedAt`、`rejectedReason` | 对应 `Offer.issueDate/acceptedAt/rejectedReason`。 |
 | 拒绝 Offer 日期 | `rejectedAt` | 当前模型没有拒绝日期，固定 `null/--`；不得使用创建或更新时间替代。 |
 | 已入职 Offer 入职日期、邮箱 | `entryDate`、`personalEmail` | `Offer.onboardingCase.actualEntryDate`、`Candidate.email`；用户确认该页面的“邮箱”也展示个人邮箱。 |
@@ -245,7 +245,7 @@
 - 预填只查询当前、在范围内、未离职的实习员工主档、主要有效证件、最高有效学历、当前周期主要任职/有效协议，以及当前主要行政汇报关系。无可靠来源返回 `null`，不借用近似值；直线经理只有主要 `ADMINISTRATIVE` 当前关系时才返回。预填不创建任何记录。
 - 接口：`GET /onboarding/intern-offer-form-options`、`GET /onboarding/intern-conversion-options`、`GET /onboarding/intern-conversion-options/:employeeId`、`POST /onboarding/intern-offers`，均需 `employee.create`，仅支持 PostgreSQL；Demo 模式统一返回 `409`“新建实习Offer仅支持数据库模式”。
 - 直接创建保存 Candidate、可选候选人证件/教育快照、Offer 及可选薪资/兼职快照。`Candidate.source` 是唯一保存的人员来源；不保存新增/转正创建路径 enum。Offer 固定 `INTERN + DRAFT + issueDate=null`，不会创建员工、任职周期/关系、汇报关系、合同、入职单或审批记录。
-- 录用部门和职位必填并验证有效性及组织范围；工作地点为可选，提供时才验证有效性，未选保存 `null`、办公地址显示 `--`。职位和部门仍是独立维度。审批流程尚待确认，当前没有预览审批人或提交审批。
+- 录用部门和职位必填并验证有效性及组织范围；工作地点为可选自由文本，未填保存 `null`；办公地址没有可靠来源，固定显示 `--`。职位和部门仍是独立维度。审批流程尚待确认，当前没有预览审批人或提交审批。
 
 
 #### 入职管理
@@ -486,7 +486,7 @@
 | 证件号码 | `documentNumber` | 有效证件中优先主要证件。 |
 | 紧急联系人、与本人关系、紧急联系人电话 | 对应 shared 字段 | 有效且标记为紧急联系人的家庭成员。 |
 | 入职日期 | `entryDate` | 当前 `EmploymentPeriod.entryDate`。 |
-| 开始日期、结束日期、部门、职务、职位、职级、工作地点 | 对应 shared 字段 | 当前主要 `EmployeeAssignment` 及其组织、`JobTitle`、`Position`、固定 `JobLevelCode`、`Workplace`。 |
+| 开始日期、结束日期、部门、职务、职位、职级、工作地点 | 对应 shared 字段 | 当前主要 `EmployeeAssignment` 及其组织、`JobTitle`、`Position`、固定 `JobLevelCode`、`workplaceName` 自由文本。 |
 | 直线经理、直线经理邮箱 | `managerName`、`managerEmail` | 当前主要行政汇报关系及经理 `workEmail`。 |
 | 累计司龄（年） | `serviceYears` | 当前实现按当前任职周期 `entryDate` 到今天计算；不是所有再入职周期合计。 |
 | 雇佣关系 | `employmentRelationship` | 当前主要 `EmployeeAssignment.employmentRelationship`，无值时回退当前 `EmploymentPeriod.employmentRelationship`，显示内部员工/实习生/劳务人员。 |
@@ -580,7 +580,7 @@
 | 职位目录替换与搜索 | 用户提供的 434 条职位编号/名称已固化为 shared 目录；shared build/typecheck、前后端 typecheck、人员/实习 Offer 职位表单 Vitest（10/10）、员工 service Jest（17/17）、Prisma 静态验证和 `git diff --check` 通过。测试目录替换脚本已新增但未执行、未连接数据库。 |
 | 证件类型扩展 | 60 项用户确认的证件类型及统一中文标签已完成 shared/Prisma/前端接入；shared build/typecheck、frontend typecheck、人员/列表/身份证读取页 Vitest（18/18）、后端 employees 聚焦 Jest（25/25）、Prisma 静态验证和 `git diff --check` 通过。Prisma Client 重新生成被 Windows query engine 文件锁阻塞，尚未完成。 |
 | 组织目录替换 | 用户确认的四层、44 节点组织树已固化为 shared 目录，根为上海宜信电子商务有限公司，负责人分组为 CEO陈锐/董事长陈钢；Demo、seed、组织范围和组织列表已同步，旧组织属于测试数据，替换脚本会直接删除。组织 service、AccessControl、DemoData、employees 聚焦后端测试 33/33，shared 目录断言、shared build/typecheck、backend/frontend typecheck（前端通过）及 `git diff --check` 已执行；组织替换脚本未执行、未连接数据库。 |
-| 人员导入导出 | “全部在职”表格右上角已增加导入、导出按钮。导出弹窗可勾选字段并选择 XLSX/CSV；首列勾选人员时导出勾选项，未勾选时按当前关键词/部门/状态筛选导出全部有权人员。导入按中文业务表头读取 XLSX/CSV、以工号创建或局部更新并返回逐行结果；新工号可创建待完善主档，后续同工号导入同时提供部门、入职日期、雇佣关系、用工形式、人员状态时补建首段任职。职位/工作地点无法唯一匹配时作为提示而不猜测写入。完整新增页面仍维持必填任职/合同规则。后端 `POST /employees/export`、`POST /employees/import-template`、`POST /employees/import` 使用共享 `PERSONNEL_FIELDS` 注册表。 |
+| 人员导入导出 | “全部在职”表格右上角已增加导入、导出按钮。导出弹窗可勾选字段并选择 XLSX/CSV；首列勾选人员时导出勾选项，未勾选时按当前关键词/部门/状态筛选导出全部有权人员。导入按中文业务表头读取 XLSX/CSV、以工号创建或局部更新并返回逐行结果；工作地点按文本直接写入任职记录。新工号可创建待完善主档，后续同工号导入同时提供部门、入职日期、雇佣关系、用工形式、人员状态时补建首段任职。职位无法唯一匹配时作为提示而不猜测写入。完整新增页面仍维持必填任职/合同规则。后端 `POST /employees/export`、`POST /employees/import-template`、`POST /employees/import` 使用共享 `PERSONNEL_FIELDS` 注册表。 |
 
 本次文档整理没有启动应用、连接 PostgreSQL、运行 migration/seed，也没有写入业务数据库。
 
@@ -596,7 +596,7 @@
 8. 编辑仍不支持直接经理变更；经理关系循环校验、结束旧关系并新建历史关系，以及跨部门经理候选人在不泄露范围外人员资料前提下的展示方案仍待实现或确认。
 9. [`docs/DATA_MODEL.md`](DATA_MODEL.md) 的“当前实现状态”表已经滞后，仍写着新模块 API 尚未实现、前端仍为占位；当前进展以本文和代码为准，后续如要同步该文档应单独处理。
 10. 项目仅供 HR 使用，现有列表和详情不再设置独立的敏感字段读取权限或脱敏分支；人员字段仍受员工读取权限和组织数据范围约束。
-11. 当前测试职位目录可通过 `npm run db:replace-position-catalog` 的显式确认变量替换：该脚本会删除当前测试数据中 Position 的已确认外键引用和旧职位记录，再导入 434 条用户提供的职位编号/名称；本快照不表示该脚本已经运行，执行前仍须确认目标为测试库。
+11. 职位目录由 shared 中确认的 434 条五位编号/名称组成。已有业务数据的 PostgreSQL 库应使用 `CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_434_POSITION_CATALOG npm run db:upsert-position-catalog` 按 `Position.code` 安全创建或更新目录，不会删除任职、Offer 或其他职位引用；导入职位可填写五位编号、`编号 - 名称` 或唯一职位名称。旧 `npm run db:replace-position-catalog` 只供确认的测试库使用：它会删除当前测试数据中 Position 的已确认外键引用和旧职位记录后再导入目录。
 12. 当前测试组织目录可通过 `npm run db:replace-organization-catalog` 的显式确认变量替换：设置 `CONFIRM_TEST_ORGANIZATION_CATALOG_RESET=REPLACE_44_TEST_ORGANIZATIONS` 后，脚本直接删除不在 44 节点目录中的旧测试组织，再恢复新目录；不应对包含正式历史数据的数据库运行。
 13. 当前工作区包含大量尚未提交的增量功能，继续开发前必须先查看 `git status` 和相关 diff，不得覆盖或回退已有改动。
 12. 当前工作区包含大量尚未提交的增量功能，继续开发前必须先查看 `git status` 和相关 diff，不得覆盖或回退已有改动。

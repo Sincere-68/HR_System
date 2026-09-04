@@ -1,5 +1,10 @@
 import { EmploymentStatus } from '@prisma/client';
-import { presentEmployeeDetail, presentEmployeeListItem, type EmployeeListSnapshot } from './employees.presenter';
+import {
+  presentEmployeeDetail,
+  presentEmployeeListItem,
+  sortEmployeeListByEntryDateDesc,
+  type EmployeeListSnapshot,
+} from './employees.presenter';
 
 const now = new Date('2026-08-25T00:00:00.000Z');
 
@@ -41,7 +46,7 @@ function employee(): EmployeeListSnapshot {
       status: 'ACTIVE',
       position: { id: 'position-1', name: '软件工程师' },
       jobLevel: 'S1',
-      workplace: { id: 'workplace-1', name: '虚构园区' },
+      workplaceName: '虚构园区',
       personnelPosition: 'FRONT_OFFICE',
       employeeLevel: 'STAFF',
       personnelCategory: 'NON_TALENT_PROGRAM',
@@ -87,6 +92,21 @@ function employee(): EmployeeListSnapshot {
 }
 
 describe('presentEmployeeListItem', () => {
+  it('sorts complete personnel rows by entry date from newest to oldest', () => {
+    const source = presentEmployeeListItem(employee(), now);
+    const ordered = sortEmployeeListByEntryDateDesc([
+      { ...source, id: 'employee-undated', employeeNo: 'FAKE-3001', entryDate: null },
+      { ...source, id: 'employee-early', employeeNo: 'FAKE-1001', entryDate: '2024-01-01' },
+      { ...source, id: 'employee-latest', employeeNo: 'FAKE-2001', entryDate: '2026-08-21' },
+    ]);
+
+    expect(ordered.map(({ id }) => id)).toEqual([
+      'employee-latest',
+      'employee-early',
+      'employee-undated',
+    ]);
+  });
+
   it('assembles current personnel relations and calculated values', () => {
     const result = presentEmployeeListItem(employee(), now);
 
@@ -133,7 +153,7 @@ describe('presentEmployeeListItem', () => {
     expect(result).toMatchObject({
       positionId: 'position-1',
       jobLevel: 'S1',
-      workplaceId: 'workplace-1',
+      workplaceName: '虚构园区',
       agreementEmployingCompanyId: 'company-1',
     });
   });

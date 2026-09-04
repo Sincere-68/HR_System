@@ -165,6 +165,7 @@ export function PartTimeManagementPage() {
           columns={partTimeColumns}
           dataSource={partTimeAssignments.data?.data ?? []}
           scroll={{ x: 1_700 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的当前兼职任职记录" /> }}
           pagination={{
             current: query.page,

@@ -519,6 +519,9 @@ model Employee {
   gender                Gender?
   birthDate             DateTime?        @map("birth_date") @db.Date
   nationality           String?
+  workStartDate         DateTime?        @map("work_start_date") @db.Date
+  birthdayPreference    String?          @map("birthday_preference") @db.VarChar(16)
+  lunarBirthDate        DateTime?        @map("lunar_birth_date") @db.Date
   ethnicity             Ethnicity?
   nativePlace           String?          @map("native_place")
   nativePlaceRegionCode String?          @map("native_place_region_code") @db.VarChar(12)
@@ -535,6 +538,10 @@ model Employee {
   bankName              BankName?        @map("bank_name")
   bankBranchName        String?          @map("bank_branch_name")
   bankAccountNumber     String?          @map("bank_account_number") @db.VarChar(19)
+  fullTimeDutyDescription String?        @map("full_time_duty_description") @db.Text
+  partTimePositionName  String?          @map("part_time_position_name") @db.VarChar(191)
+  partTimeHourlyRate    Decimal?         @map("part_time_hourly_rate") @db.Decimal(12, 2)
+  hasCompanyEquity      Boolean          @default(false) @map("has_company_equity")
   profilePhotoId        String?          @unique @map("profile_photo_id")
   recordStatus          RecordStatus     @default(ACTIVE) @map("record_status")
   archivedAt            DateTime?        @map("archived_at")
@@ -653,22 +660,6 @@ model JobTitle {
   @@map("job_titles")
 }
 
-model Workplace {
-  id          String               @id @default(cuid())
-  code        String               @unique
-  name        String
-  address     String?              @db.Text
-  status      RecordStatus         @default(ACTIVE)
-  archivedAt  DateTime?            @map("archived_at")
-  assignments EmployeeAssignment[]
-  offers      Offer[]
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
-
-  @@index([status, archivedAt])
-  @@map("workplaces")
-}
-
 model EmploymentPeriod {
   id                     String                 @id @default(cuid())
   employeeId             String                 @map("employee_id")
@@ -713,7 +704,7 @@ model EmployeeAssignment {
   positionId             String?                  @map("position_id")
   jobLevel               JobLevelCode?            @map("job_level")
   jobTitleId             String?                  @map("job_title_id")
-  workplaceId            String?                  @map("workplace_id")
+  workplaceName          String?                  @map("workplace_name") @db.VarChar(191)
   personnelPosition      PersonnelPosition?       @map("personnel_position")
   employeeLevel          EmployeeLevel?           @map("employee_level")
   personnelCategory      PersonnelCategory?       @map("personnel_category")
@@ -721,18 +712,22 @@ model EmployeeAssignment {
   employmentRelationship EmploymentRelationship?  @map("employment_relationship")
   assignmentType         AssignmentType           @default(PRIMARY) @map("assignment_type")
   workArrangement        WorkArrangement          @map("work_arrangement")
+  confirmationDate       DateTime?                @map("confirmation_date") @db.Date
+  trialPostEndDate       DateTime?                @map("trial_post_end_date") @db.Date
+  movementTypeId         String?                  @map("movement_type_id")
   isPrimary              Boolean                  @default(false) @map("is_primary")
   startDate              DateTime                 @map("start_date") @db.Date
   endDate                DateTime?                @map("end_date") @db.Date
   status                 AssignmentStatus         @default(ACTIVE)
   changeReason           String?                  @map("change_reason") @db.Text
+  changeDescription      String?                  @map("change_description") @db.Text
   archivedAt             DateTime?                @map("archived_at")
   employee               Employee                 @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   employmentPeriod       EmploymentPeriod?        @relation(fields: [employmentPeriodId], references: [id], onDelete: Restrict)
   organization           Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   position               Position?                @relation(fields: [positionId], references: [id], onDelete: Restrict)
   jobTitle               JobTitle?                @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
-  workplace              Workplace?               @relation(fields: [workplaceId], references: [id], onDelete: Restrict)
+  movementType           MovementType?            @relation("AssignmentMovementType", fields: [movementTypeId], references: [id], onDelete: Restrict)
   fieldChangeLogs        EmployeeFieldChangeLog[]
   createdAt              DateTime                 @default(now()) @map("created_at")
   updatedAt              DateTime                 @updatedAt @map("updated_at")
@@ -746,6 +741,7 @@ model EmployeeAssignment {
   @@index([personnelPosition, status])
   @@index([employeeLevel, status])
   @@index([isPrimary, status])
+  @@index([movementTypeId])
   @@map("employee_assignments")
 }
 
@@ -1175,7 +1171,7 @@ model Offer {
   acceptedEmployeeId      String?                    @map("accepted_employee_id")
   organizationId          String?                    @map("organization_id")
   positionId              String?                    @map("position_id")
-  workplaceId             String?                    @map("workplace_id")
+  workplaceName           String?                    @map("workplace_name") @db.VarChar(191)
   /// Snapshot only. No ReportingRelationship is created when an Offer is saved.
   directManagerEmployeeId String?                    @map("direct_manager_employee_id")
   jobLevel                JobLevelCode?              @map("job_level")
@@ -1204,7 +1200,6 @@ model Offer {
   directManagerEmployee   Employee?                  @relation("OfferDirectManager", fields: [directManagerEmployeeId], references: [id], onDelete: Restrict)
   organization            Organization?              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   position                Position?                  @relation(fields: [positionId], references: [id], onDelete: Restrict)
-  workplace               Workplace?                 @relation(fields: [workplaceId], references: [id], onDelete: Restrict)
   employingCompany        EmployingCompany?          @relation("OfferEmployingCompany", fields: [employingCompanyId], references: [id], onDelete: Restrict)
   compensationSnapshot    OfferCompensationSnapshot?
   partTimeSnapshot        OfferPartTimeSnapshot?
@@ -1368,6 +1363,7 @@ model MovementType {
   status      RecordStatus       @default(ACTIVE)
   archivedAt  DateTime?          @map("archived_at")
   movements   EmployeeMovement[]
+  assignments EmployeeAssignment[] @relation("AssignmentMovementType")
   createdAt   DateTime           @default(now()) @map("created_at")
   updatedAt   DateTime           @updatedAt @map("updated_at")
 

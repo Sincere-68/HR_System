@@ -24,7 +24,7 @@ const input = {
   educationExperience: { schoolName: '虚构大学', educationLevel: 'BACHELOR' as const, major: '虚构专业', graduationDate: '2026-06-30', isHighestEducation: true },
   organizationId: 'org-a',
   positionId: 'position-1',
-  workplaceId: 'workplace-1',
+  workplaceName: '虚构园区',
   proposedEntryDate: '2026-09-01',
   probationMonths: 3,
   jobLevel: 'S1' as const,
@@ -48,7 +48,6 @@ function createService(demoEnabled = false) {
   const prisma = {
     organization: { findMany: jest.fn() },
     position: { findMany: jest.fn() },
-    workplace: { findMany: jest.fn() },
     employee: { findMany: jest.fn(), findFirst: jest.fn() },
     employingCompany: { findMany: jest.fn() },
     $transaction: jest.fn(),
@@ -65,13 +64,12 @@ function validTransaction(overrides: Record<string, unknown> = {}) {
   return {
     organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-a' }) },
     position: { findFirst: jest.fn().mockResolvedValue({ id: 'position-1' }) },
-    workplace: { findFirst: jest.fn().mockResolvedValue({ id: 'workplace-1' }) },
     employingCompany: { findFirst: jest.fn().mockResolvedValue({ id: 'company-1' }) },
     employee: { findFirst: jest.fn().mockResolvedValue({ id: 'manager-1' }) },
     offer: {
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({
-        id: 'offer-1', offerNo: 'INTERN-20260901-0001', organizationId: 'org-a', positionId: 'position-1', workplaceId: 'workplace-1',
+        id: 'offer-1', offerNo: 'INTERN-20260901-0001', organizationId: 'org-a', positionId: 'position-1', workplaceName: '虚构园区',
         proposedEntryDate: new Date('2026-09-01T00:00:00.000Z'), probationMonths: 3, jobLevel: 'S1', employeeLevel: 'STAFF',
         personnelCategory: 'TALENT_PROGRAM', workArrangement: 'INTERN', directManagerEmployeeId: 'manager-1', employingCompanyId: 'company-1',
         agreementType: 'LABOR_CONTRACT', contractTermType: 'FIXED', contractMonths: 12, contractEndDate: new Date('2027-09-01T00:00:00.000Z'),
@@ -103,7 +101,7 @@ const prefillEmployee = {
   educationExperiences: [{ schoolName: '虚构大学', educationLevel: 'BACHELOR', major: '虚构专业', graduationDate: new Date('2026-06-30T00:00:00.000Z') }],
   employmentPeriods: [{
     id: 'period-1', personnelCategory: 'TALENT_PROGRAM', personnelSource: 'INTERNAL_REFERRAL',
-    assignments: [{ organizationId: 'org-a', positionId: 'position-1', workplaceId: 'workplace-1', jobLevel: 'S1', employeeLevel: 'STAFF', personnelCategory: 'TALENT_PROGRAM', workArrangement: 'INTERN' }],
+    assignments: [{ organizationId: 'org-a', positionId: 'position-1', workplaceName: '虚构园区', jobLevel: 'S1', employeeLevel: 'STAFF', personnelCategory: 'TALENT_PROGRAM', workArrangement: 'INTERN' }],
   }],
   reportingAsEmployee: [{ managerEmployeeId: 'manager-1' }],
   agreements: [{ employmentPeriodId: 'period-1', employingCompanyId: 'company-1', agreementType: 'INTERNSHIP_AGREEMENT', endDate: new Date('2026-12-31T00:00:00.000Z') }],
@@ -121,15 +119,15 @@ describe('OnboardingService direct internship Offer creation', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('returns active options with accessible manager choices and workplace addresses', async () => {
+  it('returns active options with accessible manager choices', async () => {
     const { service, prisma, access } = createService();
     prisma.$transaction.mockResolvedValue([
       [{ id: 'org-a', name: '虚构授权部门' }], [{ id: 'position-1', code: '00001', name: '虚构通用职位', organizationId: null }],
-      [{ id: 'workplace-1', name: '虚构园区', address: '虚构园区地址' }], [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }], [{ id: 'company-1', name: '虚构全日制公司' }],
+      [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }], [{ id: 'company-1', name: '虚构全日制公司' }],
     ]);
     await expect(service.getInternOfferFormOptions(user)).resolves.toEqual({
       organizations: [{ id: 'org-a', name: '虚构授权部门' }], positions: [{ id: 'position-1', code: '00001', name: '虚构通用职位', organizationId: null }],
-      workplaces: [{ id: 'workplace-1', name: '虚构园区', address: '虚构园区地址' }], managers: [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }], employingCompanies: [{ id: 'company-1', name: '虚构全日制公司' }],
+      managers: [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }], employingCompanies: [{ id: 'company-1', name: '虚构全日制公司' }],
     });
     expect(access.getEmployeeWhere).toHaveBeenCalledWith(user, ['org-a', 'org-child']);
   });
@@ -143,7 +141,7 @@ describe('OnboardingService direct internship Offer creation', () => {
     jest.spyOn(Date.prototype, 'getDate').mockReturnValue(1);
     const result = await service.createInternOffer(user, input as never);
 
-    expect(result).toMatchObject({ id: 'offer-1', employmentRelationship: 'INTERN', status: 'DRAFT', candidate: { source: 'SOCIAL_RECRUITMENT' }, workplaceId: 'workplace-1' });
+    expect(result).toMatchObject({ id: 'offer-1', employmentRelationship: 'INTERN', status: 'DRAFT', candidate: { source: 'SOCIAL_RECRUITMENT' }, workplaceName: '虚构园区' });
     expect((tx.offer as { create: jest.Mock }).create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ employmentRelationship: EmploymentRelationship.INTERN }) }));
     expect(Object.keys(prisma)).not.toContain('offer' + 'Template');
     for (const relation of ['employeeAssignment', 'reportingRelationship', 'employeeAgreement', 'onboardingCase', 'approvalRequest', 'approvalStep'] as const) {
@@ -155,19 +153,17 @@ describe('OnboardingService direct internship Offer creation', () => {
     const { service, prisma } = createService();
     const tx = validTransaction();
     (tx.offer as { create: jest.Mock }).create.mockResolvedValue({
-      id: 'offer-1', offerNo: 'INTERN-20260901-0001', organizationId: 'org-a', positionId: 'position-1', workplaceId: null,
+      id: 'offer-1', offerNo: 'INTERN-20260901-0001', organizationId: 'org-a', positionId: 'position-1', workplaceName: null,
       proposedEntryDate: new Date('2026-09-01T00:00:00.000Z'), probationMonths: null, jobLevel: null, employeeLevel: null, personnelCategory: null, workArrangement: null, directManagerEmployeeId: null, employingCompanyId: null, agreementType: null, contractTermType: null, contractMonths: null, contractEndDate: null, isSeparatelySigned: null, employmentRelationship: EmploymentRelationship.INTERN, status: ProcessStatus.DRAFT, issueDate: null,
     });
     useTransaction(prisma, tx);
-    await expect(service.createInternOffer(user, { ...input, workplaceId: undefined, directManagerEmployeeId: undefined, employingCompanyId: undefined, agreementType: undefined, contractTermType: undefined, contractMonths: undefined, contractEndDate: undefined, compensationSnapshot: undefined, partTimeSnapshot: undefined } as never)).resolves.toMatchObject({ workplaceId: null });
-    expect((tx.workplace as { findFirst: jest.Mock }).findFirst).not.toHaveBeenCalled();
-    expect((tx.offer as { create: jest.Mock }).create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ workplaceId: null }) }));
+    await expect(service.createInternOffer(user, { ...input, workplaceName: undefined, directManagerEmployeeId: undefined, employingCompanyId: undefined, agreementType: undefined, contractTermType: undefined, contractMonths: undefined, contractEndDate: undefined, compensationSnapshot: undefined, partTimeSnapshot: undefined } as never)).resolves.toMatchObject({ workplaceName: null });
+    expect((tx.offer as { create: jest.Mock }).create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ workplaceName: null }) }));
   });
 
   it.each([
     ['organization', { organization: { findFirst: jest.fn().mockResolvedValue(null) } }, '录用部门不存在、已停用或已归档'],
     ['position', { position: { findFirst: jest.fn().mockResolvedValue(null) } }, '录用职位不存在、已停用或已归档'],
-    ['workplace', { workplace: { findFirst: jest.fn().mockResolvedValue(null) } }, '工作地点不存在、已停用或已归档'],
   ])('rejects unavailable %s relation before writes', async (_relation, override, message) => {
     const { service, prisma } = createService();
     const tx = validTransaction(override);
@@ -199,7 +195,7 @@ describe('OnboardingService direct internship Offer creation', () => {
       name: '虚构实习生', mobile: '13900001002', personalEmail: 'intern@example.invalid', source: 'INTERNAL_REFERRAL', gender: 'FEMALE', birthDate: '2002-01-01',
       identityDocument: { documentType: 'PASSPORT', documentNumber: 'TEST-PASSPORT-1', isPrimary: true, expiryDate: '2036-01-01' },
       educationExperience: { schoolName: '虚构大学', educationLevel: 'BACHELOR', major: '虚构专业', graduationDate: '2026-06-30', isHighestEducation: true },
-      organizationId: 'org-a', positionId: 'position-1', workplaceId: 'workplace-1', jobLevel: 'S1', employeeLevel: 'STAFF', personnelCategory: 'TALENT_PROGRAM', workArrangement: 'INTERN', directManagerEmployeeId: 'manager-1', employingCompanyId: 'company-1', agreementType: 'INTERNSHIP_AGREEMENT', contractTermType: 'FIXED', contractEndDate: '2026-12-31',
+      organizationId: 'org-a', positionId: 'position-1', workplaceName: '虚构园区', jobLevel: 'S1', employeeLevel: 'STAFF', personnelCategory: 'TALENT_PROGRAM', workArrangement: 'INTERN', directManagerEmployeeId: 'manager-1', employingCompanyId: 'company-1', agreementType: 'INTERNSHIP_AGREEMENT', contractTermType: 'FIXED', contractEndDate: '2026-12-31',
     });
     expect(prisma.employee.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'intern-1', employmentPeriods: { some: expect.objectContaining({ employmentRelationship: EmploymentRelationship.INTERN }) } }), select: expect.objectContaining({ reportingAsEmployee: expect.objectContaining({ where: expect.objectContaining({ relationshipType: 'ADMINISTRATIVE', isPrimary: true }) }) }) }));
     expect(prisma.$transaction).not.toHaveBeenCalled();

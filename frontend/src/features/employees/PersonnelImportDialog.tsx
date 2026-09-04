@@ -60,7 +60,7 @@ export function PersonnelImportDialog({ open, onClose, onImported }: PersonnelIm
       footer={<Button onClick={onClose}>关闭</Button>}
     >
       <Typography.Paragraph type="secondary">
-请使用下载模板中的中文业务表头（例如“工号、姓名、部门”）。系统不猜测外部系统英文/编码字段含义；工号已存在时仅更新文件中有值的字段。为已有待完善人员补建首段任职时，必须在同一行提供“部门、入职日期、雇佣关系、用工形式、人员状态”；新工号仍可只创建待完善的人员主档。
+请使用下载模板中的中文业务表头（例如“工号、姓名、部门”）。系统不猜测外部系统英文/编码字段含义；工号已存在时仅更新文件中有值的字段。工作地点按输入文本直接保存；职位可填写五位职位编号、`编号 - 名称` 或唯一职位名称，系统会关联有效职位目录；未匹配或编号/名称不一致会在结果表提示。教育经历首次创建必须同时提供学校、院校类型、学历、毕业时间和专业；新工号若同一行提供完整的“部门、入职日期、雇佣关系、用工形式、人员状态”，将直接建立首段任职，否则仅创建待完善的人员主档。
       </Typography.Paragraph>
       <Space direction="vertical" size={16}>
         <Radio.Group

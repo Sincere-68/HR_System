@@ -19,6 +19,14 @@ describe('AuthService in demo mode', () => {
     expect(restored.username).toBe('admin');
   });
 
+  it('returns no business-data permissions for a demo viewer', async () => {
+    const service = createService();
+    const login = await service.login('viewer', 'Demo@123');
+
+    expect(login.user.role).toBe('VIEWER');
+    expect(login.user.permissions).toEqual([]);
+  });
+
   it('rejects an invalid demo password', async () => {
     const service = createService();
     await expect(service.login('admin', 'wrong')).rejects.toBeInstanceOf(UnauthorizedException);

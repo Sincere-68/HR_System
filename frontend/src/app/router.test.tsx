@@ -8,6 +8,10 @@ vi.mock('../features/auth/protected-route', () => ({
   ProtectedRoute: () => <Outlet />,
 }));
 
+vi.mock('../features/auth/administrator-route', () => ({
+  AdministratorRoute: () => <Outlet />,
+}));
+
 vi.mock('../layouts/AppLayout', () => ({
   AppLayout: () => <Outlet />,
 }));

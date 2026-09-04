@@ -1,10 +1,11 @@
 import {
+  AppstoreOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Space, Typography } from 'antd';
+import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Space, Tooltip, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -93,6 +94,14 @@ export function AppLayout() {
               onClick={() => setDrawerOpen(true)}
             />
           ) : null}
+          <Tooltip title="返回主菜单">
+            <Button
+              type="text"
+              aria-label="返回主菜单"
+              icon={<AppstoreOutlined />}
+              onClick={() => navigate('/', { replace: true })}
+            />
+          </Tooltip>
           <Typography.Text strong className="header-page-title">
             {findNavigationLabel(selectedKey)}
           </Typography.Text>

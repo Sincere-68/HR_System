@@ -567,6 +567,7 @@ export function EmployeeListPage() {
           columns={employeeColumns}
           dataSource={employees.data?.data ?? []}
           scroll={{ x: 7_200 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的员工" /> }}
           pagination={pagination}
           onChange={handleTableChange}
@@ -584,6 +585,7 @@ export function EmployeeListPage() {
           columns={regularEmployeeColumns}
           dataSource={regularEmployees.data?.data ?? []}
           scroll={{ x: 2_500 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的正式人员" /> }}
           pagination={pagination}
           onChange={handleTableChange}
@@ -601,6 +603,7 @@ export function EmployeeListPage() {
           columns={internColumns}
           dataSource={interns.data?.data ?? []}
           scroll={{ x: 1_650 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的实习生任职记录" /> }}
           pagination={pagination}
           onChange={handleTableChange}
@@ -618,6 +621,7 @@ export function EmployeeListPage() {
           columns={personnelLaborWorkerColumns}
           dataSource={laborWorkers.data?.data ?? []}
           scroll={{ x: 1_650 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的当前劳务人员" /> }}
           pagination={pagination}
           onChange={handleTableChange}
@@ -634,6 +638,7 @@ export function EmployeeListPage() {
         columns={personnelResignedColumns}
         dataSource={resignedEmployees.data?.data ?? []}
         scroll={{ x: 1_850 }}
+        sticky={{ offsetHeader: 48, offsetScroll: 0 }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的已完成离职人员" /> }}
         pagination={pagination}
         onChange={handleTableChange}

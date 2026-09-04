@@ -471,7 +471,7 @@ export class EmploymentService {
             select: {
               organization: { select: { name: true } },
               jobTitle: { select: { name: true } },
-              workplace: { select: { name: true } },
+              workplaceName: true,
               workArrangement: true,
             },
           },

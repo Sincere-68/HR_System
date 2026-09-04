@@ -58,8 +58,8 @@ const roleDefinitions = [
   },
   {
     code: 'VIEWER',
-    name: '普通查看者',
-    permissions: ['employee.read', 'organization.read', 'performance.read', 'performance.task.handle'],
+    name: '普通账户',
+    permissions: [],
   },
 ] as const;
 
@@ -225,7 +225,7 @@ async function main() {
     },
     {
       username: 'viewer',
-      displayName: '普通查看者',
+      displayName: '普通账户',
       roleCode: 'VIEWER',
       password: process.env.SEED_VIEWER_PASSWORD ?? 'Demo@123',
       scopeOrganizationIds: [organization('CHAIRMAN_CUSTOMER_SERVICE')],

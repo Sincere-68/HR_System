@@ -44,6 +44,7 @@ import {
   presentEmployee,
   presentEmployeeDetail,
   presentEmployeeListItem,
+  sortEmployeeListByEntryDateDesc,
 } from './employees.presenter';
 import {
   presentRegularEmployee,
@@ -80,7 +81,7 @@ function getEmployeeDetailInclude(now = new Date()) {
         },
         orderBy: [{ startDate: 'desc' }, { renewalSequence: 'desc' }, { id: 'asc' }],
         take: 1,
-        select: { employingCompany: { select: { id: true, code: true, name: true } } },
+        select: { id: true, employingCompanyId: true, employingCompany: { select: { id: true, code: true, name: true } } },
       },
     },
   },
@@ -92,7 +93,7 @@ function getEmployeeDetailInclude(now = new Date()) {
       OR: [{ endDate: null }, { endDate: { gte: now } }],
     },
     orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
-    include: { manager: { select: { name: true, workEmail: true } } },
+    include: { manager: { select: { id: true, name: true, workEmail: true } } },
   },
   identityDocuments: {
     where: { status: RecordStatus.ACTIVE, archivedAt: null },
@@ -132,7 +133,7 @@ function getEmployeeDetailInclude(now = new Date()) {
     include: {
       organization: { select: { id: true, code: true, name: true } },
       position: { select: { id: true, name: true } },
-      workplace: { select: { id: true, name: true } },
+      movementType: { select: { id: true, name: true } },
     },
   },
 });
@@ -168,7 +169,7 @@ function getEmployeeListInclude(now: Date) {
           },
           orderBy: [{ startDate: 'desc' }, { renewalSequence: 'desc' }, { id: 'asc' }],
           take: 1,
-          select: { employingCompany: { select: { id: true, code: true, name: true } } },
+          select: { id: true, employingCompanyId: true, employingCompany: { select: { id: true, code: true, name: true } } },
         },
       },
     },
@@ -183,8 +184,8 @@ function getEmployeeListInclude(now: Date) {
       include: {
         organization: { select: { id: true, code: true, name: true } },
         position: { select: { id: true, name: true } },
-        workplace: { select: { id: true, name: true } },
-      },
+        movementType: { select: { id: true, name: true } },
+        },
     },
     reportingAsEmployee: {
       where: {
@@ -194,7 +195,7 @@ function getEmployeeListInclude(now: Date) {
         OR: [{ endDate: null }, { endDate: { gte: now } }],
       },
       orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
-      include: { manager: { select: { name: true, workEmail: true } } },
+      include: { manager: { select: { id: true, name: true, workEmail: true } } },
     },
     identityDocuments: {
       where: { status: RecordStatus.ACTIVE, archivedAt: null },
@@ -243,9 +244,9 @@ export class EmployeesService {
     if (this.demo.enabled) {
       return {
         positions: [],
-        workplaces: [],
         managers: [],
         employingCompanies: [],
+        movementTypes: [],
       };
     }
 
@@ -258,9 +259,9 @@ export class EmployeesService {
       : await this.access.getEmployeeWhere(user, accessibleOrganizationIds);
     const [
       positions,
-      workplaces,
       managers,
       employingCompanies,
+      movementTypes,
     ] = await this.prisma.$transaction([
       this.prisma.position.findMany({
         where: {
@@ -269,11 +270,6 @@ export class EmployeesService {
         },
         select: { id: true, code: true, name: true, organizationId: true },
         orderBy: [{ code: 'asc' }, { id: 'asc' }],
-      }),
-      this.prisma.workplace.findMany({
-        where: { status: RecordStatus.ACTIVE },
-        select: { id: true, name: true },
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.employee.findMany({
         where: {
@@ -292,13 +288,18 @@ export class EmployeesService {
         select: { id: true, code: true, name: true },
         orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
       }),
+      this.prisma.movementType.findMany({
+        where: { status: RecordStatus.ACTIVE, archivedAt: null },
+        select: { id: true, code: true, name: true },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      }),
     ]);
 
     return {
       positions,
-      workplaces,
       managers: managers.map(({ id, name, employeeNo }) => ({ id, name: displayEmployeeName(name), employeeNo })),
       employingCompanies,
+      movementTypes,
     };
   }
 
@@ -372,14 +373,16 @@ export class EmployeesService {
         where,
         include: getEmployeeListInclude(now),
         orderBy: [{ employeeNo: 'asc' }, { id: 'asc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
       }),
       this.prisma.employee.count({ where }),
     ]);
+    const sortedRows = sortEmployeeListByEntryDateDesc(
+      rows.map((employee) => presentEmployeeListItem(employee, now, visibleOrganizationIds)),
+    );
+    const start = (page - 1) * pageSize;
 
     return {
-      data: rows.map((employee) => presentEmployeeListItem(employee, now, visibleOrganizationIds)),
+      data: sortedRows.slice(start, start + pageSize),
       meta: {
         page,
         pageSize,
@@ -552,15 +555,21 @@ export class EmployeesService {
             results.push({ rowNumber: index, employeeNo, action: 'UPDATED', errors: [], warnings });
             continue;
           }
+          const warnings = hasCurrentPrimaryAssignment
+            ? await this.applyImportAssignmentDirectoryValues(input, update)
+            : [];
+          this.warnIncompleteImportedEducation(input, warnings);
           if (Object.keys(update).length === 0) {
-            results.push({ rowNumber: index, employeeNo, action: 'SKIPPED', errors: [] });
+            results.push({ rowNumber: index, employeeNo, action: 'SKIPPED', errors: [], warnings });
             continue;
           }
           await this.update(user, existing.id, update, auditContext);
-          results.push({ rowNumber: index, employeeNo, action: 'UPDATED', errors: [] });
+          results.push({ rowNumber: index, employeeNo, action: 'UPDATED', errors: [], warnings });
         } else {
-          await this.createPartialImportedEmployee(user, input, auditContext);
-          results.push({ rowNumber: index, employeeNo, action: 'CREATED', errors: [] });
+          const warnings = this.hasCompleteImportEmploymentValues(input)
+            ? await this.createImportedEmployeeWithEmployment(user, input, auditContext)
+            : await this.createPartialImportedEmployee(user, input, auditContext);
+          results.push({ rowNumber: index, employeeNo, action: 'CREATED', errors: [], warnings });
         }
       } catch (error) {
         results.push({
@@ -830,7 +839,7 @@ export class EmployeesService {
             organizationId: dto.organizationId,
             positionId: dto.positionId,
             jobLevel: dto.jobLevel,
-            workplaceId: dto.workplaceId,
+            workplaceName: dto.workplaceName,
             personnelPosition: dto.personnelPosition,
             employeeLevel: dto.employeeLevel,
             personnelCategory: dto.personnelCategory,
@@ -960,7 +969,7 @@ export class EmployeesService {
               'organizationId',
               'positionId',
               'jobLevel',
-              'workplaceId',
+              'workplaceName',
               'hasProbation',
               'probationMonths',
               'probationEndDate',
@@ -1032,9 +1041,10 @@ export class EmployeesService {
             id: true,
             employmentPeriodId: true,
             positionId: true,
+            position: { select: { id: true, code: true, name: true } },
             jobLevel: true,
             jobTitleId: true,
-            workplaceId: true,
+            workplaceName: true,
             assignmentType: true,
             personnelPosition: true,
             employeeLevel: true,
@@ -1042,6 +1052,11 @@ export class EmployeesService {
             employmentRelationship: true,
             personnelSource: true,
             workArrangement: true,
+            confirmationDate: true,
+            trialPostEndDate: true,
+            movementTypeId: true,
+            changeReason: true,
+            changeDescription: true,
             organization: { select: { id: true, code: true, name: true } },
             startDate: true,
           },
@@ -1090,8 +1105,11 @@ export class EmployeesService {
         }
 
         const profileFields = [
-          'employeeNo',
           'name',
+          'nationality',
+          'workStartDate',
+          'birthdayPreference',
+          'lunarBirthDate',
           'workEmail',
           'personalEmail',
           'mobile',
@@ -1110,6 +1128,10 @@ export class EmployeesService {
           'bankName',
           'bankBranchName',
           'bankAccountNumber',
+          'fullTimeDutyDescription',
+          'partTimePositionName',
+          'partTimeHourlyRate',
+          'hasCompanyEquity',
         ] as const;
         const profileChanges = collectFieldChanges(
           dto as Record<string, unknown>,
@@ -1132,7 +1154,11 @@ export class EmployeesService {
         await tx.employee.update({
           where: { id },
           data: {
-            employeeNo: dto.employeeNo, name: dto.name, workEmail: dto.workEmail, personalEmail: dto.personalEmail,
+            name: dto.name, nationality: dto.nationality,
+            workStartDate: dto.workStartDate ? this.toDate(dto.workStartDate) : undefined,
+            birthdayPreference: dto.birthdayPreference,
+            lunarBirthDate: dto.lunarBirthDate ? this.toDate(dto.lunarBirthDate) : undefined,
+            workEmail: dto.workEmail, personalEmail: dto.personalEmail,
             mobile: dto.mobile, gender: dto.gender, birthDate: dto.birthDate ? this.toDate(dto.birthDate) : undefined,
             ethnicity: dto.ethnicity, maritalStatus: dto.maritalStatus, politicalStatus: dto.politicalStatus,
             nativePlace: dto.nativePlace, nativePlaceRegionCode: dto.nativePlaceRegionCode,
@@ -1140,6 +1166,10 @@ export class EmployeesService {
             householdAddress: dto.householdAddress, residentialRegionCode: dto.residentialRegionCode,
             residentialAddress: dto.residentialAddress, bankName: dto.bankName, bankBranchName: dto.bankBranchName,
             bankAccountNumber: dto.bankAccountNumber,
+            fullTimeDutyDescription: dto.fullTimeDutyDescription,
+            partTimePositionName: dto.partTimePositionName,
+            partTimeHourlyRate: dto.partTimeHourlyRate ? new Prisma.Decimal(dto.partTimeHourlyRate) : undefined,
+            hasCompanyEquity: dto.hasCompanyEquity,
             idCardNo: changesDocument ? legacyIdCardNo : undefined,
             organizationId: organizationChanged ? dto.organizationId : undefined,
           },
@@ -1172,16 +1202,51 @@ export class EmployeesService {
           });
         }
 
-        const assignmentFields = ['personnelPosition', 'employeeLevel', 'personnelCategory', 'employmentRelationship', 'personnelSource', 'workArrangement'] as const;
+        const assignmentFields = [
+          'positionId',
+          'jobLevel',
+          'workplaceName',
+          'personnelPosition',
+          'employeeLevel',
+          'personnelCategory',
+          'employmentRelationship',
+          'personnelSource',
+          'workArrangement',
+          'confirmationDate',
+          'trialPostEndDate',
+          'movementTypeId',
+          'changeReason',
+          'changeDescription',
+        ] as const;
         const changesCurrentAssignment = assignmentFields.some((field) => dto[field] !== undefined);
         if (changesCurrentAssignment && !currentAssignment && !dto.initialEmployment) {
           throw new BadRequestException('当前员工没有可更新的主要任职记录；请一次性补齐首段任职信息');
+        }
+        if (currentAssignment && changesCurrentAssignment) {
+          await this.validateCurrentAssignmentPosition(tx, dto);
+        }
+        if (dto.movementTypeId) {
+          const movementTypeExists = await tx.movementType.count({
+            where: { id: dto.movementTypeId, status: RecordStatus.ACTIVE, archivedAt: null },
+          });
+          if (!movementTypeExists) throw new BadRequestException('异动类型不存在或已停用');
+        }
+        if (dto.agreementEmployingCompanyId) {
+          const companyExists = await tx.employingCompany.count({
+            where: { id: dto.agreementEmployingCompanyId, status: RecordStatus.ACTIVE, archivedAt: null },
+          });
+          if (!companyExists) throw new BadRequestException('机构不存在或已停用');
+        }
+        if (dto.managerEmployeeId) {
+          if (dto.managerEmployeeId === id) throw new BadRequestException('员工不能将自己设为直接经理');
+          const managerExists = await tx.employee.count({ where: { id: dto.managerEmployeeId, archivedAt: null } });
+          if (!managerExists) throw new BadRequestException('直接经理不存在');
         }
         if (currentAssignment && organizationChanged) {
           const effectiveDate = this.utcCalendarDay();
           const previousEndDate = new Date(effectiveDate);
           previousEndDate.setUTCDate(previousEndDate.getUTCDate() - 1);
-          const assignmentChanges = this.createAssignmentChangeSnapshots(currentAssignment, dto);
+          const assignmentChanges = await this.createAssignmentChangeSnapshots(tx, currentAssignment, dto);
           await tx.employeeAssignment.update({
             where: { id: currentAssignment.id },
             data: { endDate: previousEndDate, status: AssignmentStatus.ENDED },
@@ -1191,10 +1256,10 @@ export class EmployeesService {
               employeeId: id,
               employmentPeriodId: currentAssignment.employmentPeriodId,
               organizationId: dto.organizationId!,
-              positionId: currentAssignment.positionId,
-              jobLevel: currentAssignment.jobLevel,
+              positionId: dto.positionId ?? currentAssignment.positionId,
+              jobLevel: dto.jobLevel as import('@prisma/client').JobLevelCode | undefined ?? currentAssignment.jobLevel,
               jobTitleId: currentAssignment.jobTitleId,
-              workplaceId: currentAssignment.workplaceId,
+              workplaceName: dto.workplaceName ?? currentAssignment.workplaceName,
               assignmentType: currentAssignment.assignmentType,
               personnelPosition: dto.personnelPosition ?? currentAssignment.personnelPosition,
               employeeLevel: dto.employeeLevel ?? currentAssignment.employeeLevel,
@@ -1202,6 +1267,11 @@ export class EmployeesService {
               employmentRelationship: dto.employmentRelationship ?? currentAssignment.employmentRelationship,
               personnelSource: dto.personnelSource ?? currentAssignment.personnelSource,
               workArrangement: dto.workArrangement ?? currentAssignment.workArrangement,
+              confirmationDate: dto.confirmationDate ? this.toDate(dto.confirmationDate) : currentAssignment.confirmationDate,
+              trialPostEndDate: dto.trialPostEndDate ? this.toDate(dto.trialPostEndDate) : currentAssignment.trialPostEndDate,
+              movementTypeId: dto.movementTypeId ?? currentAssignment.movementTypeId,
+              changeReason: dto.changeReason ?? currentAssignment.changeReason,
+              changeDescription: dto.changeDescription ?? currentAssignment.changeDescription,
               isPrimary: true,
               startDate: effectiveDate,
               status: AssignmentStatus.ACTIVE,
@@ -1238,15 +1308,23 @@ export class EmployeesService {
           }
         } else if (currentAssignment && changesCurrentAssignment) {
           const assignmentData = {
+            positionId: dto.positionId ?? currentAssignment.positionId,
+            jobLevel: dto.jobLevel as import('@prisma/client').JobLevelCode | undefined ?? currentAssignment.jobLevel,
+            workplaceName: dto.workplaceName ?? currentAssignment.workplaceName,
             personnelPosition: dto.personnelPosition ?? currentAssignment.personnelPosition,
             employeeLevel: dto.employeeLevel ?? currentAssignment.employeeLevel,
             personnelCategory: dto.personnelCategory ?? currentAssignment.personnelCategory,
             employmentRelationship: dto.employmentRelationship ?? currentAssignment.employmentRelationship,
             personnelSource: dto.personnelSource ?? currentAssignment.personnelSource,
             workArrangement: dto.workArrangement ?? currentAssignment.workArrangement,
+            confirmationDate: dto.confirmationDate ? this.toDate(dto.confirmationDate) : currentAssignment.confirmationDate,
+            trialPostEndDate: dto.trialPostEndDate ? this.toDate(dto.trialPostEndDate) : currentAssignment.trialPostEndDate,
+            movementTypeId: dto.movementTypeId ?? currentAssignment.movementTypeId,
+            changeReason: dto.changeReason ?? currentAssignment.changeReason,
+            changeDescription: dto.changeDescription ?? currentAssignment.changeDescription,
           };
           const changes = collectFieldChanges(dto as Record<string, unknown>, currentAssignment as unknown as Record<string, unknown>);
-          const assignmentChanges = this.createAssignmentChangeSnapshots(currentAssignment, dto);
+          const assignmentChanges = await this.createAssignmentChangeSnapshots(tx, currentAssignment, dto);
           await tx.employeeAssignment.update({ where: { id: currentAssignment.id }, data: assignmentData });
           for (const change of changes.filter(({ field }) => assignmentFields.includes(field as never))) {
             const snapshot = assignmentChanges.get(change.field);
@@ -1261,6 +1339,109 @@ export class EmployeesService {
               },
             });
           }
+        }
+        if (currentAssignment && dto.assignmentStartDate !== undefined) {
+          const assignmentStartDate = this.toDate(dto.assignmentStartDate);
+          if (assignmentStartDate.getTime() !== currentAssignment.startDate.getTime()) {
+            await tx.employeeAssignment.update({
+              where: { id: currentAssignment.id },
+              data: { startDate: assignmentStartDate },
+            });
+            await tx.employeeFieldChangeLog.create({
+              data: {
+                employeeId: id,
+                assignmentId: currentAssignment.id,
+                changedField: 'assignmentStartDate',
+                oldValue: currentAssignment.startDate.toISOString().slice(0, 10),
+                newValue: dto.assignmentStartDate,
+                changedById: auditContext.userId,
+              },
+            });
+          }
+        }
+        if (currentAssignment?.employmentPeriodId && dto.entryDate !== undefined) {
+          await tx.employmentPeriod.update({
+            where: { id: currentAssignment.employmentPeriodId },
+            data: { entryDate: this.toDate(dto.entryDate) },
+          });
+          await tx.employeeFieldChangeLog.create({
+            data: {
+              employeeId: id,
+              assignmentId: currentAssignment.id,
+              changedField: 'entryDate',
+              newValue: dto.entryDate,
+              changedById: auditContext.userId,
+            },
+          });
+        }
+        if (dto.agreementEmployingCompanyId !== undefined) {
+          const agreement = await tx.employeeAgreement.findFirst({
+            where: {
+              employeeId: id,
+              status: AgreementStatus.ACTIVE,
+              archivedAt: null,
+              startDate: { lte: entryDateValidationDate },
+              OR: [{ endDate: null }, { endDate: { gte: entryDateValidationDate } }],
+            },
+            orderBy: [{ startDate: 'desc' }, { renewalSequence: 'desc' }, { id: 'asc' }],
+            select: { id: true, employingCompanyId: true },
+          });
+          if (!agreement) throw new BadRequestException('当前员工没有可编辑的有效合同机构');
+          if (agreement.employingCompanyId !== dto.agreementEmployingCompanyId) {
+            await tx.employeeAgreement.update({
+              where: { id: agreement.id },
+              data: { employingCompanyId: dto.agreementEmployingCompanyId },
+            });
+            await tx.employeeFieldChangeLog.create({
+              data: {
+                employeeId: id,
+                assignmentId: currentAssignment?.id,
+                changedField: 'agreementEmployingCompanyId',
+                newValue: dto.agreementEmployingCompanyId,
+                changedById: auditContext.userId,
+              },
+            });
+          }
+        }
+        if (dto.managerEmployeeId !== undefined) {
+          const relationship = await tx.reportingRelationship.findFirst({
+            where: {
+              employeeId: id,
+              isPrimary: true,
+              status: RecordStatus.ACTIVE,
+              archivedAt: null,
+              startDate: { lte: entryDateValidationDate },
+              OR: [{ endDate: null }, { endDate: { gte: entryDateValidationDate } }],
+            },
+            orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+            select: { id: true, managerEmployeeId: true },
+          });
+          if (relationship) {
+            await tx.reportingRelationship.update({
+              where: { id: relationship.id },
+              data: { managerEmployeeId: dto.managerEmployeeId },
+            });
+          } else {
+            await tx.reportingRelationship.create({
+              data: {
+                employeeId: id,
+                managerEmployeeId: dto.managerEmployeeId,
+                relationshipType: ReportingRelationshipType.ADMINISTRATIVE,
+                isPrimary: true,
+                startDate: entryDateValidationDate,
+                status: RecordStatus.ACTIVE,
+              },
+            });
+          }
+          await tx.employeeFieldChangeLog.create({
+            data: {
+              employeeId: id,
+              assignmentId: currentAssignment?.id,
+              changedField: 'managerEmployeeId',
+              newValue: dto.managerEmployeeId,
+              changedById: auditContext.userId,
+            },
+          });
         }
         if (changesDocument) {
           if (currentDocument) {
@@ -1727,6 +1908,16 @@ export class EmployeesService {
     ].some((field) => input[field as PersonnelTransferFieldKey] !== undefined);
   }
 
+  private hasCompleteImportEmploymentValues(input: Partial<Record<PersonnelTransferFieldKey, string>>) {
+    return [
+      'organizationName',
+      'entryDate',
+      'employmentRelationship',
+      'workArrangement',
+      'employmentStatus',
+    ].every((field) => input[field as PersonnelTransferFieldKey] !== undefined);
+  }
+
   private async completeImportedEmployment(
     user: AuthenticatedUser,
     employeeId: string,
@@ -1774,7 +1965,7 @@ export class EmployeesService {
 
     const warnings: string[] = [];
     const position = await this.resolveImportPosition(input.positionName, warnings);
-    const workplace = await this.resolveImportWorkplace(input.workplaceName, warnings);
+    this.warnIncompleteImportedEducation(input, warnings);
     await this.prisma.$transaction(async (tx) => {
       await tx.employee.update({
         where: { id: employeeId },
@@ -1821,7 +2012,7 @@ export class EmployeesService {
           organizationId: organization.id,
           positionId: position?.id,
           jobLevel: input.jobLevel as never,
-          workplaceId: workplace?.id,
+          workplaceName: input.workplaceName,
           personnelPosition: profile.personnelPosition,
           employeeLevel: profile.employeeLevel,
           personnelCategory: profile.personnelCategory,
@@ -1843,6 +2034,25 @@ export class EmployeesService {
           currentFlag: true,
         },
       });
+      const hasCompleteEducation = input.graduationSchoolName
+        && profile.institutionType
+        && profile.highestEducation
+        && profile.graduationDate
+        && input.major;
+      if (hasCompleteEducation) {
+        await tx.employeeEducationExperience.create({
+          data: {
+            employeeId,
+            schoolName: input.graduationSchoolName!,
+            institutionType: profile.institutionType!,
+            educationLevel: profile.highestEducation!,
+            graduationDate: this.toDate(profile.graduationDate!),
+            major: input.major!,
+            isHighestEducation: true,
+            status: RecordStatus.ACTIVE,
+          },
+        });
+      }
       await tx.employeeFieldChangeLog.create({
         data: {
           employeeId,
@@ -1879,33 +2089,262 @@ export class EmployeesService {
 
   private async resolveImportPosition(value: string | undefined, warnings: string[]) {
     if (!value) return null;
+    const normalized = value.trim();
+    const codeAndName = /^(\d{5})\s*(?:[-－—–:：])\s*(.+)$/.exec(normalized);
+    const code = /^\d{5}$/.test(normalized) ? normalized : codeAndName?.[1];
+    if (code) {
+      const position = await this.prisma.position.findFirst({
+        where: { code, status: RecordStatus.ACTIVE, archivedAt: null },
+        select: { id: true, name: true },
+      });
+      if (!position) {
+        const activeCount = await this.prisma.position.count({
+          where: { status: RecordStatus.ACTIVE, archivedAt: null },
+        });
+        warnings.push(activeCount === 0
+          ? '职位目录未初始化，请先执行安全职位目录同步脚本'
+          : `职位编号“${code}”不存在，未导入`);
+        return null;
+      }
+      const suppliedName = codeAndName?.[2]?.trim();
+      if (suppliedName && suppliedName !== position.name) {
+        warnings.push(`职位编号“${code}”对应“${position.name}”，与导入名称“${suppliedName}”不一致，未导入`);
+        return null;
+      }
+      return position;
+    }
+
     const matches = await this.prisma.position.findMany({
-      where: { name: value, status: RecordStatus.ACTIVE, archivedAt: null },
+      where: { name: normalized, status: RecordStatus.ACTIVE, archivedAt: null },
       select: { id: true },
       take: 2,
     });
     if (matches.length === 1) return matches[0]!;
-    warnings.push(matches.length === 0 ? `职位“${value}”不存在，未导入` : `职位“${value}”匹配多个目录项，未导入`);
+    if (matches.length === 0) {
+      const activeCount = await this.prisma.position.count({
+        where: { status: RecordStatus.ACTIVE, archivedAt: null },
+      });
+      warnings.push(activeCount === 0
+        ? '职位目录未初始化，请先执行安全职位目录同步脚本'
+        : `职位“${normalized}”不存在，未导入`);
+    } else {
+      warnings.push(`职位“${normalized}”匹配多个目录项，未导入`);
+    }
     return null;
   }
 
-  private async resolveImportWorkplace(value: string | undefined, warnings: string[]) {
-    if (!value) return null;
-    const matches = await this.prisma.workplace.findMany({
-      where: { name: value, status: RecordStatus.ACTIVE, archivedAt: null },
-      select: { id: true },
+  private async applyImportAssignmentDirectoryValues(
+    input: Partial<Record<PersonnelTransferFieldKey, string>>,
+    update: UpdateEmployeeDto,
+  ) {
+    const warnings: string[] = [];
+    if (input.positionName !== undefined) {
+      const position = await this.resolveImportPosition(input.positionName, warnings);
+      if (position) update.positionId = position.id;
+    }
+    if (input.workplaceName !== undefined) update.workplaceName = input.workplaceName;
+    if (input.jobLevel !== undefined) update.jobLevel = input.jobLevel;
+    return warnings;
+  }
+
+  private warnIncompleteImportedEducation(
+    input: Partial<Record<PersonnelTransferFieldKey, string>>,
+    warnings: string[],
+  ) {
+    const fields: Array<[PersonnelTransferFieldKey, string]> = [
+      ['graduationSchoolName', '毕业学校名称'],
+      ['institutionType', '院校类型'],
+      ['highestEducation', '最高学历'],
+      ['graduationDate', '毕业时间'],
+      ['major', '专业'],
+    ];
+    const supplied = fields.filter(([field]) => input[field] !== undefined);
+    if (supplied.length > 0 && supplied.length < fields.length) {
+      warnings.push(`最高教育信息不完整，未创建教育经历；须同时提供：${fields.map(([, label]) => label).join('、')}`);
+    }
+  }
+
+  private async createImportedEmployeeWithEmployment(
+    user: AuthenticatedUser,
+    input: Partial<Record<PersonnelTransferFieldKey, string>>,
+    auditContext: AuditContext,
+  ) {
+    const employeeNo = input.employeeNo?.trim();
+    if (!employeeNo || !/^[A-Za-z0-9_-]{1,32}$/.test(employeeNo)) {
+      throw new BadRequestException('工号只能包含字母、数字、下划线和连字符，且长度不超过 32 位');
+    }
+    const profile = this.toImportUpdateInput(input);
+    const requiredFields: Array<[PersonnelTransferFieldKey, string]> = [
+      ['organizationName', '部门'],
+      ['entryDate', '入职日期'],
+      ['employmentRelationship', '雇佣关系'],
+      ['workArrangement', '用工形式'],
+      ['employmentStatus', '人员状态'],
+    ];
+    const missing = requiredFields
+      .filter(([field]) => input[field] === undefined)
+      .map(([, label]) => label);
+    if (missing.length > 0) {
+      throw new BadRequestException(`创建首段任职时必须同时提供：${missing.join('、')}`);
+    }
+    const accessibleOrganizationIds = await this.access.getAccessibleOrganizationIds(user);
+    const organizations = await this.prisma.organization.findMany({
+      where: {
+        name: input.organizationName!,
+        status: RecordStatus.ACTIVE,
+        archivedAt: null,
+        ...(accessibleOrganizationIds === null ? {} : { id: { in: accessibleOrganizationIds } }),
+      },
+      select: { id: true, code: true, name: true },
       take: 2,
     });
-    if (matches.length === 1) return matches[0]!;
-    warnings.push(matches.length === 0 ? `工作地点“${value}”不存在，未导入` : `工作地点“${value}”匹配多个目录项，未导入`);
-    return null;
+    if (organizations.length !== 1) {
+      throw new BadRequestException(
+        organizations.length === 0 ? '部门不存在、不在当前范围内或已停用' : '部门名称存在多个有效匹配项，请使用唯一部门名称',
+      );
+    }
+    const employmentRelationship = profile.employmentRelationship;
+    const workArrangement = profile.workArrangement;
+    const employmentStatus = this.normalizeImportEmploymentStatus(input.employmentStatus!);
+    if (!employmentRelationship || !workArrangement || !employmentStatus) {
+      throw new BadRequestException('雇佣关系、用工形式或人员状态不支持');
+    }
+
+    const warnings: string[] = [];
+    const position = await this.resolveImportPosition(input.positionName, warnings);
+    this.warnIncompleteImportedEducation(input, warnings);
+    const documentType = profile.documentType;
+    const documentNumber = input.documentNumber?.toUpperCase();
+    if ((documentType && !documentNumber) || (!documentType && documentNumber)) {
+      throw new BadRequestException('证件类型和证件号码必须同时提供');
+    }
+    const entryDate = this.toDate(this.normalizeImportDate(input.entryDate!, '入职日期'));
+    await this.prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.create({
+        data: {
+          employeeNo,
+          name: profile.name ?? null,
+          mobile: profile.mobile ?? null,
+          workEmail: profile.workEmail,
+          personalEmail: profile.personalEmail,
+          gender: profile.gender as never,
+          birthDate: profile.birthDate ? this.toDate(profile.birthDate) : undefined,
+          ethnicity: profile.ethnicity as never,
+          maritalStatus: profile.maritalStatus as never,
+          politicalStatus: profile.politicalStatus as never,
+          nativePlace: profile.nativePlace,
+          nativePlaceRegionCode: profile.nativePlaceRegionCode,
+          householdType: profile.householdType as never,
+          householdRegionCode: profile.householdRegionCode,
+          householdAddress: profile.householdAddress,
+          residentialRegionCode: profile.residentialRegionCode,
+          residentialAddress: profile.residentialAddress,
+          bankName: profile.bankName as never,
+          bankBranchName: profile.bankBranchName,
+          bankAccountNumber: profile.bankAccountNumber,
+          organizationId: organizations[0]!.id,
+          idCardNo: documentType === 'NATIONAL_ID' ? documentNumber : undefined,
+        },
+      });
+      const period = await tx.employmentPeriod.create({
+        data: {
+          employeeId: employee.id,
+          sequenceNo: 1,
+          personnelCategory: profile.personnelCategory,
+          personnelSource: profile.personnelSource,
+          employmentRelationship,
+          entryDate,
+          employmentStatus,
+          isRehire: false,
+          status: RecordStatus.ACTIVE,
+        },
+      });
+      const assignment = await tx.employeeAssignment.create({
+        data: {
+          employeeId: employee.id,
+          employmentPeriodId: period.id,
+          organizationId: organizations[0]!.id,
+          positionId: position?.id,
+          jobLevel: input.jobLevel as never,
+          workplaceName: input.workplaceName,
+          personnelPosition: profile.personnelPosition,
+          employeeLevel: profile.employeeLevel,
+          personnelCategory: profile.personnelCategory,
+          personnelSource: profile.personnelSource,
+          employmentRelationship,
+          assignmentType: AssignmentType.PRIMARY,
+          workArrangement,
+          isPrimary: true,
+          startDate: entryDate,
+          status: AssignmentStatus.ACTIVE,
+        },
+        select: { id: true },
+      });
+      await tx.employmentRecord.create({
+        data: {
+          employeeId: employee.id,
+          employmentPeriodId: period.id,
+          status: employmentStatus,
+          effectiveAt: entryDate,
+          currentFlag: true,
+        },
+      });
+      if (documentType && documentNumber) {
+        await tx.employeeIdentityDocument.create({
+          data: {
+            employeeId: employee.id,
+            documentType: documentType as never,
+            documentNumber,
+            expiryDate: profile.documentExpiryDate ? this.toDate(profile.documentExpiryDate) : undefined,
+            isPrimary: true,
+            status: RecordStatus.ACTIVE,
+          },
+        });
+      }
+      const hasCompleteEducation = input.graduationSchoolName
+        && profile.institutionType
+        && profile.highestEducation
+        && profile.graduationDate
+        && input.major;
+      if (hasCompleteEducation) {
+        await tx.employeeEducationExperience.create({
+          data: {
+            employeeId: employee.id,
+            schoolName: input.graduationSchoolName!,
+            institutionType: profile.institutionType!,
+            educationLevel: profile.highestEducation!,
+            graduationDate: this.toDate(profile.graduationDate!),
+            major: input.major!,
+            isHighestEducation: true,
+            status: RecordStatus.ACTIVE,
+          },
+        });
+      }
+      await tx.employeeFieldChangeLog.create({
+        data: {
+          employeeId: employee.id,
+          assignmentId: assignment.id,
+          changedField: 'organizationId',
+          newValue: directoryValue(organizations[0]!) ?? undefined,
+          changedById: auditContext.userId,
+        },
+      });
+      await this.audit.create(
+        auditContext,
+        AuditAction.CREATE,
+        employee.id,
+        { importRow: true, completedEmployment: true, changedFields: Object.keys(input) },
+        tx,
+      );
+    });
+    return warnings;
   }
 
   private async createPartialImportedEmployee(
     user: AuthenticatedUser,
     input: Partial<Record<PersonnelTransferFieldKey, string>>,
     auditContext: AuditContext,
-  ) {
+  ): Promise<string[]> {
     const employeeNo = input.employeeNo?.trim();
     if (!employeeNo || !/^[A-Za-z0-9_-]{1,32}$/.test(employeeNo)) {
       throw new BadRequestException('工号只能包含字母、数字、下划线和连字符，且长度不超过 32 位');
@@ -1928,6 +2367,8 @@ export class EmployeesService {
     }
 
     const profile = this.toImportUpdateInput(input);
+    const warnings: string[] = [];
+    this.warnIncompleteImportedEducation(input, warnings);
     const documentType = profile.documentType;
     const documentNumber = input.documentNumber?.toUpperCase();
     if ((documentType && !documentNumber) || (!documentType && documentNumber)) {
@@ -1980,6 +2421,7 @@ export class EmployeesService {
         tx,
       );
     });
+    return warnings;
   }
 
   private async createTransferExportFile(
@@ -2088,6 +2530,19 @@ export class EmployeesService {
     return employee;
   }
 
+  private async validateCurrentAssignmentPosition(
+    tx: Prisma.TransactionClient,
+    dto: Pick<UpdateEmployeeDto, 'positionId'>,
+  ) {
+    if (dto.positionId) {
+      const position = await tx.position.findFirst({
+        where: { id: dto.positionId, status: RecordStatus.ACTIVE, archivedAt: null },
+        select: { id: true },
+      });
+      if (!position) throw new BadRequestException('职位不存在、已停用或已归档');
+    }
+  }
+
   private async validateCreateRelations(user: AuthenticatedUser, dto: CreateEmployeeDto) {
     const checks: Promise<number>[] = [];
     const labels: string[] = [];
@@ -2102,10 +2557,6 @@ export class EmployeesService {
         },
       }));
       labels.push('职位不存在、已停用或已归档');
-    }
-    if (dto.workplaceId) {
-      checks.push(this.prisma.workplace.count({ where: { id: dto.workplaceId, status: RecordStatus.ACTIVE } }));
-      labels.push('工作地点不存在或已停用');
     }
     if (dto.managerEmployeeId) {
       checks.push(this.prisma.employee.count({
@@ -2150,15 +2601,6 @@ export class EmployeesService {
     if (input.positionId && !position) {
       throw new BadRequestException('职位不存在、已停用或已归档');
     }
-    const workplace = input.workplaceId
-      ? await tx.workplace.findFirst({
-        where: { id: input.workplaceId, status: RecordStatus.ACTIVE, archivedAt: null },
-        select: { id: true },
-      })
-      : null;
-    if (input.workplaceId && !workplace) {
-      throw new BadRequestException('工作地点不存在或已停用');
-    }
     const organization = await tx.organization.findFirst({
       where: { id: input.organizationId, status: RecordStatus.ACTIVE, archivedAt: null },
       select: { id: true, code: true, name: true },
@@ -2188,7 +2630,7 @@ export class EmployeesService {
         organizationId: organization.id,
         positionId: position?.id,
         jobLevel: input.jobLevel as never,
-        workplaceId: workplace?.id,
+        workplaceName: input.workplaceName,
         personnelPosition: input.personnelPosition,
         employeeLevel: input.employeeLevel,
         personnelCategory: input.personnelCategory,
@@ -2233,8 +2675,13 @@ export class EmployeesService {
     }
   }
 
-  private createAssignmentChangeSnapshots(
+  private async createAssignmentChangeSnapshots(
+    tx: Prisma.TransactionClient,
     currentAssignment: {
+      positionId: string | null;
+      position: { id: string; code: string; name: string } | null;
+      jobLevel: import('@prisma/client').JobLevelCode | null;
+      workplaceName: string | null;
       personnelPosition: string | null;
       employeeLevel: string | null;
       personnelCategory: string | null;
@@ -2250,6 +2697,9 @@ export class EmployeesService {
     }>();
 
     for (const field of [
+      'positionId',
+      'jobLevel',
+      'workplaceName',
       'personnelPosition',
       'employeeLevel',
       'personnelCategory',
@@ -2258,12 +2708,25 @@ export class EmployeesService {
       'workArrangement',
     ] as const) {
       if (dto[field] === undefined) continue;
-      const oldCode = currentAssignment[field];
-      const newCode = dto[field];
-      snapshots.set(field, {
-        oldValue: enumValue(oldCode, employeeEnumLabel(field, oldCode)),
-        newValue: enumValue(newCode, employeeEnumLabel(field, newCode)),
-      });
+      const oldValue = currentAssignment[field];
+      const newValue = dto[field];
+      const isEnum = EMPLOYEE_ENUM_LABELS[field] !== undefined;
+      const oldSnapshot = field === 'positionId'
+        ? directoryValue(currentAssignment.position)
+        : isEnum
+          ? enumValue(oldValue, employeeEnumLabel(field, oldValue))
+          : oldValue;
+      let newSnapshot: Prisma.InputJsonValue | null = newValue ?? null;
+      if (field === 'positionId' && newValue) {
+        const position = await tx.position.findUnique({
+          where: { id: newValue },
+          select: { id: true, code: true, name: true },
+        });
+        newSnapshot = directoryValue(position);
+      } else if (isEnum) {
+        newSnapshot = enumValue(newValue, employeeEnumLabel(field, newValue));
+      }
+      snapshots.set(field, { oldValue: oldSnapshot, newValue: newSnapshot });
     }
     return snapshots;
   }

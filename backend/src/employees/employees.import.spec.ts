@@ -23,13 +23,18 @@ async function createXlsx(headers: string[], rows: string[][]) {
 
 function createService(existingEmployee: { id: string } | null = null) {
   const employeeCreate = jest.fn().mockResolvedValue({ id: 'created-employee' });
+  const positionFindMany = jest.fn().mockResolvedValue([]);
   const prisma = {
     employee: {
-      findUnique: jest.fn().mockResolvedValue(existingEmployee && { ...existingEmployee, assignments: [] }),
+      findUnique: jest.fn().mockResolvedValue(existingEmployee && {
+        ...existingEmployee,
+        assignments: 'assignments' in existingEmployee ? (existingEmployee as { assignments: unknown[] }).assignments : [],
+      }),
       findFirst: jest.fn(),
       create: employeeCreate,
     },
     organization: { findFirst: jest.fn() },
+    position: { findMany: positionFindMany, findFirst: jest.fn(), count: jest.fn().mockResolvedValue(0) },
     $transaction: jest.fn((callback: (client: unknown) => unknown) => callback({
       employee: { create: employeeCreate },
       employeeIdentityDocument: { create: jest.fn() },
@@ -42,7 +47,7 @@ function createService(existingEmployee: { id: string } | null = null) {
     { create: jest.fn() } as never,
     { enabled: false } as never,
   );
-  return { service, employeeCreate };
+  return { service, prisma, employeeCreate, positionFindMany };
 }
 
 describe('EmployeesService importEmployees', () => {
@@ -56,7 +61,7 @@ describe('EmployeesService importEmployees', () => {
     }, { userId: user.id });
 
     expect(result).toMatchObject({ created: 1, updated: 0, failed: 0 });
-    expect(result.rows).toEqual([{ rowNumber: 2, employeeNo: 'IMPORT-001', action: 'CREATED', errors: [] }]);
+    expect(result.rows).toEqual([{ rowNumber: 2, employeeNo: 'IMPORT-001', action: 'CREATED', errors: [], warnings: [] }]);
     expect(employeeCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ employeeNo: 'IMPORT-001', name: null, mobile: null }),
     }));
@@ -168,6 +173,94 @@ describe('EmployeesService importEmployees', () => {
     expect(result).toMatchObject({ created: 0, updated: 1, failed: 0 });
     expect(update).toHaveBeenCalledWith(user, 'existing-employee', { name: '更新姓名' }, { userId: user.id });
     expect(employeeCreate).not.toHaveBeenCalled();
+  });
+
+  it('resolves a five-digit position code when updating an existing primary assignment', async () => {
+    const { service, prisma } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
+    prisma.position.findFirst.mockResolvedValue({ id: 'position-1', name: '财务总监' });
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-001', '00001']]);
+
+    const result = await service.importEmployees(user, {
+      originalname: 'employees.xlsx',
+      buffer,
+    }, { userId: user.id });
+
+    expect(update).toHaveBeenCalledWith(user, 'existing-employee', { positionId: 'position-1' }, { userId: user.id });
+    expect(result.rows[0]).toEqual(expect.objectContaining({ action: 'UPDATED', warnings: [] }));
+  });
+
+  it('accepts a matching position code-and-name value', async () => {
+    const { service, prisma } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
+    prisma.position.findFirst.mockResolvedValue({ id: 'position-1', name: '财务总监' });
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-002', '00001 - 财务总监']]);
+
+    await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(update).toHaveBeenCalledWith(user, 'existing-employee', { positionId: 'position-1' }, { userId: user.id });
+  });
+
+  it('warns when a position code and name disagree', async () => {
+    const { service, prisma } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
+    prisma.position.findFirst.mockResolvedValue({ id: 'position-1', name: '财务总监' });
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-003', '00001 - 财务副经理']]);
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(update).not.toHaveBeenCalled();
+    expect(result.rows[0]?.warnings).toContain('职位编号“00001”对应“财务总监”，与导入名称“财务副经理”不一致，未导入');
+  });
+
+  it('warns when the position catalog is uninitialized', async () => {
+    const { service } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-004', '00001']]);
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result.rows[0]?.warnings).toContain('职位目录未初始化，请先执行安全职位目录同步脚本');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('writes workplace text directly when updating an existing primary assignment', async () => {
+    const { service } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+    const buffer = await createXlsx(['工号', '工作地点'], [['EXISTING-WORKPLACE-001', '上海园区']]);
+
+    const result = await service.importEmployees(user, {
+      originalname: 'employees.xlsx',
+      buffer,
+    }, { userId: user.id });
+
+    expect(update).toHaveBeenCalledWith(user, 'existing-employee', { workplaceName: '上海园区' }, { userId: user.id });
+    expect(result.rows[0]).toEqual(expect.objectContaining({ action: 'UPDATED', warnings: [] }));
+  });
+
+  it('writes workplace text while importing confirmed bank and education fields', async () => {
+    const { service } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+    const buffer = await createXlsx(
+      ['工号', '工作地点', '银行', '毕业学校名称', '院校类型', '最高学历', '毕业时间', '专业'],
+      [['EXISTING-WARNING-001', '未知园区', '中国工商银行', '虚构大学', '985', '本科', '2024-06-30', '虚构专业']],
+    );
+
+    const result = await service.importEmployees(user, {
+      originalname: 'employees.xlsx',
+      buffer,
+    }, { userId: user.id });
+
+    expect(update).toHaveBeenCalledWith(user, 'existing-employee', expect.objectContaining({
+      workplaceName: '未知园区',
+      bankName: 'ICBC',
+      graduationSchoolName: '虚构大学',
+      institutionType: 'RANK_985',
+      highestEducation: 'BACHELOR',
+      graduationDate: '2024-06-30',
+      major: '虚构专业',
+    }), { userId: user.id });
+    expect(result.rows[0]?.warnings).toEqual([]);
   });
 
   it('returns a per-row error when the employee number is absent', async () => {

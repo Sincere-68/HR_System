@@ -133,17 +133,14 @@ describe('EmployeesService database detail authorization', () => {
 describe('EmployeesService database form options', () => {
   it('returns only directory-backed options and excludes fixed enum directories', async () => {
     const positions = [{ id: 'position-1', code: '00105', name: 'web前端工程师', organizationId: null }];
-    const workplaces = [{ id: 'workplace-1', name: '虚构园区' }];
     const managers = [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }];
     const employingCompanies = [{ id: 'company-1', code: 'COMPANY_001', name: '虚构全日制公司' }];
     const prisma = {
       position: { findMany: jest.fn().mockReturnValue(undefined) },
-      workplace: { findMany: jest.fn().mockReturnValue(undefined) },
       employee: { findMany: jest.fn().mockReturnValue(undefined) },
       employingCompany: { findMany: jest.fn().mockReturnValue(undefined) },
       $transaction: jest.fn().mockResolvedValue([
         positions,
-        workplaces,
         managers,
         employingCompanies,
       ]),
@@ -167,7 +164,6 @@ describe('EmployeesService database form options', () => {
 
     expect(result).toEqual({
       positions,
-      workplaces,
       managers,
       employingCompanies,
     });
@@ -205,8 +201,8 @@ describe('EmployeesService database department history', () => {
     createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
   const currentAssignment = {
-    id: 'assignment-current', employmentPeriodId: 'period-1', positionId: 'position-1', jobLevel: 'S2',
-    jobTitleId: 'job-title-1', workplaceId: 'workplace-1', assignmentType: 'PRIMARY',
+    id: 'assignment-current', employmentPeriodId: 'period-1', positionId: 'position-1', position: { id: 'position-1', code: 'POS-01', name: '原职位' }, jobLevel: 'S2',
+    jobTitleId: 'job-title-1', workplaceName: '上海园区一期', assignmentType: 'PRIMARY',
     personnelPosition: 'FRONT_OFFICE', employeeLevel: 'STAFF', personnelCategory: 'NON_TALENT_PROGRAM',
     employmentRelationship: 'INTERNAL_EMPLOYEE', personnelSource: 'SOCIAL_RECRUITMENT',
     workArrangement: 'CONTRACT_EMPLOYMENT', organization: { id: 'org-current', code: 'CURRENT', name: '旧部门' },
@@ -250,7 +246,7 @@ describe('EmployeesService database department history', () => {
         positionId: 'position-1',
         jobLevel: 'S2',
         jobTitleId: 'job-title-1',
-        workplaceId: 'workplace-1',
+        workplaceName: '上海园区一期',
         isPrimary: true,
         status: 'ACTIVE',
       }),
@@ -263,6 +259,41 @@ describe('EmployeesService database department history', () => {
         newValue: { id: 'org-target', code: 'TARGET', label: '新部门' },
       }),
     }));
+  });
+
+  it('updates an existing primary assignment workplace as free text', async () => {
+    const assignmentUpdate = jest.fn().mockResolvedValue(undefined);
+    const changeLogCreate = jest.fn().mockResolvedValue(undefined);
+    const tx = {
+      employeeAssignment: { findFirst: jest.fn().mockResolvedValue(currentAssignment), update: assignmentUpdate },
+      employeeIdentityDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeFamilyMember: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeEducationExperience: { findFirst: jest.fn().mockResolvedValue(null) },
+      employee: { update: jest.fn().mockResolvedValue(undefined), findUniqueOrThrow: jest.fn().mockResolvedValue(currentEmployee) },
+      position: { findUnique: jest.fn() },
+      employeeFieldChangeLog: { create: changeLogCreate },
+    };
+    const service = new EmployeesService(
+      { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)), employee: { findFirst: jest.fn().mockResolvedValue(currentEmployee) } } as never,
+      { getEmployeeWhere: jest.fn().mockResolvedValue({}) } as never,
+      { create: jest.fn() } as never,
+      { enabled: false } as never,
+    );
+
+    await service.update(user, employeeId, { workplaceName: '上海园区二期' } as never, auditContext);
+
+    expect(assignmentUpdate).toHaveBeenCalledWith({
+      where: { id: 'assignment-current' },
+      data: expect.objectContaining({ workplaceName: '上海园区二期' }),
+    });
+    expect(changeLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentId: 'assignment-current',
+        changedField: 'workplaceName',
+        oldValue: '上海园区一期',
+        newValue: '上海园区二期',
+      }),
+    });
   });
 
   it('creates the first employment period and primary assignment when all initial employment fields are supplied', async () => {
@@ -279,7 +310,6 @@ describe('EmployeesService database department history', () => {
       employee: { update: employeeUpdate, findUniqueOrThrow: jest.fn().mockResolvedValue(currentEmployee) },
       organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-target', code: 'TARGET', name: '新部门' }) },
       position: { findFirst: jest.fn() },
-      workplace: { findFirst: jest.fn() },
       employmentPeriod: { create: periodCreate },
       employmentRecord: { create: employmentRecordCreate },
       employeeFieldChangeLog: { create: fieldChangeLogCreate },

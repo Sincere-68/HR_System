@@ -48,13 +48,12 @@ export function LoginPage() {
 
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-form-wrap">
-          <Typography.Title id="login-title" level={2}>进入演示系统</Typography.Title>
-          <Typography.Paragraph type="secondary">管理员账号已为您填好，直接点击下方按钮即可</Typography.Paragraph>
+          <Typography.Title id="login-title" level={2}>登录系统</Typography.Title>
+          <Typography.Paragraph type="secondary">请输入管理员账号和密码后登录</Typography.Paragraph>
           {error ? <Alert className="login-error" type="error" showIcon message={error} /> : null}
           <Form<LoginValues>
             layout="vertical"
             requiredMark={false}
-            initialValues={{ username: 'admin', password: 'Demo@123' }}
             onFinish={handleSubmit}
           >
             <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
@@ -64,17 +63,9 @@ export function LoginPage() {
               <Input.Password size="large" prefix={<LockOutlined />} autoComplete="current-password" />
             </Form.Item>
             <Button block size="large" type="primary" htmlType="submit" loading={isSubmitting}>
-              直接进入演示系统
+              登录
             </Button>
           </Form>
-          <div className="demo-accounts" aria-label="演示账号">
-            <Typography.Text strong>想体验不同权限，也可以使用：</Typography.Text>
-            <dl>
-              <div><dt>管理员</dt><dd>admin / Demo@123</dd></div>
-              <div><dt>部门管理员</dt><dd>deptadmin / Demo@123</dd></div>
-              <div><dt>普通查看者</dt><dd>viewer / Demo@123</dd></div>
-            </dl>
-          </div>
         </div>
       </section>
     </main>

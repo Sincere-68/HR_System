@@ -13,7 +13,7 @@ describe('presentLaborWorker', () => {
     assignments: [{
       organization: { name: '虚构部门' },
       jobTitle: { name: '虚构职务' },
-      workplace: { name: '虚构工作地点' },
+      workplaceName: '虚构工作地点',
       workArrangement: 'LABOR_EMPLOYMENT' as const,
     }],
   };

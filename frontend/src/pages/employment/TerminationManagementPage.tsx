@@ -186,6 +186,7 @@ export function TerminationManagementPage() {
           columns={terminationColumns}
           dataSource={terminations.data?.data ?? []}
           scroll={{ x: 1_850 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的离职记录" /> }}
           pagination={{
             current: query.page,

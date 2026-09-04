@@ -114,7 +114,6 @@ erDiagram
 | `employee_assignments.job_level` | `JobLevelCode` enum | 固定职级 code：`S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`；通过新迁移从旧目录精确回填 |
 | `employing_companies` | code、name、status | 全日制公司目录；仅内部合同协议通过该目录关联，不写入部门任职；外部履历和项目经历的公司文字字段保持原语义 |
 | `job_titles` | code、name、organization_id、status | 职务，例如部门经理 |
-| `workplaces` | code、name、address、status | 工作地点 |
 
 ### 5.4 `employment_periods`：入职/离职周期
 
@@ -144,7 +143,7 @@ erDiagram
 | `employment_period_id` | String | 否 | 所属任职周期 |
 | `organization_id` | String | 是 | 部门或中心；同一员工同一时点仅允许一条当前有效部门任职 |
 | `position_id` / `job_level` / `job_title_id` | String / Enum / String | 否 | 分别关联岗位、保存 `JobLevelCode` 固定职级 code、关联职务；部门与职位相互独立、互不依赖。职级 code 与任职记录一起保留历史 |
-| `workplace_id` | String | 否 | 工作地点 |
+| `workplace_name` | String | 否 | 工作地点自由文本；随任职记录保留历史，不关联目录 |
 | `assignment_type` | Enum (`AssignmentType`) | 是 | 主要、兼任、临时 |
 | `work_arrangement` | Enum (`WorkArrangement`) | 是 | 兼职、劳务派遣、合同用工、劳务用工、实习生或退休返聘 |
 | `is_primary` | Boolean | 是 | 当前有效部门任职应为唯一主要任职；历史记录按各自有效期保留 |
@@ -185,7 +184,7 @@ erDiagram
 
 ### 6.2.1 Offer 直接创建快照
 
-`candidates` 与 `offers` 支持直接创建实习 Offer。创建事务可保存 Candidate 主快照、`candidate_identity_documents`、`candidate_education_experiences`、`offer_compensation_snapshots` 和 `offer_part_time_snapshots`，但不会创建员工、任职、汇报关系、协议、入职单或审批记录。`Offer.workplace_id` 为可空；未选择工作地点时保存 `null`。Offer 固定保存 `employment_relationship=INTERN`，而人员来源仅保存于 `Candidate.source`，不保存创建路径 enum。
+`candidates` 与 `offers` 支持直接创建实习 Offer。创建事务可保存 Candidate 主快照、`candidate_identity_documents`、`candidate_education_experiences`、`offer_compensation_snapshots` 和 `offer_part_time_snapshots`，但不会创建员工、任职、汇报关系、协议、入职单或审批记录。`Offer.workplace_name` 是可选自由文本；未填写时保存 `null`，不关联工作地点目录。Offer 固定保存 `employment_relationship=INTERN`，而人员来源仅保存于 `Candidate.source`，不保存创建路径 enum。
 
 系统不设持久化 Offer 模板、版本、配置或工时制度模型/字段。前端“Offer创建”入口是路径选择 UI：新增人员直接填写，实习生转正只从当前有效、受组织范围约束的实习员工读取预填数据；预填不创建任何记录，用户保存前可以编辑全部 Offer 表单字段。
 

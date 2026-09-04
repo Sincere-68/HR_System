@@ -16,10 +16,6 @@ const formOptions: InternOfferFormOptions = {
     { id: 'position-1', code: '00001', name: '财务总监', organizationId: null },
     { id: 'position-2', code: '00105', name: 'web前端工程师', organizationId: null },
   ],
-  workplaces: [
-    { id: 'workplace-1', name: '虚构园区', address: '虚构园区 1 号楼' },
-    { id: 'workplace-2', name: '无地址园区', address: null },
-  ],
   employingCompanies: [{ id: 'company-1', name: '虚构全日制公司' }],
   managers: [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }],
 };
@@ -35,7 +31,7 @@ const conversionPrefill: InternConversionOfferPrefill = {
   educationExperience: { schoolName: '虚构大学', educationLevel: 'BACHELOR', major: '虚构专业', graduationDate: '2026-06-30', isHighestEducation: true },
   organizationId: 'org-1',
   positionId: 'position-1',
-  workplaceId: 'workplace-1',
+  workplaceName: '虚构园区',
   jobLevel: 'S1',
   employeeLevel: 'STAFF',
   personnelCategory: 'TALENT_PROGRAM',
@@ -76,7 +72,7 @@ describe('InternOfferForm', () => {
     expect(screen.queryByText(/活动 Offer 模板|应用模板/)).not.toBeInTheDocument();
   });
 
-  it('uses code-name position labels and derives optional workplace address', () => {
+  it('uses code-name position labels and keeps office address unavailable', () => {
     renderForm();
     expect(field('办公地址')).toHaveValue('--');
     fireEvent.mouseDown(field('职位'));
@@ -87,13 +83,13 @@ describe('InternOfferForm', () => {
     expect(calculateAge(undefined, dayjs('2026-09-01'))).toBeNull();
   });
 
-  it('maps direct creation values without a workplace or creation-path/template fields', () => {
+  it('maps direct creation values with optional free-text workplace and no creation-path/template fields', () => {
     const input = toCreateInternOfferInput({
       name: ' 虚构实习候选人 ', mobile: ' 13900001001 ', personalEmail: ' fictional.intern@example.invalid ', source: 'SOCIAL_RECRUITMENT',
       gender: 'FEMALE', birthDate: dayjs('2002-01-01'), workStartDate: dayjs('2025-06-01'),
       documentType: 'PASSPORT', documentNumber: ' test-passport-1 ', documentExpiryDate: dayjs('2036-01-01'),
       graduationSchoolName: ' 虚构大学 ', highestEducation: 'BACHELOR', major: ' 虚构专业 ', graduationDate: dayjs('2026-06-30'),
-      organizationId: 'org-1', positionId: 'position-1', proposedEntryDate: dayjs('2026-09-01'),
+      organizationId: 'org-1', positionId: 'position-1', workplaceName: ' 上海园区 ', proposedEntryDate: dayjs('2026-09-01'),
       hasProbation: true, probationMonths: 3, jobLevel: 'S1', employeeLevel: 'STAFF', personnelCategory: 'TALENT_PROGRAM', workArrangement: 'INTERN', directManagerEmployeeId: 'manager-1',
       employingCompanyId: 'company-1', agreementType: 'INTERNSHIP_AGREEMENT', contractTermType: 'FIXED', contractMonths: 12, contractEndDate: dayjs('2027-09-01'), isSeparatelySigned: false,
       salaryPackage: ' 月薪包 ', salaryRemark: '说明', preConfirmationBaseSalary: '8000.50', postConfirmationBaseSalary: '9000.00',
@@ -102,11 +98,11 @@ describe('InternOfferForm', () => {
 
     expect(input).toMatchObject({
       name: '虚构实习候选人', mobile: '13900001001', personalEmail: 'fictional.intern@example.invalid', source: 'SOCIAL_RECRUITMENT',
-      organizationId: 'org-1', positionId: 'position-1', proposedEntryDate: '2026-09-01',
+      organizationId: 'org-1', positionId: 'position-1', workplaceName: '上海园区', proposedEntryDate: '2026-09-01',
       identityDocument: { documentType: 'PASSPORT', documentNumber: 'test-passport-1', isPrimary: true, expiryDate: '2036-01-01' },
       educationExperience: { schoolName: '虚构大学', educationLevel: 'BACHELOR', major: '虚构专业', graduationDate: '2026-06-30', isHighestEducation: true },
     });
-    expect(input).not.toHaveProperty('workplaceId');
+    expect(input.workplaceName).toBe('上海园区');
     expect(input).not.toHaveProperty('creationPath');
     expect(input).not.toHaveProperty('templateId');
     expect(input).not.toHaveProperty('work' + 'Schedule');
@@ -116,7 +112,7 @@ describe('InternOfferForm', () => {
     const values = internConversionPrefillToFormValues(conversionPrefill);
     expect(values).toMatchObject({
       name: '虚构实习生', mobile: '13900001001', personalEmail: 'intern@example.invalid', source: 'INTERNAL_REFERRAL',
-      documentType: 'PASSPORT', documentNumber: 'TEST-PASSPORT-1', organizationId: 'org-1', positionId: 'position-1', workplaceId: 'workplace-1', directManagerEmployeeId: 'manager-1',
+      documentType: 'PASSPORT', documentNumber: 'TEST-PASSPORT-1', organizationId: 'org-1', positionId: 'position-1', workplaceName: '虚构园区', directManagerEmployeeId: 'manager-1',
     });
     expect(values).not.toHaveProperty('creationPath');
     expect(values).not.toHaveProperty('work' + 'Schedule');

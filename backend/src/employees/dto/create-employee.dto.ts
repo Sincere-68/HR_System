@@ -125,10 +125,12 @@ export class CreateEmployeeDto {
   @IsEnum(JobLevelCode)
   jobLevel?: JobLevelCode;
 
-  @ApiPropertyOptional({ description: '工作地点 ID' })
+  @ApiPropertyOptional({ description: '工作地点（自由文本）', maxLength: 191 })
   @IsOptional()
+  @Transform(trim)
   @IsString()
-  workplaceId?: string;
+  @MaxLength(191)
+  workplaceName?: string;
 
   @ApiProperty({ enum: PersonnelPosition })
   @IsEnum(PersonnelPosition)

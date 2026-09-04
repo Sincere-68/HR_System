@@ -63,11 +63,26 @@ const employee: EmployeeDetail = {
   major: '虚构专业',
   assignmentId: 'assignment-1',
   positionId: 'position-1',
-  workplaceId: 'workplace-1',
   agreementEmployingCompanyId: 'company-1',
   primaryDocumentId: 'document-1',
   emergencyContactId: 'contact-1',
   highestEducationId: 'education-1',
+  nationality: '中国',
+  workStartDate: '2014-07-01',
+  birthdayPreference: 'LUNAR',
+  lunarBirthDate: '1992-02-15',
+  fullTimeDutyDescription: '负责产品研发工作。',
+  partTimePositionName: '技术顾问',
+  partTimeHourlyRate: '200',
+  hasCompanyEquity: false,
+  assignmentStartDate: '2025-01-01',
+  confirmationDate: null,
+  trialPostEndDate: null,
+  movementTypeId: null,
+  movementTypeName: null,
+  changeReason: null,
+  changeDescription: null,
+  managerEmployeeId: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -83,7 +98,6 @@ const formOptions: EmployeeFormOptions = {
     { id: 'position-1', code: '00105', name: 'web前端工程师', organizationId: null },
     { id: 'position-2', code: '00427', name: '开发工程师', organizationId: null },
   ],
-  workplaces: [{ id: 'workplace-1', name: '虚构园区' }],
   managers: [{ id: 'manager-1', name: '虚构经理甲', employeeNo: 'FAKE-M001' }],
   employingCompanies: [{ id: 'company-1', name: '虚构公司', code: 'COMPANY_001' }],
 };
@@ -127,27 +141,21 @@ describe('EmployeeForm', () => {
     expect(screen.getByRole('option', { name: '香港特别行政区签证身份书（黄本）' })).toBeInTheDocument();
   });
 
-  it('renders administrative-region cascaders and restores selected code paths', async () => {
+  it('renders the target employee fields and keeps the employee number read-only', async () => {
     render(
       <EmployeeForm
         formId="region-form"
-        employee={{
-          ...employee,
-          nativePlaceRegionCode: '310115',
-          householdRegionCode: '110105',
-          residentialRegionCode: '440305',
-        }}
+        employee={employee}
         organizations={organizations}
         formOptions={formOptions}
         onSubmit={vi.fn()}
       />,
     );
 
-    const regionControls = document.querySelectorAll<HTMLInputElement>('.ant-cascader input');
-    expect(regionControls).toHaveLength(3);
-    expect(screen.getByText('籍贯地区')).toBeInTheDocument();
-    expect(screen.getByText('户籍所在地地区')).toBeInTheDocument();
-    expect(screen.getByText('联系地址地区')).toBeInTheDocument();
+    expect(screen.getByText('参加工作日期')).toBeInTheDocument();
+    expect(screen.getByText('全日制岗位职责说明')).toBeInTheDocument();
+    expect(screen.getByText('银行卡信息')).toBeInTheDocument();
+    expect(document.getElementById('employeeNo')).toBeDisabled();
   });
 
   it('builds a nested organization tree from parent identifiers', () => {
@@ -216,7 +224,7 @@ describe('EmployeeForm', () => {
     expect(agreementSection.textContent).toContain('公司');
   });
 
-  it('requires the initial employment fields when a partial employee is saved', async () => {
+  it('requires the department when a partial employee is saved', async () => {
     const onSubmit = vi.fn();
     render(
       <EmployeeForm
@@ -231,8 +239,25 @@ describe('EmployeeForm', () => {
     fireEvent.submit(document.getElementById('partial-required-form')!);
 
     expect(await screen.findByText('请选择部门')).toBeInTheDocument();
-    expect(screen.getByText('请选择入职日期')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('shows position, job level, and workplace for an existing employment record', async () => {
+    render(
+      <EmployeeForm
+        formId="existing-assignment-form"
+        employee={employee}
+        organizations={organizations}
+        formOptions={formOptions}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const labels = [...document.querySelectorAll('.employee-form-label')].map((label) => label.textContent?.replace('*', ''));
+    expect(labels).toEqual(expect.arrayContaining(['职位', '职级', '工作地点']));
+    expect(document.getElementById('positionId')).toBeInTheDocument();
+    expect(document.getElementById('jobLevel')).toBeInTheDocument();
+    expect(document.getElementById('workplaceName')).toBeInTheDocument();
   });
 
   it('fills complete employee values into editable inputs', async () => {

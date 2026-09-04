@@ -453,7 +453,7 @@ export function PerformanceTemplateEditorPage() {
               </div>
               <span className="performance-dispatch-module-weight">{selectedModule.participatesInTotal ? `模块权重：${selectedModule.weight ?? 0}%` : '额外调整项'}</span>
             </div>
-            <Table<PerformanceIndicator> className="performance-indicator-table" rowKey="id" columns={indicatorColumns} dataSource={selectedModule.indicators} pagination={false} scroll={{ x: 740 }} />
+            <Table<PerformanceIndicator> className="performance-indicator-table" rowKey="id" columns={indicatorColumns} dataSource={selectedModule.indicators} pagination={false} scroll={{ x: 740 }} sticky={{ offsetHeader: 48, offsetScroll: 0 }} />
             <div className="performance-parse-source-note"><FileMarkdownOutlined /><span>当前模块的指标来自：{selectedModule.indicators[0]?.source ?? parsedHrbpPerformanceTemplate.sourceName}</span></div>
           </section>
         ) : null}

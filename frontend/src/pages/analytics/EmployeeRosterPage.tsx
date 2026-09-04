@@ -77,6 +77,7 @@ export function EmployeeRosterPage() {
           columns={employeeRosterColumns}
           dataSource={roster.data?.data ?? []}
           scroll={{ x: 6_400 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无当前在职员工" /> }}
           pagination={{
             current: query.page,

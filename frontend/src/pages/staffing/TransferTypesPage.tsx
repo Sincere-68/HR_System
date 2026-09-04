@@ -102,6 +102,7 @@ export function TransferTypesPage() {
           columns={transferTypeColumns}
           dataSource={transferTypes.data?.data ?? []}
           scroll={{ x: 760 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的调动类型" /> }}
           pagination={{
             current: query.page,

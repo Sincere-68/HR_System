@@ -32,11 +32,11 @@ vi.mock('antd', async () => {
 
 const formOptions: InternOfferFormOptions = {
   organizations: [{ id: 'org-1', name: '虚构研发部' }], positions: [{ id: 'position-1', name: '虚构实习职位', organizationId: 'org-1' }],
-  workplaces: [{ id: 'workplace-1', name: '虚构园区', address: '虚构地址' }], employingCompanies: [{ id: 'company-1', name: '虚构全日制公司' }], managers: [],
+  employingCompanies: [{ id: 'company-1', name: '虚构全日制公司' }], managers: [],
 };
 const prefill: InternConversionOfferPrefill = {
   name: '虚构实习生', mobile: '13900001002', personalEmail: 'intern@example.invalid', source: 'INTERNAL_REFERRAL', gender: null, birthDate: null,
-  identityDocument: null, educationExperience: null, organizationId: 'org-1', positionId: null, workplaceId: null, jobLevel: null, employeeLevel: null, personnelCategory: null, workArrangement: null, directManagerEmployeeId: null, employingCompanyId: null, agreementType: null, contractTermType: null, contractEndDate: null,
+  identityDocument: null, educationExperience: null, organizationId: 'org-1', positionId: null, workplaceName: null, jobLevel: null, employeeLevel: null, personnelCategory: null, workArrangement: null, directManagerEmployeeId: null, employingCompanyId: null, agreementType: null, contractTermType: null, contractEndDate: null,
 };
 function LocationProbe() { const location = useLocation(); return <output data-testid="location-search">{location.pathname}{location.search}</output>; }
 function renderPage(path = '/onboarding/offers/new?source=new-hire') { return render(<MemoryRouter initialEntries={[path]}><InternOfferFormPage /><LocationProbe /></MemoryRouter>); }

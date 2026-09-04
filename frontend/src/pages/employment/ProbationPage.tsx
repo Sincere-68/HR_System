@@ -134,6 +134,7 @@ export function ProbationPage() {
           columns={columns}
           dataSource={probation.data?.data ?? []}
           scroll={{ x: 1_100 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的试用记录" /> }}
           pagination={{
             current: query.page,

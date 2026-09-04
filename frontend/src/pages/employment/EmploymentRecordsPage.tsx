@@ -235,6 +235,7 @@ export function EmploymentRecordsPage() {
           columns={employmentRecordColumns}
           dataSource={records.data?.data ?? []}
           scroll={{ x: 2_050 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={view === 'current' ? '没有符合条件的当前任职记录' : '没有符合条件的任职历史'} /> }}
           pagination={{
             current: query.page,

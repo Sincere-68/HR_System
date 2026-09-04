@@ -176,6 +176,7 @@ export function EmployeeChangeManagementPage() {
           columns={employeeMovementColumns}
           dataSource={movements.data?.data ?? []}
           scroll={{ x: 2_450 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的异动记录" /> }}
           pagination={{
             current: query.page,

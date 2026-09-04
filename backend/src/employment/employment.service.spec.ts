@@ -429,7 +429,7 @@ describe('EmploymentService labor workers', () => {
       assignments: [{
         organization: { name: '虚构部门' },
         jobTitle: { name: '虚构职务' },
-        workplace: { name: '虚构工作地点' },
+        workplaceName: '虚构工作地点',
         workArrangement: 'LABOR_EMPLOYMENT',
         }],
     };
@@ -458,7 +458,7 @@ describe('EmploymentService labor workers', () => {
           select: {
             organization: { select: { name: true } },
             jobTitle: { select: { name: true } },
-            workplace: { select: { name: true } },
+            workplaceName: true,
             workArrangement: true,
           },
         }),

@@ -23,7 +23,7 @@ const employeeRow = {
   reportingAsEmployee: [{ manager: { name: '虚构经理', workEmail: 'manager@example.invalid' } }],
   employmentPeriods: [{
     entryDate: new Date('2020-01-01T00:00:00.000Z'), personnelCategory: 'NON_TALENT_PROGRAM', employmentRelationship: 'INTERNAL_EMPLOYEE', employmentStatus: 'REGULAR',
-    assignments: [{ startDate: new Date('2020-01-01T00:00:00.000Z'), endDate: null, organization: { id: 'org-a', name: '虚构部门' }, jobTitle: { name: '虚构职务' }, position: { name: '虚构职位' }, jobLevel: 'S1', workplace: { name: '虚构地点' } }],
+    assignments: [{ startDate: new Date('2020-01-01T00:00:00.000Z'), endDate: null, organization: { id: 'org-a', name: '虚构部门' }, jobTitle: { name: '虚构职务' }, position: { name: '虚构职位' }, jobLevel: 'S1', workplaceName: '虚构地点' }],
     probationRecords: [{ startDate: new Date('2020-01-01T00:00:00.000Z'), plannedEndDate: new Date('2020-06-30T00:00:00.000Z'), probationMonths: 6, confirmedDate: new Date('2020-07-01T00:00:00.000Z') }],
     agreements: [{ agreementType: AgreementType.LABOR_CONTRACT, startDate: new Date('2020-01-01T00:00:00.000Z'), endDate: new Date('2030-01-01T00:00:00.000Z'), terminationDate: null, employingCompany: { name: '虚构公司' } }],
   }],

@@ -12,7 +12,7 @@ export interface LaborWorkerPresentationRow {
   assignments: Array<{
     organization: { name: string };
     jobTitle: { name: string } | null;
-    workplace: { name: string } | null;
+    workplaceName: string | null;
     workArrangement: WorkArrangement;
   }>;
 }
@@ -38,7 +38,7 @@ export function presentLaborWorker(
     jobTitleName: assignment?.jobTitle?.name ?? null,
     workArrangement: assignment?.workArrangement ?? null,
     managerName: options.managerName,
-    workplaceName: assignment?.workplace?.name ?? null,
+    workplaceName: assignment?.workplaceName ?? null,
     canViewEmployeeDetail: options.canViewEmployeeDetail,
   };
 }

@@ -188,6 +188,7 @@ export function RetirementManagementPage() {
           columns={retirementColumns}
           dataSource={retirements.data?.data ?? []}
           scroll={{ x: 1_250 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的退休记录" /> }}
           pagination={{
             current: query.page,

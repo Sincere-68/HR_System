@@ -16,6 +16,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:replace-position-catalog": "tsx prisma/replace-position-catalog.ts",
+    "prisma:upsert-position-catalog": "tsx prisma/upsert-position-catalog.ts",
     "prisma:replace-organization-catalog": "tsx prisma/replace-organization-catalog.ts"
   },
   "dependencies": {

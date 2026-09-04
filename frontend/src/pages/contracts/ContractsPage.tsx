@@ -108,6 +108,7 @@ export function ContractsPage() {
           columns={contractColumns}
           dataSource={contracts.data?.data ?? []}
           scroll={{ x: 2_150 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的合同协议" /> }}
           pagination={{
             current: query.page,

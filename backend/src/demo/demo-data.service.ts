@@ -84,12 +84,7 @@ const accounts: DemoAccount[] = [
     displayName: '普通查看者',
     role: 'VIEWER',
     roleName: '普通查看者',
-    permissions: [
-      PERMISSIONS.EMPLOYEE_READ,
-      PERMISSIONS.ORGANIZATION_READ,
-      PERMISSIONS.PERFORMANCE_READ,
-      PERMISSIONS.PERFORMANCE_TASK_HANDLE,
-    ],
+    permissions: [],
     organizationIds: [organizationId('CHAIRMAN_CHEN_GANG')],
   },
 ];
@@ -213,9 +208,6 @@ export class DemoDataService {
   }
 
   updateEmployee(employee: DemoEmployeeRecord, input: UpdateEmployeeInput) {
-    this.assertUnique(input.employeeNo ?? employee.employeeNo, employee.idCardNo, employee.id);
-
-    if (input.employeeNo !== undefined) employee.employeeNo = input.employeeNo;
     if (input.name !== undefined) employee.name = input.name;
     if (input.mobile !== undefined) employee.mobile = input.mobile;
     if (input.organizationId !== undefined) {

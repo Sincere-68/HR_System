@@ -112,6 +112,7 @@ export function BlacklistPage() {
           columns={columns}
           dataSource={blacklist.data?.data ?? []}
           scroll={{ x: 1_370 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的黑名单记录" /> }}
           pagination={{
             current: query.page,

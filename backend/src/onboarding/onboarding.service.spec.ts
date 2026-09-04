@@ -143,7 +143,7 @@ describe('OnboardingService', () => {
         acceptedEmployee: { select: { gender: true } },
         organization: { select: { name: true } },
         position: { select: { name: true } },
-        workplace: { select: { name: true } },
+        workplaceName: true,
       }),
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       skip: 20,
@@ -180,7 +180,7 @@ describe('OnboardingService', () => {
       acceptedEmployee: null,
       organization: null,
       position: null,
-      workplace: null,
+      workplaceName: null,
       onboardingCase: null,
     }]);
     prisma.offer.count.mockResolvedValue(1);
@@ -328,7 +328,7 @@ describe('OnboardingService', () => {
       },
       offer: {
         organization: { name: '虚构待入职中心' },
-        workplace: { name: '虚构园区' },
+        workplaceName: '虚构园区',
         position: { name: '虚构岗位' },
         candidate: { source: '虚构招聘渠道' },
       },
@@ -402,7 +402,7 @@ describe('OnboardingService', () => {
       status: 'DRAFT',
       plannedEntryDate: new Date('2026-09-05T00:00:00.000Z'),
       employee: { name: '虚构员工丁', gender: null, reportingAsEmployee: [], employmentPeriods: [], agreements: [] },
-      offer: { organization: null, workplace: null, position: null, candidate: { source: null } },
+      offer: { organization: null, workplaceName: null, position: null, candidate: { source: null } },
     }]);
     prisma.onboardingCase.count.mockResolvedValue(1);
 

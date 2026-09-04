@@ -9,7 +9,7 @@ const validInput = {
   source: 'SOCIAL_RECRUITMENT',
   organizationId: 'org-1',
   positionId: 'position-1',
-  workplaceId: 'workplace-1',
+  workplaceName: 'workplace-1',
   proposedEntryDate: '2026-09-01',
 };
 
@@ -59,7 +59,7 @@ describe('CreateInternOfferDto', () => {
   });
 
   it('allows an omitted workplace and does not expose source-path, work-schedule or approval fields', async () => {
-    const dto = plainToInstance(CreateInternOfferDto, { ...validInput, workplaceId: undefined });
+    const dto = plainToInstance(CreateInternOfferDto, { ...validInput, workplaceName: undefined });
     await expect(validate(dto)).resolves.toHaveLength(0);
     expect(dto).not.toHaveProperty('employmentRelationship');
     expect(dto).not.toHaveProperty('creationPath');

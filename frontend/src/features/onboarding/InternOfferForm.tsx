@@ -77,7 +77,7 @@ export interface InternOfferFormValues {
   employeeLevel?: EmployeeLevel;
   personnelCategory?: PersonnelCategory;
   workArrangement?: WorkArrangement;
-  workplaceId?: string;
+  workplaceName?: string;
   hasProbation?: boolean;
   probationMonths?: number | null;
   directManagerEmployeeId?: string;
@@ -230,7 +230,7 @@ export function internConversionPrefillToFormValues(prefill: InternConversionOff
     graduationDate: toDayjs(prefill.educationExperience?.graduationDate),
     organizationId: prefill.organizationId ?? undefined,
     positionId: prefill.positionId ?? undefined,
-    workplaceId: prefill.workplaceId ?? undefined,
+    workplaceName: prefill.workplaceName ?? undefined,
     jobLevel: prefill.jobLevel ?? undefined,
     employeeLevel: prefill.employeeLevel ?? undefined,
     personnelCategory: prefill.personnelCategory ?? undefined,
@@ -292,7 +292,7 @@ export function toCreateInternOfferInput(values: InternOfferFormValues): CreateI
     ...(educationExperience ? { educationExperience } : {}),
     organizationId: values.organizationId!,
     positionId: values.positionId!,
-    ...(toOptionalString(values.workplaceId) ? { workplaceId: toOptionalString(values.workplaceId) } : {}),
+    ...(toOptionalString(values.workplaceName) ? { workplaceName: toOptionalString(values.workplaceName) } : {}),
     proposedEntryDate: toDateString(values.proposedEntryDate)!,
     ...(values.hasProbation && values.probationMonths ? { probationMonths: values.probationMonths } : {}),
     ...(values.jobLevel ? { jobLevel: values.jobLevel } : {}),
@@ -319,15 +319,10 @@ export function InternOfferForm({ formId, formOptions, onSubmit, conversionPrefi
   const contractTermType = Form.useWatch('contractTermType', form);
   const proposedEntryDate = Form.useWatch('proposedEntryDate', form);
   const birthDate = Form.useWatch('birthDate', form);
-  const workplaceId = Form.useWatch('workplaceId', form);
 
   const positionOptions = useMemo(
     () => formOptions.positions.map(({ id, code, name }) => ({ value: id, label: code ? `${code} - ${name}` : name, code, name })),
     [formOptions.positions],
-  );
-  const workplaceOptions = useMemo(
-    () => formOptions.workplaces.map(({ id, name }) => ({ value: id, label: name })),
-    [formOptions.workplaces],
   );
   const managerOptions = useMemo(
     () => (formOptions.managers ?? []).map(({ id, name, employeeNo }) => ({ value: id, label: `${name}（${employeeNo}）` })),
@@ -343,7 +338,7 @@ export function InternOfferForm({ formId, formOptions, onSubmit, conversionPrefi
     isSeparatelySigned: false,
     ...(conversionPrefill ? internConversionPrefillToFormValues(conversionPrefill) : {}),
   }), [conversionPrefill]);
-  const officeAddress = formOptions.workplaces.find(({ id }) => id === workplaceId)?.address ?? EMPTY_VALUE;
+  const officeAddress = EMPTY_VALUE;
   const age = calculateAge(birthDate);
   const sourceOptions: DefaultOptionType[] = personnelSourceOptions.map((option) => ({ ...option }));
 
@@ -394,7 +389,7 @@ export function InternOfferForm({ formId, formOptions, onSubmit, conversionPrefi
         <FormLine name="employeeLevel" label="员工层级"><Select aria-label="员工层级" placeholder="请选择" options={employeeLevelOptions} /></FormLine>
         <FormLine name="personnelCategory" label="人员类别"><Select aria-label="人员类别" placeholder="请选择" options={personnelCategoryOptions} /></FormLine>
         <FormLine name="workArrangement" label="用工形式"><Select aria-label="用工形式" placeholder="请选择" options={workArrangementOptions} /></FormLine>
-        <FormLine name="workplaceId" label="工作地点"><Select aria-label="工作地点" allowClear placeholder="请选择（可选）" showSearch optionFilterProp="label" options={workplaceOptions} /></FormLine>
+        <FormLine name="workplaceName" label="工作地点"><Input aria-label="工作地点" placeholder="请输入（可选）" maxLength={191} /></FormLine>
         <FormLine label="办公地址"><ReadonlyInput ariaLabel="办公地址" value={officeAddress} /></FormLine>
         <FormLine name="hasProbation" label="是否有试用期"><Select aria-label="是否有试用期" options={booleanOptions} onChange={(value) => { if (!value) form.setFieldValue('probationMonths', undefined); }} /></FormLine>
         <FormLine name="probationMonths" label="试用期（月）" required={hasProbation} rules={hasProbation ? [{ required: true, message: '请输入试用期月数' }] : []}><InputNumber aria-label="试用期（月）" disabled={!hasProbation} placeholder="请输入" min={1} max={12} precision={0} /></FormLine>

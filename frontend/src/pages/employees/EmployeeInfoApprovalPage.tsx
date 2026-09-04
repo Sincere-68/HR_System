@@ -174,6 +174,7 @@ export function EmployeeInfoApprovalPage() {
           columns={columns}
           dataSource={approvals.data?.data ?? []}
           scroll={{ x: 1_220 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的审批记录" /> }}
           pagination={{
             current: query.page,

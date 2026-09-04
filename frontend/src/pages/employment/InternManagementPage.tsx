@@ -104,6 +104,7 @@ export function InternManagementPage() {
           columns={internColumns}
           dataSource={interns.data?.data ?? []}
           scroll={{ x: 1_650 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的实习生任职记录" /> }}
           pagination={{
             current: query.page,

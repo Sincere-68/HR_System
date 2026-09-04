@@ -51,21 +51,6 @@ import {
   workArrangementOptions,
 } from '../../config/personnel-fields';
 
-interface InitialEmploymentFormValues {
-  organizationId: string;
-  entryDate?: Dayjs;
-  personnelCategory?: PersonnelCategory;
-  employmentRelationship?: EmploymentRelationship;
-  personnelSource?: PersonnelSource;
-  workArrangement?: WorkArrangement;
-  employmentStatus?: EmploymentStatus;
-  personnelPosition?: PersonnelPosition;
-  employeeLevel?: EmployeeLevel;
-  positionId?: string;
-  jobLevel?: JobLevel;
-  workplaceId?: string;
-}
-
 interface EmployeeFormValues {
   name: string;
   workEmail?: string;
@@ -75,6 +60,14 @@ interface EmployeeFormValues {
   documentExpiryDate?: Dayjs;
   idCardNo?: string;
   mobile: string;
+  nationality?: string;
+  workStartDate?: Dayjs;
+  birthdayPreference?: 'SOLAR' | 'LUNAR';
+  lunarBirthDate?: Dayjs;
+  fullTimeDutyDescription?: string;
+  partTimePositionName?: string;
+  partTimeHourlyRate?: string;
+  hasCompanyEquity?: boolean;
   gender?: Gender;
   personnelCategory?: PersonnelCategory;
   employmentRelationship?: EmploymentRelationship;
@@ -112,7 +105,13 @@ interface EmployeeFormValues {
   positionId?: string;
   jobLevel?: JobLevel;
   isDepartmentLead?: boolean;
-  workplaceId?: string;
+  workplaceName?: string;
+  assignmentStartDate?: Dayjs;
+  confirmationDate?: Dayjs;
+  trialPostEndDate?: Dayjs;
+  movementTypeId?: string;
+  changeReason?: string;
+  changeDescription?: string;
   hasProbation: boolean;
   probationMonths?: number;
   probationEndDate?: Dayjs;
@@ -145,11 +144,12 @@ interface FormLineProps {
     type?: 'email' | 'number';
   }[];
   children: ReactNode;
+  className?: string;
 }
 
-function FormLine({ name, label, required, note, rules, children }: FormLineProps) {
+function FormLine({ name, label, required, note, rules, children, className }: FormLineProps) {
   return (
-    <div className="employee-form-line">
+    <div className={`employee-form-line${className ? ` ${className}` : ''}`}>
       <span className="employee-form-label">{required ? <i>*</i> : null}{label}</span>
       <Form.Item<EmployeeFormValues>
         className="employee-form-control"
@@ -231,18 +231,17 @@ export function EmployeeForm({
   formId,
 }: EmployeeFormProps) {
   const [form] = Form.useForm<EmployeeFormValues>();
-  const [initialEmploymentForm] = Form.useForm<InitialEmploymentFormValues>();
   const hasProbation = Form.useWatch('hasProbation', form);
   const contractTermType = Form.useWatch('contractTermType', form);
   const entryDate = Form.useWatch('entryDate', form);
   const positionOptions = (formOptions?.positions ?? [])
     .map(({ id, code, name }) => ({ value: id, label: `${code} - ${name}`, code, name }));
-  const workplaceOptions = (formOptions?.workplaces ?? []).map(({ id, name }) => ({ value: id, label: name }));
   const managerOptions = (formOptions?.managers ?? []).map(({ id, name, employeeNo }) => ({
     value: id,
     label: `${name}（${employeeNo}）`,
   }));
   const employingCompanyOptions = (formOptions?.employingCompanies ?? []).map(({ id, name }) => ({ value: id, label: name }));
+  const movementTypeOptions = (formOptions?.movementTypes ?? []).map(({ id, name }) => ({ value: id, label: name }));
 
   useEffect(() => {
     if (employee) {
@@ -250,15 +249,32 @@ export function EmployeeForm({
       form.setFieldsValue({
         employeeNo: employee.employeeNo,
         name: employee.name ?? undefined,
+        nationality: employee.nationality ?? undefined,
+        workStartDate: employee.workStartDate ? dayjs(employee.workStartDate) : undefined,
+        birthdayPreference: employee.birthdayPreference ?? undefined,
+        lunarBirthDate: employee.lunarBirthDate ? dayjs(employee.lunarBirthDate) : undefined,
+        fullTimeDutyDescription: employee.fullTimeDutyDescription ?? undefined,
+        partTimePositionName: employee.partTimePositionName ?? undefined,
+        partTimeHourlyRate: employee.partTimeHourlyRate ?? undefined,
+        hasCompanyEquity: employee.hasCompanyEquity,
         workEmail: employee.workEmail ?? undefined,
         personalEmail: employee.personalEmail ?? undefined,
         mobile: employee.mobile ?? undefined,
         documentType: detail.documentType ?? undefined,
         documentNumber: detail.documentNumber ?? employee.idCardNo ?? undefined,
         organizationId: employee.organizationId ?? undefined,
+        assignmentStartDate: employee.assignmentStartDate ? dayjs(employee.assignmentStartDate) : undefined,
+        entryDate: employee.entryDate ? dayjs(employee.entryDate) : undefined,
+        confirmationDate: employee.confirmationDate ? dayjs(employee.confirmationDate) : undefined,
+        trialPostEndDate: employee.trialPostEndDate ? dayjs(employee.trialPostEndDate) : undefined,
+        movementTypeId: employee.movementTypeId ?? undefined,
+        changeReason: employee.changeReason ?? undefined,
+        changeDescription: employee.changeDescription ?? undefined,
+        managerEmployeeId: employee.managerEmployeeId ?? undefined,
+        agreementEmployingCompanyId: employee.agreementEmployingCompanyId ?? undefined,
         positionId: detail.positionId ?? undefined,
         jobLevel: detail.jobLevel ?? undefined,
-        workplaceId: detail.workplaceId ?? undefined,
+        workplaceName: detail.workplaceName ?? undefined,
         personnelPosition: detail.personnelPosition ?? undefined,
         employeeLevel: detail.employeeLevel ?? undefined,
         employmentStatus: employee.employmentStatus ?? undefined,
@@ -308,8 +324,7 @@ export function EmployeeForm({
         inviteAccount: true,
       });
     }
-    initialEmploymentForm.resetFields();
-  }, [employee, form, initialEmploymentForm]);
+  }, [employee, form]);
 
   const suggestEndDate = (field: 'probationEndDate' | 'contractEndDate', months?: number) => {
     if (entryDate && months) form.setFieldValue(field, entryDate.add(months, 'month'));
@@ -338,7 +353,7 @@ export function EmployeeForm({
         organizationId: values.organizationId,
         positionId: values.positionId,
         jobLevel: values.jobLevel,
-        workplaceId: values.workplaceId,
+        workplaceName: values.workplaceName,
         personnelPosition: 'FRONT_OFFICE',
         employeeLevel: 'STAFF',
         agreementEmployingCompanyId: values.agreementEmployingCompanyId ?? employingCompanyOptions[0]?.value ?? '',
@@ -376,17 +391,16 @@ export function EmployeeForm({
       return;
     }
 
-    let initialEmploymentValues: InitialEmploymentFormValues | undefined;
-    if (!employee.assignmentId) {
-      try {
-        initialEmploymentValues = await initialEmploymentForm.validateFields();
-      } catch {
-        return;
-      }
-    }
     const payload: UpdateEmployeeInput = {
-      employeeNo: values.employeeNo,
       name: values.name,
+      nationality: values.nationality?.trim(),
+      workStartDate: values.workStartDate?.format('YYYY-MM-DD'),
+      birthdayPreference: values.birthdayPreference,
+      lunarBirthDate: values.lunarBirthDate?.format('YYYY-MM-DD'),
+      fullTimeDutyDescription: values.fullTimeDutyDescription?.trim(),
+      partTimePositionName: values.partTimePositionName?.trim(),
+      partTimeHourlyRate: values.partTimeHourlyRate?.trim(),
+      hasCompanyEquity: values.hasCompanyEquity,
       workEmail: values.workEmail?.trim(),
       personalEmail: values.personalEmail?.trim(),
       mobile: values.mobile?.trim(),
@@ -423,27 +437,39 @@ export function EmployeeForm({
       ...(employee.assignmentId
         ? {
           ...(values.organizationId !== employee.organizationId ? { organizationId: values.organizationId } : {}),
+          positionId: values.positionId,
+          jobLevel: values.jobLevel,
+          workplaceName: values.workplaceName,
           personnelPosition: values.personnelPosition,
           employeeLevel: values.employeeLevel,
           personnelCategory: values.personnelCategory,
           employmentRelationship: values.employmentRelationship,
           personnelSource: values.personnelSource,
           workArrangement: values.workArrangement,
+          assignmentStartDate: values.assignmentStartDate?.format('YYYY-MM-DD'),
+          entryDate: values.entryDate?.format('YYYY-MM-DD'),
+          confirmationDate: values.confirmationDate?.format('YYYY-MM-DD'),
+          trialPostEndDate: values.trialPostEndDate?.format('YYYY-MM-DD'),
+          movementTypeId: values.movementTypeId,
+          changeReason: values.changeReason?.trim(),
+          changeDescription: values.changeDescription?.trim(),
+          managerEmployeeId: values.managerEmployeeId,
+          agreementEmployingCompanyId: values.agreementEmployingCompanyId,
         }
         : {
           initialEmployment: {
-            organizationId: initialEmploymentValues!.organizationId,
-            entryDate: initialEmploymentValues!.entryDate!.format('YYYY-MM-DD'),
-            personnelCategory: initialEmploymentValues!.personnelCategory,
-            employmentRelationship: initialEmploymentValues!.employmentRelationship!,
-            personnelSource: initialEmploymentValues!.personnelSource,
-            workArrangement: initialEmploymentValues!.workArrangement!,
-            employmentStatus: initialEmploymentValues!.employmentStatus!,
-            personnelPosition: initialEmploymentValues!.personnelPosition,
-            employeeLevel: initialEmploymentValues!.employeeLevel,
-            positionId: initialEmploymentValues!.positionId,
-            jobLevel: initialEmploymentValues!.jobLevel,
-            workplaceId: initialEmploymentValues!.workplaceId,
+            organizationId: values.organizationId,
+            entryDate: values.entryDate!.format('YYYY-MM-DD'),
+            personnelCategory: values.personnelCategory,
+            employmentRelationship: values.employmentRelationship!,
+            personnelSource: values.personnelSource,
+            workArrangement: values.workArrangement!,
+            employmentStatus: values.employmentStatus,
+            personnelPosition: values.personnelPosition,
+            employeeLevel: values.employeeLevel,
+            positionId: values.positionId,
+            jobLevel: values.jobLevel,
+            workplaceName: values.workplaceName,
           },
         }),
     };
@@ -455,72 +481,57 @@ export function EmployeeForm({
       <Form<EmployeeFormValues> id={formId} form={form} requiredMark={false} onFinish={handleFinish} className="employee-form">
         <FormSection title="员工信息">
           <FormLine name="name" label="姓名" required rules={[{ required: true, message: '请输入姓名' }, { max: 50, message: '姓名不能超过 50 个字符' }]}><Input /></FormLine>
-          <FormLine name="employeeNo" label="工号" required rules={[{ required: true, message: '请输入工号' }, { max: 32, message: '工号不能超过 32 个字符' }, { pattern: /^[A-Za-z0-9_-]+$/, message: '只能使用字母、数字、下划线和连字符' }]}><Input /></FormLine>
-          <FormLine name="workEmail" label="企业邮箱" rules={[{ type: 'email', message: '请输入有效的企业邮箱' }]}><Input /></FormLine>
+          <FormLine name="workEmail" label="电子邮件" required rules={[{ required: true, message: '请输入电子邮件' }, { type: 'email', message: '请输入有效的电子邮件' }]}><Input /></FormLine>
           <FormLine name="personalEmail" label="个人邮箱" rules={[{ type: 'email', message: '请输入有效的个人邮箱' }]}><Input /></FormLine>
-          <FormLine name="mobile" label="手机号码" rules={[{ pattern: /^1\d{10}$/, message: '请输入 11 位中国大陆手机号' }]}><Input maxLength={11} /></FormLine>
-          <FormLine name="gender" label="性别"><Select options={[{ value: 'MALE', label: '男' }, { value: 'FEMALE', label: '女' }, { value: 'UNDISCLOSED', label: '保密' }]} /></FormLine>
-          <FormLine name="birthDate" label="出生日期"><DatePicker /></FormLine>
+          <FormLine name="workStartDate" label="参加工作日期"><DatePicker /></FormLine>
+          <FormLine name="nationality" label="国籍(地区)"><Select options={[{ value: '中国', label: '中国' }]} /></FormLine>
+          <FormLine name="documentType" label="证件类型" required rules={[{ required: true, message: '请选择证件类型' }]}><Select showSearch optionFilterProp="label" options={identityDocumentTypeOptions} /></FormLine>
+          <FormLine name="documentNumber" label="证件号码" required rules={[{ required: true, message: '请输入证件号码' }, { max: 64, message: '证件号码不能超过 64 个字符' }]}><Input maxLength={64} /></FormLine>
+          <FormLine name="birthDate" label="出生日期" required rules={[{ required: true, message: '请选择出生日期' }]}><DatePicker /></FormLine>
+          <FormLine name="birthdayPreference" label="过生日偏好"><Select options={[{ value: 'SOLAR', label: '公历' }, { value: 'LUNAR', label: '农历' }]} /></FormLine>
+          <FormLine name="lunarBirthDate" label="农历生日" required><DatePicker /></FormLine>
+          <FormLine name="gender" label="性别" required><Select options={[{ value: 'MALE', label: '男' }, { value: 'FEMALE', label: '女' }, { value: 'UNDISCLOSED', label: '保密' }]} /></FormLine>
           <FormLine name="ethnicity" label="民族"><Select showSearch optionFilterProp="label" options={ethnicityOptions} /></FormLine>
-          <FormLine name="maritalStatus" label="婚姻状况"><Select options={maritalStatusOptions} /></FormLine>
-          <FormLine name="politicalStatus" label="政治面貌"><Select options={politicalStatusOptions} /></FormLine>
-          <FormLine name="nativePlaceRegionCode" label="籍贯地区"><RegionCascader /></FormLine>
-          <FormLine name="nativePlace" label="籍贯详细说明"><Input /></FormLine>
-          <FormLine name="householdType" label="户口类别"><Select options={householdTypeOptions} /></FormLine>
-          <FormLine name="householdRegionCode" label="户籍所在地地区"><RegionCascader /></FormLine>
-          <FormLine name="householdAddress" label="户籍详细地址"><Input /></FormLine>
-          <FormLine name="residentialRegionCode" label="联系地址地区"><RegionCascader /></FormLine>
-          <FormLine name="residentialAddress" label="联系详细地址"><Input /></FormLine>
-          <FormLine name="documentType" label="证件类型"><Select showSearch optionFilterProp="label" options={identityDocumentTypeOptions} /></FormLine>
-          <FormLine name="documentNumber" label="证件号码"><Input maxLength={64} /></FormLine>
-          <FormLine name="documentExpiryDate" label="证件截止日期"><DatePicker /></FormLine>
+          <FormLine name="maritalStatus" label="婚姻状况" required><Select options={maritalStatusOptions} /></FormLine>
+          <FormLine name="politicalStatus" label="政治面貌" required><Select options={politicalStatusOptions} /></FormLine>
+          <FormLine name="householdType" label="户口类别" required><Select options={householdTypeOptions} /></FormLine>
+          <FormLine name="householdAddress" label="户籍所在地"><Input /></FormLine>
+          <FormLine name="highestEducation" label="最高学历" required><Select options={educationLevelOptions} /></FormLine>
+          <FormLine name="mobile" label="手机" required rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1\d{10}$/, message: '请输入 11 位中国大陆手机号' }]}><Input maxLength={11} /></FormLine>
+          <FormLine name="residentialAddress" label="联系地址" required><Input /></FormLine>
+          <FormLine name="emergencyContactName" label="紧急联系人" required><Input /></FormLine>
+          <FormLine name="emergencyContactRelationship" label="与本人关系" required><Input /></FormLine>
+          <FormLine name="emergencyContactMobile" label="紧急联系人电话" required><Input maxLength={11} /></FormLine>
+          <FormLine name="fullTimeDutyDescription" label="全日制岗位职责说明" className="employee-form-tall-control"><Input.TextArea autoSize={false} /></FormLine>
+          <FormLine name="partTimeHourlyRate" label="非全时薪资（元/小时）"><Input inputMode="decimal" /></FormLine>
+          <FormLine name="partTimePositionName" label="非全职位名称"><Input /></FormLine>
         </FormSection>
         <FormSection title="任职信息">
-          {employee.assignmentId ? (
-            <>
-              <FormLine name="organizationId" label="部门" note="变更部门会结束当前主要任职并创建新的任职历史记录"><OrganizationTreeSelect organizations={organizations} placeholder="请选择" /></FormLine>
-              <FormLine name="personnelPosition" label="人员定位"><Select options={personnelPositionOptions} /></FormLine>
-              <FormLine name="employeeLevel" label="员工层级"><Select options={employeeLevelOptions} /></FormLine>
-              <FormLine name="personnelCategory" label="人员类别"><Select options={personnelCategoryOptions} /></FormLine>
-              <FormLine name="employmentRelationship" label="雇佣关系"><Select options={employmentRelationshipOptions} /></FormLine>
-              <FormLine name="personnelSource" label="人员来源"><Select options={personnelSourceOptions} /></FormLine>
-              <FormLine name="workArrangement" label="用工形式"><Select options={workArrangementOptions} /></FormLine>
-              <FormLine name="employmentStatus" label="人员状态" note="人员状态需通过对应任职流程维护"><Select disabled options={employmentStatusOptions} /></FormLine>
-            </>
-          ) : (
-            <Form<InitialEmploymentFormValues> form={initialEmploymentForm} component={false} requiredMark={false}>
-              <div className="employee-form-unavailable">该人员尚未建立任职记录。保存时须一次性补齐以下首段任职必要字段。</div>
-              <FormLine name="organizationId" label="部门" required rules={[{ required: true, message: '请选择部门' }]}><OrganizationTreeSelect organizations={organizations} placeholder="请选择" /></FormLine>
-              <FormLine name="entryDate" label="入职日期" required rules={[{ required: true, message: '请选择入职日期' }]}><DatePicker placeholder="入职日期" /></FormLine>
-              <FormLine name="employmentRelationship" label="雇佣关系" required rules={[{ required: true, message: '请选择雇佣关系' }]}><Select options={employmentRelationshipOptions} /></FormLine>
-              <FormLine name="workArrangement" label="用工形式" required rules={[{ required: true, message: '请选择用工形式' }]}><Select options={workArrangementOptions} /></FormLine>
-              <FormLine name="employmentStatus" label="人员状态" required rules={[{ required: true, message: '请选择人员状态' }]}><Select options={employmentStatusOptions} /></FormLine>
-              <FormLine name="personnelCategory" label="人员类别"><Select options={personnelCategoryOptions} /></FormLine>
-              <FormLine name="personnelSource" label="人员来源"><Select options={personnelSourceOptions} /></FormLine>
-              <FormLine name="personnelPosition" label="人员定位"><Select options={personnelPositionOptions} /></FormLine>
-              <FormLine name="employeeLevel" label="员工层级"><Select options={employeeLevelOptions} /></FormLine>
-              <FormLine name="positionId" label="职位"><Select placeholder="请搜索" showSearch filterOption={matchesPositionSearch} options={positionOptions} /></FormLine>
-              <FormLine name="jobLevel" label="职级"><Select placeholder="请搜索" showSearch optionFilterProp="label" filterOption={matchesJobLevelSearch} options={jobLevelOptions} /></FormLine>
-              <FormLine name="workplaceId" label="工作地点"><Select placeholder="请选择" options={workplaceOptions} /></FormLine>
-            </Form>
-          )}
+          <FormLine name="assignmentStartDate" label="开始日期"><DatePicker /></FormLine>
+          <FormLine name="agreementEmployingCompanyId" label="机构"><Select options={employingCompanyOptions} /></FormLine>
+          <FormLine name="organizationId" label="部门" required rules={[{ required: true, message: '请选择部门' }]}><OrganizationTreeSelect organizations={organizations} placeholder="请选择" /></FormLine>
+          <FormLine name="employmentRelationship" label="雇佣关系"><Select options={employmentRelationshipOptions} /></FormLine>
+          <FormLine name="employeeNo" label="工号"><Input disabled /></FormLine>
+          <FormLine name="positionId" label="职位"><Select placeholder="请搜索" showSearch filterOption={matchesPositionSearch} options={positionOptions} /></FormLine>
+          <FormLine name="jobLevel" label="职级"><Select placeholder="请搜索" showSearch optionFilterProp="label" filterOption={matchesJobLevelSearch} options={jobLevelOptions} /></FormLine>
+          <FormLine name="employeeLevel" label="员工层级"><Select options={employeeLevelOptions} /></FormLine>
+          <FormLine name="personnelPosition" label="人员定位"><Select options={personnelPositionOptions} /></FormLine>
+          <FormLine name="workplaceName" label="工作地点"><Input maxLength={191} /></FormLine>
+          <FormLine name="managerEmployeeId" label="直接经理"><Select placeholder="请选择" showSearch optionFilterProp="label" options={managerOptions} /></FormLine>
+          <FormLine name="personnelCategory" label="人员类别"><Select options={personnelCategoryOptions} /></FormLine>
+          <FormLine name="workArrangement" label="用工形式"><Select options={workArrangementOptions} /></FormLine>
+          <FormLine name="entryDate" label="入职日期"><DatePicker /></FormLine>
+          <FormLine name="confirmationDate" label="转正日期"><DatePicker /></FormLine>
+          <FormLine name="trialPostEndDate" label="试岗结束日期"><DatePicker /></FormLine>
+          <FormLine name="movementTypeId" label="异动类型"><Select placeholder="请选择" options={movementTypeOptions} /></FormLine>
+          <FormLine name="changeReason" label="变动原因"><Input /></FormLine>
+          <FormLine name="changeDescription" label="变动说明"><Input /></FormLine>
+          <FormLine name="hasCompanyEquity" label="是否有公司资质权限"><Radio.Group options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></FormLine>
         </FormSection>
-        <FormSection title="紧急联系人">
-          <FormLine name="emergencyContactName" label="紧急联系人"><Input /></FormLine>
-          <FormLine name="emergencyContactRelationship" label="与本人关系"><Input /></FormLine>
-          <FormLine name="emergencyContactMobile" label="紧急联系人电话"><Input /></FormLine>
-        </FormSection>
-        <FormSection title="银行资料">
-          <FormLine name="bankName" label="银行"><Select options={bankNameOptions} /></FormLine>
-          <FormLine name="bankBranchName" label="开户行支行"><Input /></FormLine>
-          <FormLine name="bankAccountNumber" label="银行账号"><Input maxLength={19} /></FormLine>
-        </FormSection>
-        <FormSection title="教育经历">
-          <FormLine name="graduationSchoolName" label="毕业学校名称"><Input /></FormLine>
-          <FormLine name="institutionType" label="院校类型"><Select options={institutionTypeOptions} /></FormLine>
-          <FormLine name="highestEducation" label="最高学历"><Select options={educationLevelOptions} /></FormLine>
-          <FormLine name="graduationDate" label="毕业时间"><DatePicker /></FormLine>
-          <FormLine name="major" label="专业"><Input /></FormLine>
+        <FormSection title="银行卡信息">
+          <FormLine name="bankName" label="银行" required><Select options={bankNameOptions} /></FormLine>
+          <FormLine name="bankAccountNumber" label="银行账号" required><Input maxLength={19} /></FormLine>
+          <FormLine name="bankBranchName" label="开户行支行" required><Input /></FormLine>
         </FormSection>
       </Form>
     );
@@ -548,7 +559,7 @@ export function EmployeeForm({
         <FormLine name="positionId" label="职位"><Select placeholder="请搜索" showSearch filterOption={matchesPositionSearch} options={positionOptions} /></FormLine>
         <FormLine name="jobLevel" label="职级"><Select placeholder="请搜索" showSearch optionFilterProp="label" filterOption={matchesJobLevelSearch} options={jobLevelOptions} /></FormLine>
         <FormLine name="isDepartmentLead" label="是否部门负责人"><Radio.Group options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></FormLine>
-        <FormLine name="workplaceId" label="工作地点"><Select placeholder="请选择" options={workplaceOptions} /></FormLine>
+        <FormLine name="workplaceName" label="工作地点"><Input placeholder="请输入（可选）" maxLength={191} /></FormLine>
         <FormLine name="workArrangement" label="用工形式" required rules={[{ required: true, message: '请选择用工形式' }]}><Select options={workArrangementOptions} /></FormLine>
         <FormLine name="hasProbation" label="是否有试用期" required rules={[{ required: true, message: '请选择是否有试用期' }]}><Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} onChange={(value) => { if (!value) form.setFieldsValue({ probationMonths: undefined, probationEndDate: undefined }); }} /></FormLine>
       </FormSection>

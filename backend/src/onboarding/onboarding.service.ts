@@ -145,7 +145,7 @@ export class OnboardingService {
       archivedAt: null,
     };
 
-    const [organizations, positions, workplaces, managers, employingCompanies] = await this.prisma.$transaction([
+    const [organizations, positions, managers, employingCompanies] = await this.prisma.$transaction([
       this.prisma.organization.findMany({
         where: organizationWhere,
         select: { id: true, name: true, parentId: true },
@@ -155,11 +155,6 @@ export class OnboardingService {
         where: positionWhere,
         select: { id: true, code: true, name: true, organizationId: true },
         orderBy: [{ code: 'asc' }, { id: 'asc' }],
-      }),
-      this.prisma.workplace.findMany({
-        where: { status: RecordStatus.ACTIVE, archivedAt: null },
-        select: { id: true, name: true, address: true },
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.employee.findMany({
         where: { ...managerWhere, name: { not: null } },
@@ -176,7 +171,6 @@ export class OnboardingService {
     return {
       organizations,
       positions,
-      workplaces,
       managers: managers.map(({ id, name, employeeNo }) => ({ id, name: name ?? '--', employeeNo })),
       employingCompanies,
     };
@@ -248,7 +242,7 @@ export class OnboardingService {
               candidateId: candidate.id,
               organizationId: dto.organizationId,
               positionId: dto.positionId,
-              workplaceId: dto.workplaceId ?? null,
+              workplaceName: dto.workplaceName ?? null,
               proposedEntryDate,
               probationMonths: dto.probationMonths,
               jobLevel: dto.jobLevel,
@@ -267,7 +261,7 @@ export class OnboardingService {
               issueDate: null,
             },
             select: {
-              id: true, offerNo: true, organizationId: true, positionId: true, workplaceId: true,
+              id: true, offerNo: true, organizationId: true, positionId: true, workplaceName: true,
               proposedEntryDate: true, probationMonths: true, jobLevel: true, employeeLevel: true,
               personnelCategory: true, workArrangement: true, directManagerEmployeeId: true,
               employingCompanyId: true, agreementType: true, contractTermType: true, contractMonths: true,
@@ -314,7 +308,7 @@ export class OnboardingService {
             },
             organizationId: offer.organizationId!,
             positionId: offer.positionId!,
-            workplaceId: offer.workplaceId,
+            workplaceName: offer.workplaceName,
             proposedEntryDate: formatDate(offer.proposedEntryDate)!,
             probationMonths: offer.probationMonths,
             jobLevel: offer.jobLevel,
@@ -437,7 +431,7 @@ export class OnboardingService {
               select: {
                 organizationId: true,
                 positionId: true,
-                workplaceId: true,
+                workplaceName: true,
                 jobLevel: true,
                 employeeLevel: true,
                 personnelCategory: true,
@@ -508,7 +502,7 @@ export class OnboardingService {
         : null,
       organizationId: assignment?.organizationId ?? null,
       positionId: assignment?.positionId ?? null,
-      workplaceId: assignment?.workplaceId ?? null,
+      workplaceName: assignment?.workplaceName ?? null,
       jobLevel: assignment?.jobLevel ?? null,
       employeeLevel: assignment?.employeeLevel ?? null,
       personnelCategory: assignment?.personnelCategory ?? period.personnelCategory,
@@ -563,7 +557,7 @@ export class OnboardingService {
       acceptedEmployee: { select: { gender: true } },
       organization: { select: { name: true } },
       position: { select: { name: true } },
-      workplace: { select: { name: true } },
+      workplaceName: true,
       onboardingCase: {
         select: {
           actualEntryDate: true,
@@ -611,7 +605,7 @@ export class OnboardingService {
           organizationName: row.organization?.name ?? null,
           appliedPositionName: null,
           offeredPositionName: row.position?.name ?? null,
-          workplaceName: row.workplace?.name ?? null,
+          workplaceName: row.workplaceName ?? null,
           proposedEntryDate: formatDate(row.proposedEntryDate),
           probationMonths: row.probationMonths,
           offerSenderName: null,
@@ -714,7 +708,7 @@ export class OnboardingService {
       offer: {
         select: {
           organization: { select: { name: true } },
-          workplace: { select: { name: true } },
+          workplaceName: true,
           position: { select: { name: true } },
           candidate: { select: { source: true } },
         },
@@ -746,7 +740,7 @@ export class OnboardingService {
           plannedOrganizationName: row.offer?.organization?.name ?? null,
           plannedEntryDate: row.plannedEntryDate.toISOString().slice(0, 10),
           entryType: null,
-          plannedWorkplaceName: row.offer?.workplace?.name ?? null,
+          plannedWorkplaceName: row.offer?.workplaceName ?? null,
           positionName: row.offer?.position?.name ?? null,
           jobLevel: null,
           managerName: row.employee.reportingAsEmployee[0]?.manager.name ?? null,
@@ -1199,7 +1193,7 @@ export class OnboardingService {
     input: {
       organizationId?: string;
       positionId?: string;
-      workplaceId?: string;
+      workplaceName?: string;
       employingCompanyId?: string;
       directManagerEmployeeId?: string;
     },
@@ -1228,14 +1222,6 @@ export class OnboardingService {
       if (!position) throw new BadRequestException('录用职位不存在、已停用或已归档');
     } else if (requireCoreDirectories) {
       throw new BadRequestException('必须选择录用职位');
-    }
-
-    if (input.workplaceId) {
-      const workplace = await prisma.workplace.findFirst({
-        where: { id: input.workplaceId, status: RecordStatus.ACTIVE, archivedAt: null },
-        select: { id: true },
-      });
-      if (!workplace) throw new BadRequestException('工作地点不存在、已停用或已归档');
     }
 
     if (input.employingCompanyId) {

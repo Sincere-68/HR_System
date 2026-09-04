@@ -163,6 +163,7 @@ export function TrialPostManagementPage() {
           columns={trialPostColumns}
           dataSource={trialPosts.data?.data ?? []}
           scroll={{ x: 1_450 }}
+          sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的试岗记录" /> }}
           pagination={{
             current: query.page,

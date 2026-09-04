@@ -234,13 +234,12 @@ export class CreateInternOfferDto {
   @MaxLength(191)
   positionId: string;
 
-  @ApiPropertyOptional({ description: '工作地点 ID；未选择时 Offer 快照保存为空' })
+  @ApiPropertyOptional({ description: '工作地点（自由文本）', maxLength: 191 })
   @Transform(trim)
   @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(191)
-  workplaceId?: string;
+  workplaceName?: string;
 
   @ApiProperty({ example: '2026-09-01', description: '拟入职日期，格式 YYYY-MM-DD' })
   @IsDateString({ strict: true })

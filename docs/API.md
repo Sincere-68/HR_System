@@ -16,8 +16,8 @@ Authorization: Bearer <accessToken>
 
 ```json
 {
-  "username": "admin",
-  "password": "Demo@123"
+  "username": "<管理员账号>",
+  "password": "<管理员密码>"
 }
 ```
 
@@ -30,10 +30,10 @@ Authorization: Bearer <accessToken>
 ```json
 {
   "id": "...",
-  "username": "deptadmin",
-  "displayName": "部门管理员",
-  "role": "DEPT_ADMIN",
-  "roleName": "部门管理员",
+  "username": "<当前账号>",
+  "displayName": "<当前用户显示名>",
+  "role": "<当前角色代码>",
+  "roleName": "<当前角色名称>",
   "permissions": [
     "employee.read",
     "employee.create",
@@ -152,7 +152,7 @@ Authorization: Bearer <accessToken>
 
 ### GET `/employees/form-options`
 
-需要 `employee.create` 或 `employee.update` 任一权限。返回新增或编辑员工页面可选择的有效职位、工作地点、直接经理和全日制公司目录；职位目录每项返回稳定 `id`、五位 `code` 与 `name`，前端显示“编号 - 名称”并支持按编号或名称搜索。职位是公司内部全局目录，和部门是独立维度，不按部门过滤；只返回有效、未归档的职位。职级是前后端共享的固定 enum，不通过本接口返回。合同及内部公司统一使用全日制公司，不再返回独立的合同签订公司选项。可通过 `excludeEmployeeId` 排除当前员工，经理选项只包含表单需要的员工 ID、姓名和工号。全日制公司目录只返回有效、未归档项。
+需要 `employee.create` 或 `employee.update` 任一权限。返回新增或编辑员工页面可选择的有效职位、直接经理和全日制公司目录；工作地点是任职上的可选自由文本，不通过本接口返回。职位目录每项返回稳定 `id`、五位 `code` 与 `name`，前端显示“编号 - 名称”并支持按编号或名称搜索。职位是公司内部全局目录，和部门是独立维度，不按部门过滤；只返回有效、未归档的职位。职级是前后端共享的固定 enum，不通过本接口返回。合同及内部公司统一使用全日制公司，不再返回独立的合同签订公司选项。可通过 `excludeEmployeeId` 排除当前员工，经理选项只包含表单需要的员工 ID、姓名和工号。全日制公司目录只返回有效、未归档项。
 
 ### POST `/employees`
 
@@ -188,7 +188,7 @@ Authorization: Bearer <accessToken>
   "organizationId": "部门 ID",
   "positionId": "职位 ID",
   "jobLevel": "S1",
-  "workplaceId": "工作地点 ID",
+  "workplaceName": "上海园区",
   "personnelPosition": "FRONT_OFFICE",
   "employeeLevel": "STAFF",
   "agreementEmployingCompanyId": "本次合同协议的全日制公司目录 ID",
@@ -236,7 +236,7 @@ Authorization: Bearer <accessToken>
 
 五个业务阶段按以下优先级互斥：`ONBOARDED` 为关联入职单有 `actualEntryDate`；其次 `REJECTED` 为 Offer 状态 `REJECTED` 且尚未入职；`ACCEPTED` 为有接受日期、未拒绝且尚未入职；`SENT` 为有 Offer 发送日期、未接受、未拒绝且尚未入职；其余未归档 Offer 为 `PENDING_SEND`。`ALL` 返回全部未归档 Offer。响应 `meta.viewCounts` 返回同一组织数据范围下待发、已发、已接受、已拒绝、已入职和全部 Offer 的实时数量；分页在后端按当前 `view` 筛选后执行。
 
-字段来源：姓名、个人邮箱、手机号码读取 `Candidate.name/email/mobile`；录用部门、录用职位、工作地点、拟入职日期、试用期、发送日期、接受日期和拒绝原因分别读取 `Offer.organization/position/workplace/proposedEntryDate/probationMonths/issueDate/acceptedAt/rejectedReason`；入职日期读取关联 `OnboardingCase.actualEntryDate`；已入职页面的“邮箱”按用户确认也读取 `Candidate.email`（接口 `personalEmail`）；Offer 状态读取 `Offer.status`。外部应聘职位、Offer 发送人、推荐人、同步状态、拒绝日期、审批状态和当前审批人当前没有可靠来源，均返回 `null`，前端显示 `--`；尤其不能把 `Offer.status` 当作审批状态，也不能用创建/更新时间代替拒绝日期。
+字段来源：姓名、个人邮箱、手机号码读取 `Candidate.name/email/mobile`；录用部门、录用职位、工作地点、拟入职日期、试用期、发送日期、接受日期和拒绝原因分别读取 `Offer.organization/position/workplaceName/proposedEntryDate/probationMonths/issueDate/acceptedAt/rejectedReason`；工作地点是可选自由文本，不关联目录。入职日期读取关联 `OnboardingCase.actualEntryDate`；已入职页面的“邮箱”按用户确认也读取 `Candidate.email`（接口 `personalEmail`）；Offer 状态读取 `Offer.status`。外部应聘职位、Offer 发送人、推荐人、同步状态、拒绝日期、审批状态和当前审批人当前没有可靠来源，均返回 `null`，前端显示 `--`；尤其不能把 `Offer.status` 当作审批状态，也不能用创建/更新时间代替拒绝日期。
 
 当前六个表格均为只读列表，操作列显示禁用的“暂无操作”。
 
@@ -252,7 +252,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 ### GET `/onboarding/intern-offer-form-options`
 
-返回直接创建实习 Offer 的目录项。组织只返回当前账号组织树范围内有效且未归档项；职位、工作地点、全日制公司均只返回有效未归档目录，职位与录用部门独立。工作地点包含仅供派生显示的 `address`，但不是必填项；未选工作地点时前端办公地址显示 `--`，Offer 保存 `workplace_id = NULL`。
+返回直接创建实习 Offer 的目录项。组织只返回当前账号组织树范围内有效且未归档项；职位与全日制公司均只返回有效未归档目录，职位与录用部门独立。工作地点是表单中的可选自由文本，不在本接口返回；办公地址没有可靠来源，前端固定显示 `--`。
 
 ### GET `/onboarding/intern-conversion-options`
 
@@ -264,7 +264,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 ### POST `/onboarding/intern-offers`
 
-请求直接创建一个实习 Offer。`name`、`mobile`、`personalEmail`、`source`、`organizationId`、`positionId`、`proposedEntryDate` 必填；`workplaceId` 可选，若提供必须指向有效未归档工作地点。`mobile` 必须为 11 位中国大陆手机号，`source` 只接受既有 `PersonnelSource` 值，并原样写入 `Candidate.source`；创建路径 query 参数绝不保存。
+请求直接创建一个实习 Offer。`name`、`mobile`、`personalEmail`、`source`、`organizationId`、`positionId`、`proposedEntryDate` 必填；`workplaceName` 为可选自由文本，最长 191 个字符。`mobile` 必须为 11 位中国大陆手机号，`source` 只接受既有 `PersonnelSource` 值，并原样写入 `Candidate.source`；创建路径 query 参数绝不保存。
 
 接口可同时保存已确认的候选人证件/教育快照和 Offer 薪资、兼职、任职、直线经理、全日制公司及合同快照字段。服务端固定 `Offer.employmentRelationship=INTERN`、`status=DRAFT`、`issueDate=null`，并以 `INTERN-YYYYMMDD-####` 规则生成编号，在 `offer_no` 唯一冲突时最多重试 3 次。事务仅创建 `Candidate`、可选 Candidate 快照、`Offer` 和可选 Offer 快照；不会创建 `Employee`、`EmploymentPeriod`、`EmployeeAssignment`、`ReportingRelationship`、`EmployeeAgreement`、`OnboardingCase`、`ApprovalRequest` 或 `ApprovalStep`。不提供审批预览或提交。
 

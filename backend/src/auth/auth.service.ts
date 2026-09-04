@@ -67,13 +67,19 @@ export class AuthService {
     };
     dataScopes: { organizationId: string }[];
   }): AuthUser {
+    const role = user.role.code as RoleCode;
+    // 普通账户当前仅能完成登录，尚未开放业务数据访问。这里在每次
+    // JWT 解析时强制收敛权限，避免旧种子数据中的角色权限继续生效。
+    const permissions = role === 'VIEWER'
+      ? []
+      : user.role.permissions.map(({ permission }) => permission.code as PermissionCode);
     return {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
-      role: user.role.code as RoleCode,
+      role,
       roleName: user.role.name,
-      permissions: user.role.permissions.map(({ permission }) => permission.code as PermissionCode),
+      permissions,
       organizationIds: user.dataScopes.map(({ organizationId }) => organizationId),
     };
   }
