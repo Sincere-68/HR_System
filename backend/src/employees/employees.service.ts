@@ -268,8 +268,8 @@ export class EmployeesService {
           status: RecordStatus.ACTIVE,
           archivedAt: null,
         },
-        select: { id: true, code: true, name: true, organizationId: true },
-        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        select: { id: true, name: true, organizationId: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.employee.findMany({
         where: {
@@ -344,11 +344,14 @@ export class EmployeesService {
         });
       }
     }
-    if (query.keyword) {
+    if (query.name) {
+      conditions.push({ name: { contains: query.name } });
+    }
+    if (query.employmentRelationship) {
       conditions.push({
         OR: [
-          { name: { contains: query.keyword } },
-          { employeeNo: { contains: query.keyword } },
+          { assignments: { some: { ...currentAssignmentWhere, employmentRelationship: query.employmentRelationship } } },
+          { assignments: { none: {} }, employmentPeriods: { some: { employmentRelationship: query.employmentRelationship } } },
         ],
       });
     }
@@ -1041,7 +1044,7 @@ export class EmployeesService {
             id: true,
             employmentPeriodId: true,
             positionId: true,
-            position: { select: { id: true, code: true, name: true } },
+            position: { select: { id: true, name: true } },
             jobLevel: true,
             jobTitleId: true,
             workplaceName: true,
@@ -1280,7 +1283,7 @@ export class EmployeesService {
           });
           const targetOrganization = await tx.organization.findUniqueOrThrow({
             where: { id: dto.organizationId! },
-            select: { id: true, code: true, name: true },
+            select: { id: true, name: true },
           });
           await tx.employeeFieldChangeLog.create({
             data: {
@@ -2090,46 +2093,23 @@ export class EmployeesService {
   private async resolveImportPosition(value: string | undefined, warnings: string[]) {
     if (!value) return null;
     const normalized = value.trim();
-    const codeAndName = /^(\d{5})\s*(?:[-－—–:：])\s*(.+)$/.exec(normalized);
-    const code = /^\d{5}$/.test(normalized) ? normalized : codeAndName?.[1];
-    if (code) {
-      const position = await this.prisma.position.findFirst({
-        where: { code, status: RecordStatus.ACTIVE, archivedAt: null },
-        select: { id: true, name: true },
-      });
-      if (!position) {
-        const activeCount = await this.prisma.position.count({
-          where: { status: RecordStatus.ACTIVE, archivedAt: null },
-        });
-        warnings.push(activeCount === 0
-          ? '职位目录未初始化，请先执行安全职位目录同步脚本'
-          : `职位编号“${code}”不存在，未导入`);
-        return null;
-      }
-      const suppliedName = codeAndName?.[2]?.trim();
-      if (suppliedName && suppliedName !== position.name) {
-        warnings.push(`职位编号“${code}”对应“${position.name}”，与导入名称“${suppliedName}”不一致，未导入`);
-        return null;
-      }
-      return position;
+    if (/^\d{5}(?:\s*(?:[-－—–:：])\s*.+)?$/.test(normalized)) {
+      warnings.push(`职位“${normalized}”包含已废止的职位编号，请仅填写职位名称`);
+      return null;
     }
 
-    const matches = await this.prisma.position.findMany({
+    const position = await this.prisma.position.findFirst({
       where: { name: normalized, status: RecordStatus.ACTIVE, archivedAt: null },
       select: { id: true },
-      take: 2,
     });
-    if (matches.length === 1) return matches[0]!;
-    if (matches.length === 0) {
-      const activeCount = await this.prisma.position.count({
-        where: { status: RecordStatus.ACTIVE, archivedAt: null },
-      });
-      warnings.push(activeCount === 0
-        ? '职位目录未初始化，请先执行安全职位目录同步脚本'
-        : `职位“${normalized}”不存在，未导入`);
-    } else {
-      warnings.push(`职位“${normalized}”匹配多个目录项，未导入`);
-    }
+    if (position) return position;
+
+    const activeCount = await this.prisma.position.count({
+      where: { status: RecordStatus.ACTIVE, archivedAt: null },
+    });
+    warnings.push(activeCount === 0
+      ? '职位目录未初始化，请先执行安全职位名称目录同步脚本'
+      : `职位“${normalized}”不存在，未导入`);
     return null;
   }
 
@@ -2487,12 +2467,14 @@ export class EmployeesService {
         ? employees.filter((employee) => employee.organizationId === query.organizationId)
         : [];
     }
-    if (query.keyword) {
-      const keyword = query.keyword.toLocaleLowerCase();
-      employees = employees.filter(
-        (employee) => employee.name.toLocaleLowerCase().includes(keyword)
-          || employee.employeeNo.toLocaleLowerCase().includes(keyword),
-      );
+    if (query.name) {
+      const name = query.name.toLocaleLowerCase();
+      employees = employees.filter((employee) => employee.name.toLocaleLowerCase().includes(name));
+    }
+    if (query.employmentRelationship) {
+      // The in-memory Demo model does not retain normalized employment periods,
+      // so its records have no reliable employment-relationship source.
+      employees = [];
     }
     if (query.status) {
       employees = employees.filter((employee) => employee.employmentRecords[0]?.status === query.status);
@@ -2679,7 +2661,7 @@ export class EmployeesService {
     tx: Prisma.TransactionClient,
     currentAssignment: {
       positionId: string | null;
-      position: { id: string; code: string; name: string } | null;
+      position: { id: string; name: string } | null;
       jobLevel: import('@prisma/client').JobLevelCode | null;
       workplaceName: string | null;
       personnelPosition: string | null;
@@ -2720,7 +2702,7 @@ export class EmployeesService {
       if (field === 'positionId' && newValue) {
         const position = await tx.position.findUnique({
           where: { id: newValue },
-          select: { id: true, code: true, name: true },
+          select: { id: true, name: true },
         });
         newSnapshot = directoryValue(position);
       } else if (isEnum) {

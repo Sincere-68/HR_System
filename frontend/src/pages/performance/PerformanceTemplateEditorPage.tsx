@@ -33,10 +33,9 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useCreatePerformanceTemplate, useCreatePerformanceTemplateVersion, usePerformanceOptions, usePerformanceTemplate } from '../../features/performance/api';
+import { performanceApi, useCreatePerformanceTemplate, useCreatePerformanceTemplateVersion, usePerformanceOptions, usePerformanceTemplate } from '../../features/performance/api';
 import {
   getFixedWeightTotal,
-  parseHrbpPerformanceMarkdown,
   parsedHrbpPerformanceTemplate,
   reorderPerformanceModules,
   type PerformanceIndicator,
@@ -79,6 +78,8 @@ export function PerformanceTemplateEditorPage() {
   const [dragOverModuleId, setDragOverModuleId] = useState<string | null>(null);
   const [sourceName, setSourceName] = useState(parsedHrbpPerformanceTemplate.sourceName);
   const [initializedTemplateId, setInitializedTemplateId] = useState<string | null>(null);
+  const [parseWarnings, setParseWarnings] = useState<string[]>([]);
+  const [isParsing, setIsParsing] = useState(false);
 
   useEffect(() => {
     const version = existingTemplate.data?.versions[0];
@@ -127,14 +128,33 @@ export function PerformanceTemplateEditorPage() {
     setDragOverModuleId(null);
   };
 
-  const applyMarkdown = (markdown: string, importedSourceName = sourceName) => {
-    const parsed = parseHrbpPerformanceMarkdown(markdown);
+  const applyMarkdown = async (markdown: string, importedSourceName = sourceName) => {
     setSourceMarkdown(markdown);
     setSourceName(importedSourceName);
-    setTemplateName(parsed.name);
-    setModules(parsed.modules);
-    setSelectedModuleId(parsed.modules[0]?.id ?? '');
-    messageApi.success('Markdown 已解析为流程、模块权重和考核指标');
+    setIsParsing(true);
+    try {
+      const parsed = await performanceApi.parseTemplate(markdown, importedSourceName);
+      if (!parsed.definition || parsed.errors.length) {
+        setParseWarnings(parsed.errors.map((item) => item.message));
+        messageApi.error(parsed.errors.map((item) => item.message).join('；') || 'Markdown 解析失败');
+        return;
+      }
+      setTemplateName(parsed.definition.name);
+      const nextModules = parsed.definition.modules.map((module) => ({
+        ...module,
+        type: module.type.toLowerCase() as PerformanceModuleKind,
+        responsibleRole: module.executor.type === 'AUTO' ? '系统自动计算' : '待指定执行人',
+        indicators: module.indicators.map((indicator) => ({ ...indicator, weightLabel: `${indicator.weight}%`, source: importedSourceName })),
+      }));
+      setModules(nextModules);
+      setSelectedModuleId(nextModules[0]?.id ?? '');
+      setParseWarnings(parsed.warnings.map((item) => item.message));
+      messageApi.success('Markdown 已由后端解析为可确认的模板结构');
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : 'Markdown 解析失败');
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const importMarkdown: UploadProps['beforeUpload'] = (file) => {
@@ -143,7 +163,7 @@ export function PerformanceTemplateEditorPage() {
       return Upload.LIST_IGNORE;
     }
     const reader = new FileReader();
-    reader.onload = () => applyMarkdown(String(reader.result ?? ''), file.name);
+    reader.onload = () => void applyMarkdown(String(reader.result ?? ''), file.name);
     reader.readAsText(file);
     return false;
   };
@@ -276,14 +296,14 @@ export function PerformanceTemplateEditorPage() {
         </label>
         <label className="performance-template-field">
           <span>模板说明</span>
-          <Input.TextArea value="依据业务达成、业务负责人评价及 BP 负责人评价计算月度绩效分。" autoSize={{ minRows: 3, maxRows: 3 }} readOnly />
+          <Input.TextArea value="由当前导入 Markdown 的实际模块、指标、衡量标准和评分参考组成；待确认项会在解析预览中提示。" autoSize={{ minRows: 3, maxRows: 3 }} readOnly />
         </label>
         <div className="performance-template-source-card">
           <div>
             <span className="performance-template-source-icon" aria-hidden="true"><FileMarkdownOutlined /></span>
             <div>
               <strong>已解析 Markdown 来源</strong>
-              <p>{parsedHrbpPerformanceTemplate.sourceName}</p>
+              <p>{sourceName}</p>
             </div>
           </div>
           <Upload accept=".md,text/markdown" showUploadList={false} beforeUpload={importMarkdown}>
@@ -294,7 +314,8 @@ export function PerformanceTemplateEditorPage() {
           <span>Markdown 解析内容</span>
           <Input.TextArea value={sourceMarkdown} onChange={(event) => setSourceMarkdown(event.target.value)} autoSize={{ minRows: 12, maxRows: 18 }} />
         </label>
-        <Button icon={<ReloadOutlined />} onClick={() => applyMarkdown(sourceMarkdown)}>重新解析当前内容</Button>
+        {parseWarnings.length ? <Alert type="warning" showIcon message="Markdown 解析需要确认" description={<ul>{parseWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>} /> : null}
+        <Button icon={<ReloadOutlined />} loading={isParsing} onClick={() => void applyMarkdown(sourceMarkdown)}>使用后端重新解析当前内容</Button>
       </div>
     </section>
   );
@@ -355,7 +376,7 @@ export function PerformanceTemplateEditorPage() {
                     aria-label="特定岗位名称"
                     showSearch
                     options={[
-                      ...(options.data?.positions ?? []).map((option) => ({ label: `职位：${option.code} - ${option.name}`, value: `POSITION:${option.id}` })),
+                      ...(options.data?.positions ?? []).map((option) => ({ label: `职位：${option.name}`, value: `POSITION:${option.id}` })),
                       ...(options.data?.jobTitles ?? []).map((option) => ({ label: `职务：${option.code} - ${option.name}`, value: `JOB_TITLE:${option.id}` })),
                     ]}
                     value={selectedModule.executor.directoryId ? `${selectedModule.executor.directoryType}:${selectedModule.executor.directoryId}` : undefined}
@@ -441,7 +462,7 @@ export function PerformanceTemplateEditorPage() {
         </div>
         <p>指标名称、描述、衡量标准和内部权重均来自当前 Markdown 解析结果。</p>
       </div>
-      <Alert className="performance-indicator-alert" type="info" showIcon message="业务达成模块将按模板的数据映射读取目标值、实际值和指标权重；人工模块展示指标标准，处理人提交模块总分。" />
+      <Alert className="performance-indicator-alert" type="info" showIcon message="指标描述、衡量标准和评分参考来自实际 Markdown。业务模块必须另行确认数据字段和声明式评分规则；人工模块由处理人提交模块总分。" />
       <div className="performance-template-workspace">
         {renderModuleList('dispatch')}
         {selectedModule ? (
@@ -454,7 +475,7 @@ export function PerformanceTemplateEditorPage() {
               <span className="performance-dispatch-module-weight">{selectedModule.participatesInTotal ? `模块权重：${selectedModule.weight ?? 0}%` : '额外调整项'}</span>
             </div>
             <Table<PerformanceIndicator> className="performance-indicator-table" rowKey="id" columns={indicatorColumns} dataSource={selectedModule.indicators} pagination={false} scroll={{ x: 740 }} sticky={{ offsetHeader: 48, offsetScroll: 0 }} />
-            <div className="performance-parse-source-note"><FileMarkdownOutlined /><span>当前模块的指标来自：{selectedModule.indicators[0]?.source ?? parsedHrbpPerformanceTemplate.sourceName}</span></div>
+            <div className="performance-parse-source-note"><FileMarkdownOutlined /><span>当前模块的指标来自：{selectedModule.indicators[0]?.source ?? sourceName}</span></div>
           </section>
         ) : null}
       </div>
@@ -485,7 +506,7 @@ export function PerformanceTemplateEditorPage() {
         <div className="performance-template-title-row">
           <Button type="text" aria-label="返回绩效模板" icon={<ArrowLeftOutlined />} onClick={() => navigate('/performance/templates')} />
           <div>
-            <div className="performance-template-title-meta"><span>员工绩效模板</span><Tag color="cyan">Markdown 已解析</Tag></div>
+            <div className="performance-template-title-meta"><span>员工绩效模板</span><Tag color="cyan">Markdown 结构预览</Tag></div>
             <h1 id="performance-template-editor-title">{templateName || '未命名绩效模板'}</h1>
           </div>
         </div>

@@ -2,12 +2,12 @@ import { PrismaClient } from '@prisma/client';
 import { POSITION_CATALOG } from '@hr-demo/shared';
 
 const prisma = new PrismaClient();
-const RESET_CONFIRMATION = 'REPLACE_434_TEST_POSITIONS';
+const RESET_CONFIRMATION = 'REPLACE_288_TEST_POSITIONS';
 
 function assertResetIsConfirmed() {
   if (process.env.CONFIRM_TEST_POSITION_CATALOG_RESET !== RESET_CONFIRMATION) {
     throw new Error(
-      `拒绝执行：请设置 CONFIRM_TEST_POSITION_CATALOG_RESET=${RESET_CONFIRMATION} 后再运行测试职位目录替换。`,
+      `拒绝执行：请设置 CONFIRM_TEST_POSITION_CATALOG_RESET=${RESET_CONFIRMATION} 后再运行测试职位名称目录替换。`,
     );
   }
 }
@@ -26,8 +26,7 @@ async function main() {
     const assignments = await tx.employeeAssignment.deleteMany();
     const positions = await tx.position.deleteMany();
     const created = await tx.position.createMany({
-      data: POSITION_CATALOG.map(({ code, name }) => ({
-        code,
+      data: POSITION_CATALOG.map(({ name }) => ({
         name,
         organizationId: null,
         status: 'ACTIVE',

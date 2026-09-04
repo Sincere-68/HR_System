@@ -15,7 +15,7 @@ describe('PerformanceController permissions', () => {
     ['startCycle', PERMISSIONS.PERFORMANCE_CYCLE_MANAGE],
     ['submitTask', PERMISSIONS.PERFORMANCE_TASK_HANDLE],
     ['modifyResult', PERMISSIONS.PERFORMANCE_RESULT_MODIFY],
-    ['updateAmountBase', PERMISSIONS.PERFORMANCE_AMOUNT_BASE_MANAGE],
+    ['createEmployeeAmountBase', PERMISSIONS.PERFORMANCE_AMOUNT_BASE_MANAGE],
   ])('protects %s with %s', (method, permission) => {
     expect(Reflect.getMetadata(PERMISSIONS_KEY, controller[method as keyof PerformanceController])).toEqual([permission]);
   });

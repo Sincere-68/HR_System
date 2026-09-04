@@ -1,15 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { EmploymentStatus } from '@prisma/client';
+import { EmploymentRelationship, EmploymentStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class QueryEmployeesDto {
-  @ApiPropertyOptional({ description: '姓名或工号关键字' })
+  @ApiPropertyOptional({ description: '姓名关键字' })
   @IsOptional()
   @IsString()
   @MaxLength(50)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  keyword?: string;
+  name?: string;
 
   @ApiPropertyOptional({ description: '部门 ID' })
   @IsOptional()
@@ -20,6 +20,11 @@ export class QueryEmployeesDto {
   @IsOptional()
   @IsEnum(EmploymentStatus)
   status?: EmploymentStatus;
+
+  @ApiPropertyOptional({ enum: EmploymentRelationship })
+  @IsOptional()
+  @IsEnum(EmploymentRelationship)
+  employmentRelationship?: EmploymentRelationship;
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()

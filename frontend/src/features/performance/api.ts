@@ -1,7 +1,7 @@
 import type {
   Paginated,
-  PerformanceAmountBase,
-  PerformanceAmountBaseInput,
+  EmployeePerformanceAmountBase,
+  EmployeePerformanceAmountBaseInput,
   PerformanceCreateTemplateInput,
   PerformanceDashboardSummary,
   PerformanceOptions,
@@ -36,8 +36,8 @@ export const performanceKeys = {
   task: (id: string) => ['performance', 'task', id] as const,
   results: (query: Record<string, unknown>) => ['performance', 'results', query] as const,
   result: (id: string) => ['performance', 'result', id] as const,
-  amountBase: ['performance', 'amount-base'] as const,
-  amountBaseHistory: ['performance', 'amount-base-history'] as const,
+  employeeAmountBases: (query: Record<string, unknown>) => ['performance', 'employee-amount-bases', query] as const,
+  employeeAmountBaseHistory: (employeeId: string) => ['performance', 'employee-amount-base-history', employeeId] as const,
 };
 
 export const performanceApi = {
@@ -60,9 +60,9 @@ export const performanceApi = {
   listResults: (query: Record<string, unknown>) => apiRequest<Paginated<PerformanceResultListItem>>(`/performance/results?${params(query)}`),
   getResult: (id: string) => apiRequest<PerformanceResultDetail>(`/performance/results/${id}`),
   modifyResult: (id: string, input: PerformanceResultModificationInput) => apiRequest<PerformanceResultDetail>(`/performance/results/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
-  getAmountBase: () => apiRequest<PerformanceAmountBase | null>('/performance/settings/amount-base'),
-  listAmountBaseHistory: () => apiRequest<PerformanceAmountBase[]>('/performance/settings/amount-base/history'),
-  updateAmountBase: (input: PerformanceAmountBaseInput) => apiRequest<PerformanceAmountBase>('/performance/settings/amount-base', { method: 'PUT', body: JSON.stringify(input) }),
+  listEmployeeAmountBases: (query: Record<string, unknown>) => apiRequest<Paginated<EmployeePerformanceAmountBase>>(`/performance/settings/employee-amount-bases?${params(query)}`),
+  listEmployeeAmountBaseHistory: (employeeId: string) => apiRequest<EmployeePerformanceAmountBase[]>(`/performance/settings/employee-amount-bases/${employeeId}/history`),
+  createEmployeeAmountBase: (input: EmployeePerformanceAmountBaseInput) => apiRequest<EmployeePerformanceAmountBase>('/performance/settings/employee-amount-bases', { method: 'POST', body: JSON.stringify(input) }),
 };
 
 export function usePerformanceDashboard() { return useQuery({ queryKey: performanceKeys.dashboard, queryFn: performanceApi.dashboard }); }
@@ -76,10 +76,10 @@ export function usePerformanceTasks(query: Record<string, unknown>, mine = false
 export function usePerformanceTask(id: string) { return useQuery({ queryKey: performanceKeys.task(id), queryFn: () => performanceApi.getTask(id), enabled: Boolean(id) }); }
 export function usePerformanceResults(query: Record<string, unknown>) { return useQuery({ queryKey: performanceKeys.results(query), queryFn: () => performanceApi.listResults(query) }); }
 export function usePerformanceResult(id: string) { return useQuery({ queryKey: performanceKeys.result(id), queryFn: () => performanceApi.getResult(id), enabled: Boolean(id) }); }
-export function usePerformanceAmountBase() { return useQuery({ queryKey: performanceKeys.amountBase, queryFn: performanceApi.getAmountBase }); }
-export function usePerformanceAmountBaseHistory() { return useQuery({ queryKey: performanceKeys.amountBaseHistory, queryFn: performanceApi.listAmountBaseHistory }); }
+export function useEmployeePerformanceAmountBases(query: Record<string, unknown> = {}) { return useQuery({ queryKey: performanceKeys.employeeAmountBases(query), queryFn: () => performanceApi.listEmployeeAmountBases(query) }); }
+export function useEmployeePerformanceAmountBaseHistory(employeeId: string) { return useQuery({ queryKey: performanceKeys.employeeAmountBaseHistory(employeeId), queryFn: () => performanceApi.listEmployeeAmountBaseHistory(employeeId), enabled: Boolean(employeeId) }); }
 export function useCreatePerformanceTemplate() { const client = useQueryClient(); return useMutation({ mutationFn: performanceApi.createTemplate, onSuccess: () => client.invalidateQueries({ queryKey: performanceKeys.templates }) }); }
 export function useCreatePerformanceTemplateVersion() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, input }: { id: string; input: Parameters<typeof performanceApi.createTemplateVersion>[1] }) => performanceApi.createTemplateVersion(id, input), onSuccess: (_, variables) => { client.invalidateQueries({ queryKey: performanceKeys.templates }); client.invalidateQueries({ queryKey: performanceKeys.template(variables.id) }); } }); }
-export function useUpdatePerformanceAmountBase() { const client = useQueryClient(); return useMutation({ mutationFn: performanceApi.updateAmountBase, onSuccess: () => { client.invalidateQueries({ queryKey: performanceKeys.amountBase }); client.invalidateQueries({ queryKey: performanceKeys.amountBaseHistory }); } }); }
+export function useCreateEmployeePerformanceAmountBase() { const client = useQueryClient(); return useMutation({ mutationFn: performanceApi.createEmployeeAmountBase, onSuccess: (_, variables) => { client.invalidateQueries({ queryKey: ['performance', 'employee-amount-bases'] }); client.invalidateQueries({ queryKey: performanceKeys.employeeAmountBaseHistory(variables.employeeId) }); } }); }
 export function useSubmitPerformanceTask() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, input }: { id: string; input: PerformanceTaskSubmissionInput }) => performanceApi.submitTask(id, input), onSuccess: (_, variables) => { client.invalidateQueries({ queryKey: performanceKeys.task(variables.id) }); client.invalidateQueries({ queryKey: performanceKeys.all }); } }); }
 export function useModifyPerformanceResult() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, input }: { id: string; input: PerformanceResultModificationInput }) => performanceApi.modifyResult(id, input), onSuccess: (_, variables) => { client.invalidateQueries({ queryKey: performanceKeys.result(variables.id) }); client.invalidateQueries({ queryKey: performanceKeys.results({}) }); } }); }

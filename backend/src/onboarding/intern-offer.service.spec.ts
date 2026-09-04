@@ -122,11 +122,11 @@ describe('OnboardingService direct internship Offer creation', () => {
   it('returns active options with accessible manager choices', async () => {
     const { service, prisma, access } = createService();
     prisma.$transaction.mockResolvedValue([
-      [{ id: 'org-a', name: '虚构授权部门' }], [{ id: 'position-1', code: '00001', name: '虚构通用职位', organizationId: null }],
+      [{ id: 'org-a', name: '虚构授权部门' }], [{ id: 'position-1', name: '虚构通用职位', organizationId: null }],
       [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }], [{ id: 'company-1', name: '虚构全日制公司' }],
     ]);
     await expect(service.getInternOfferFormOptions(user)).resolves.toEqual({
-      organizations: [{ id: 'org-a', name: '虚构授权部门' }], positions: [{ id: 'position-1', code: '00001', name: '虚构通用职位', organizationId: null }],
+      organizations: [{ id: 'org-a', name: '虚构授权部门' }], positions: [{ id: 'position-1', name: '虚构通用职位', organizationId: null }],
       managers: [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }], employingCompanies: [{ id: 'company-1', name: '虚构全日制公司' }],
     });
     expect(access.getEmployeeWhere).toHaveBeenCalledWith(user, ['org-a', 'org-child']);

@@ -4,6 +4,7 @@ import {
   PERMISSIONS,
   type EmployeeListItem,
   type EmployeeListQuery,
+  type EmploymentRelationship,
   type EmploymentStatus,
   type InternListQuery,
   type PersonnelLaborWorkerListItem,
@@ -269,18 +270,19 @@ export function EmployeeListPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [secondaryExportOpen, setSecondaryExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const view: PersonnelView = isPersonnelView(requestedView) ? requestedView : 'all';
   const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') ?? '');
+  const [nameInput, setNameInput] = useState(searchParams.get('name') ?? '');
 
   const employeeQuery = useMemo<EmployeeListQuery>(() => ({
-    keyword: searchParams.get('keyword') || undefined,
+    name: searchParams.get('name') || undefined,
     organizationId: searchParams.get('organizationId') || undefined,
     status: (searchParams.get('status') as EmploymentStatus | null) ?? undefined,
+    employmentRelationship: (searchParams.get('employmentRelationship') as EmploymentRelationship | null) ?? undefined,
     page: positiveInt(searchParams.get('page'), 1),
     pageSize: positiveInt(searchParams.get('pageSize'), 10),
   }), [searchParams]);
@@ -328,6 +330,7 @@ export function EmployeeListPage() {
 
   useEffect(() => {
     setKeywordInput(searchParams.get('keyword') ?? '');
+    setNameInput(searchParams.get('name') ?? '');
   }, [searchParams]);
 
   const patchSearch = (changes: Record<string, string | number | undefined>) => {
@@ -341,7 +344,7 @@ export function EmployeeListPage() {
 
   const switchView = (nextView: PersonnelView) => {
     const retainedKeys: Record<PersonnelView, readonly string[]> = {
-      all: ['keyword', 'organizationId', 'status', 'pageSize'],
+      all: ['name', 'organizationId', 'status', 'employmentRelationship', 'pageSize'],
       regular: ['keyword', 'organizationId', 'pageSize'],
       intern: ['keyword', 'startDateFrom', 'startDateTo', 'pageSize'],
       labor: ['keyword', 'entryDateFrom', 'entryDateTo', 'pageSize'],
@@ -365,9 +368,9 @@ export function EmployeeListPage() {
     label,
     value,
   }));
-  const employeeOptions = (employees.data?.data ?? []).map((employee) => ({
-    label: `${employee.name}（${employee.employeeNo}）`,
-    value: employee.id,
+  const employmentRelationshipOptions = Object.entries(employmentRelationshipLabels).map(([value, label]) => ({
+    label,
+    value,
   }));
 
   const activeQuery = view === 'all'
@@ -415,6 +418,21 @@ export function EmployeeListPage() {
     />
   );
 
+  const nameSearchInput = (
+    <Input.Search
+      className="personnel-view-keyword-input"
+      allowClear
+      aria-label="按姓名搜索"
+      placeholder="请输入姓名"
+      value={nameInput}
+      onChange={(event) => {
+        setNameInput(event.target.value);
+        if (!event.target.value) patchSearch({ name: undefined, page: 1 });
+      }}
+      onSearch={(name) => patchSearch({ name: name.trim() || undefined, page: 1 })}
+    />
+  );
+
   const pagination = {
     current: employeeQuery.page,
     pageSize: employeeQuery.pageSize,
@@ -429,16 +447,7 @@ export function EmployeeListPage() {
       return (
         <div className="employee-filter-toolbar">
           <div className="employee-filter-controls">
-            <CheckboxFilterDropdown
-              label="人员"
-              options={employeeOptions}
-              value={selectedEmployeeIds}
-              onChange={(values) => {
-                setSelectedEmployeeIds(values);
-                const latestEmployee = employees.data?.data.find((employee) => employee.id === values.at(-1));
-                patchSearch({ keyword: latestEmployee?.employeeNo, page: 1 });
-              }}
-            />
+            {nameSearchInput}
             <OrganizationTreeSelect
               aria-label="筛选部门"
               className="department-filter-tree-select"
@@ -450,6 +459,12 @@ export function EmployeeListPage() {
               onChange={(organizationId) => patchSearch({ organizationId, page: 1 })}
             />
             <CheckboxFilterDropdown
+              label="雇佣关系"
+              options={employmentRelationshipOptions}
+              value={employeeQuery.employmentRelationship ? [employeeQuery.employmentRelationship] : []}
+              onChange={(values) => patchSearch({ employmentRelationship: values.at(-1), page: 1 })}
+            />
+            <CheckboxFilterDropdown
               label="人员状态"
               options={statusOptions}
               value={employeeQuery.status ? [employeeQuery.status] : []}
@@ -459,7 +474,7 @@ export function EmployeeListPage() {
           <div className="employee-selection-summary" aria-live="polite">
             <Typography.Text type="secondary">已选择 {selectedRowKeys.length} 人</Typography.Text>
             {selectedRowKeys.length > 0 ? (
-              <Button type="link" size="small" onClick={() => setSelectedRowKeys([])}>清空</Button>
+              <Button type="link" size="small" onClick={() => setSelectedRowKeys([])}>清空已选</Button>
             ) : null}
           </div>
         </div>
@@ -690,9 +705,10 @@ export function EmployeeListPage() {
         open={exportOpen}
         selectedEmployeeIds={selectedRowKeys.map(String)}
         query={{
-          keyword: employeeQuery.keyword,
+          name: employeeQuery.name,
           organizationId: employeeQuery.organizationId,
           status: employeeQuery.status,
+          employmentRelationship: employeeQuery.employmentRelationship,
         }}
         onClose={() => setExportOpen(false)}
       />

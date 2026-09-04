@@ -58,8 +58,9 @@ Authorization: Bearer <accessToken>
 
 | 参数 | 类型 | 说明 |
 | --- | --- | --- |
-| `keyword` | string | 姓名或工号模糊搜索，最多 50 个字符 |
+| `name` | string | 姓名模糊搜索，最多 50 个字符 |
 | `organizationId` | string | 部门筛选，不能扩大当前用户数据范围 |
+| `employmentRelationship` | enum | `INTERNAL_EMPLOYEE`、`INTERN` 或 `LABOR_WORKER` |
 | `status` | enum | `PROBATION`、`REGULAR`、`PENDING_ENTRY`、`TRANSFERRED_OUT`、`PENDING_TRANSFER_IN`、`RETIRED`、`RESIGNED` 或 `NON_REGULAR` |
 | `page` | integer | 从 1 开始 |
 | `pageSize` | integer | 1-100，默认 10 |
@@ -152,7 +153,7 @@ Authorization: Bearer <accessToken>
 
 ### GET `/employees/form-options`
 
-需要 `employee.create` 或 `employee.update` 任一权限。返回新增或编辑员工页面可选择的有效职位、直接经理和全日制公司目录；工作地点是任职上的可选自由文本，不通过本接口返回。职位目录每项返回稳定 `id`、五位 `code` 与 `name`，前端显示“编号 - 名称”并支持按编号或名称搜索。职位是公司内部全局目录，和部门是独立维度，不按部门过滤；只返回有效、未归档的职位。职级是前后端共享的固定 enum，不通过本接口返回。合同及内部公司统一使用全日制公司，不再返回独立的合同签订公司选项。可通过 `excludeEmployeeId` 排除当前员工，经理选项只包含表单需要的员工 ID、姓名和工号。全日制公司目录只返回有效、未归档项。
+需要 `employee.create` 或 `employee.update` 任一权限。返回新增或编辑员工页面可选择的有效职位、直接经理和全日制公司目录；工作地点是任职上的可选自由文本，不通过本接口返回。职位目录每项返回稳定 `id` 与唯一 `name`，前端按名称显示和搜索。职位是公司内部全局目录，和部门是独立维度，不按部门过滤；只返回有效、未归档的职位。职级是前后端共享的固定 enum，不通过本接口返回。合同及内部公司统一使用全日制公司，不再返回独立的合同签订公司选项。可通过 `excludeEmployeeId` 排除当前员工，经理选项只包含表单需要的员工 ID、姓名和工号。全日制公司目录只返回有效、未归档项。
 
 ### POST `/employees`
 
@@ -322,7 +323,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 需要 `employee.read`。仅用于“人员 > 全部在职”表右上角的字段勾选导出，支持 `XLSX` 和 `CSV`。
 
-请求包含：`format`（`XLSX` 或 `CSV`）、至少一个从人员字段注册表勾选的 `fields`、可选 `employeeIds`，以及可选当前筛选 `query.keyword`、`query.organizationId`、`query.status`。当首列勾选了人员时，`employeeIds` 优先；未勾选时，后端导出当前筛选下的全部有权限人员，不受列表分页限制。后端严格应用当前账号组织数据范围，响应为文件流和下载文件名。
+请求包含：`format`（`XLSX` 或 `CSV`）、至少一个从人员字段注册表勾选的 `fields`、可选 `employeeIds`，以及可选当前筛选 `query.name`、`query.organizationId`、`query.employmentRelationship`、`query.status`。当首列勾选了人员时，`employeeIds` 优先；未勾选时，后端导出当前筛选下的全部有权限人员，不受列表分页限制。后端严格应用当前账号组织数据范围，响应为文件流和下载文件名。
 
 ### PATCH `/employees/:id`
 

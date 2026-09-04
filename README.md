@@ -310,10 +310,10 @@ CREATE DATABASE hr_personnel_demo_test OWNER hr_demo;
 
 > 云端已有空 PostgreSQL 数据库时，不要重复创建数据库；只需确保连接账号拥有目标 schema 的建表、建类型和建索引权限。首次部署会执行仓库内的 PostgreSQL 初始 migration；旧数据库版本的迁移已移至 `backend/prisma/mysql-migrations-archive/`，不会被部署命令读取。
 >
-> 初始 migration 只建表，不自动写入 434 条职位目录。首次需要导入人员或 Offer 前，可在确认目标库后执行安全的职位目录同步（只按职位编号创建/更新，不删除任职、Offer 或其他引用数据）：
+> 初始 migration 只建表，不自动写入 288 条唯一职位名称目录。首次需要导入人员或 Offer 前，可在确认目标库后执行安全的职位目录同步（只按职位名称创建/更新，不删除任职、Offer 或其他引用数据）：
 >
 > ```bash
-> CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_434_POSITION_CATALOG npm run db:upsert-position-catalog
+> CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_288_UNIQUE_POSITION_NAMES npm run db:upsert-position-catalog
 > ```
 >
 > 不要在已有业务数据的数据库执行 `db:replace-position-catalog`；该旧脚本会删除职位及其已确认的测试引用。

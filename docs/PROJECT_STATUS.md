@@ -144,7 +144,7 @@
 | 工号、姓名 | `employeeNo`、`name` | `Employee.employeeNo`、`Employee.name`。姓名链接人员详情。 |
 | 部门 | `organizationName` | 当前主要 `EmployeeAssignment.organization.name`；迁移兼容时可回退 `Employee.organization`。 |
 | 入职日期 | `entryDate` | 当前 `EmploymentPeriod.entryDate`。 |
-| 职位、职级、工作地点 | `positionName`、`jobLevel`、`workplaceName` | 当前主要任职关联的 `Position`、固定 `JobLevelCode` code、`EmployeeAssignment.workplaceName` 自由文本；职位目录当前以用户提供的 434 条五位编号/名称为唯一标准，选择时显示“编号 - 名称”并支持两个维度搜索，部门与职位独立；职级允许 `S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`。 |
+| 职位、职级、工作地点 | `positionName`、`jobLevel`、`workplaceName` | 当前主要任职关联的唯一名称 `Position`、固定 `JobLevelCode` code、`EmployeeAssignment.workplaceName` 自由文本；职位目录由原 434 条编号/名称去重为 288 个唯一职位名称，页面按名称选择和搜索，部门与职位独立；职级允许 `S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`。 |
 | 性别 | `gender` | `Employee.gender`。 |
 | 人员定位、员工层级 | `personnelPosition`、`employeeLevel` | 当前主要 `EmployeeAssignment.personnelPosition`、`EmployeeAssignment.employeeLevel` 固定 enum code；API 返回 code，前端映射中文标签。无当前值时返回 `null/--`。 |
 | 企业邮箱 | `workEmail` | `Employee.workEmail`。 |
@@ -184,7 +184,7 @@
 | 劳务人员 | `GET /employment/personnel-labor-workers` | 当前有效主要任职对应的劳务人员；列为姓名、电子邮箱、工号、入职日期、部门、职务、职位、用工形式、直线经理、操作。不返回工作地点或全日制公司。 |
 | 离职人员 | `GET /employment/personnel-resigned` | 未归档且已完成离职记录；列为工号、姓名、部门、性别、入职日期、离职前职位、离职原因、异动类型、最后工作日、全日制公司、证件号码、手机号码。异动类型固定 `null/--`，无操作列；历史范围按离职日和同周期主要任职授权。 |
 
-全部在职沿用现有部门/人员状态/人员选择筛选；正式人员支持姓名/工号与组织子树筛选；实习生、劳务人员和离职人员分别复用其起始日期、入职日期、最后工作日的日期范围筛选。行勾选仅为前端页面状态。
+全部在职从当前账号可访问的完整人员群体查询，不再从当前分页结果中选择人员筛选；支持姓名精确业务维度搜索、部门组织子树、雇佣关系与人员状态筛选。表格行勾选仅为前端页面状态，右侧显示“清空已选”操作。正式人员支持姓名/工号与组织子树筛选；实习生、劳务人员和离职人员分别复用其起始日期、入职日期、最后工作日的日期范围筛选。
 
 ### 5.2 黑名单管理
 
@@ -577,7 +577,7 @@
 | 人员字段收尾验证（shared build、前后端 typecheck、上述聚焦测试、`git diff --check`） | 通过；`git diff --check` 仅输出 Windows LF/CRLF 转换警告。 |
 | Offer 直接创建后端 | 聚焦测试覆盖 Demo 409、目录/组织范围、无模板查询、直接新增与实习转正预填、可选工作地点、仅 Candidate + Offer 快照写入和编号重试。 |
 | Offer 直接创建前端验证 | 直接表单、创建入口、Offer 页和路由聚焦 Vitest 通过；未启动应用或连接数据库。 |
-| 职位目录替换与搜索 | 用户提供的 434 条职位编号/名称已固化为 shared 目录；shared build/typecheck、前后端 typecheck、人员/实习 Offer 职位表单 Vitest（10/10）、员工 service Jest（17/17）、Prisma 静态验证和 `git diff --check` 通过。测试目录替换脚本已新增但未执行、未连接数据库。 |
+| 职位目录去重与搜索 | 原用户提供的 434 条职位编号/名称已按名称去重为 288 条唯一职位目录；人员/实习 Offer 表单仅按职位名称显示和搜索，人员导入仅按名称匹配。PostgreSQL migration 会保留每个名称的稳定 Position ID、重定向全部引用并删除重复记录；执行前须检查编制唯一键冲突。 |
 | 证件类型扩展 | 60 项用户确认的证件类型及统一中文标签已完成 shared/Prisma/前端接入；shared build/typecheck、frontend typecheck、人员/列表/身份证读取页 Vitest（18/18）、后端 employees 聚焦 Jest（25/25）、Prisma 静态验证和 `git diff --check` 通过。Prisma Client 重新生成被 Windows query engine 文件锁阻塞，尚未完成。 |
 | 组织目录替换 | 用户确认的四层、44 节点组织树已固化为 shared 目录，根为上海宜信电子商务有限公司，负责人分组为 CEO陈锐/董事长陈钢；Demo、seed、组织范围和组织列表已同步，旧组织属于测试数据，替换脚本会直接删除。组织 service、AccessControl、DemoData、employees 聚焦后端测试 33/33，shared 目录断言、shared build/typecheck、backend/frontend typecheck（前端通过）及 `git diff --check` 已执行；组织替换脚本未执行、未连接数据库。 |
 | 人员导入导出 | “全部在职”表格右上角已增加导入、导出按钮。导出弹窗可勾选字段并选择 XLSX/CSV；首列勾选人员时导出勾选项，未勾选时按当前关键词/部门/状态筛选导出全部有权人员。导入按中文业务表头读取 XLSX/CSV、以工号创建或局部更新并返回逐行结果；工作地点按文本直接写入任职记录。新工号可创建待完善主档，后续同工号导入同时提供部门、入职日期、雇佣关系、用工形式、人员状态时补建首段任职。职位无法唯一匹配时作为提示而不猜测写入。完整新增页面仍维持必填任职/合同规则。后端 `POST /employees/export`、`POST /employees/import-template`、`POST /employees/import` 使用共享 `PERSONNEL_FIELDS` 注册表。 |
@@ -596,7 +596,7 @@
 8. 编辑仍不支持直接经理变更；经理关系循环校验、结束旧关系并新建历史关系，以及跨部门经理候选人在不泄露范围外人员资料前提下的展示方案仍待实现或确认。
 9. [`docs/DATA_MODEL.md`](DATA_MODEL.md) 的“当前实现状态”表已经滞后，仍写着新模块 API 尚未实现、前端仍为占位；当前进展以本文和代码为准，后续如要同步该文档应单独处理。
 10. 项目仅供 HR 使用，现有列表和详情不再设置独立的敏感字段读取权限或脱敏分支；人员字段仍受员工读取权限和组织数据范围约束。
-11. 职位目录由 shared 中确认的 434 条五位编号/名称组成。已有业务数据的 PostgreSQL 库应使用 `CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_434_POSITION_CATALOG npm run db:upsert-position-catalog` 按 `Position.code` 安全创建或更新目录，不会删除任职、Offer 或其他职位引用；导入职位可填写五位编号、`编号 - 名称` 或唯一职位名称。旧 `npm run db:replace-position-catalog` 只供确认的测试库使用：它会删除当前测试数据中 Position 的已确认外键引用和旧职位记录后再导入目录。
+11. 职位目录已按名称去重为 288 条唯一名称，业务不再使用职位编号。`20260904110000_deduplicate_positions_by_name` 会按稳定 ID 合并同名 Position、重定向任职/Offer/异动/试岗/编制/绩效职位引用，并在编制唯一键冲突时阻断。迁移后可使用 `CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_288_UNIQUE_POSITION_NAMES npm run db:upsert-position-catalog` 按名称安全创建或更新目录；导入职位仅填写名称。旧 `npm run db:replace-position-catalog` 只供确认的测试库使用。
 12. 当前测试组织目录可通过 `npm run db:replace-organization-catalog` 的显式确认变量替换：设置 `CONFIRM_TEST_ORGANIZATION_CATALOG_RESET=REPLACE_44_TEST_ORGANIZATIONS` 后，脚本直接删除不在 44 节点目录中的旧测试组织，再恢复新目录；不应对包含正式历史数据的数据库运行。
 13. 当前工作区包含大量尚未提交的增量功能，继续开发前必须先查看 `git status` 和相关 diff，不得覆盖或回退已有改动。
 12. 当前工作区包含大量尚未提交的增量功能，继续开发前必须先查看 `git status` 和相关 diff，不得覆盖或回退已有改动。

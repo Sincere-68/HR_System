@@ -191,8 +191,12 @@ const allBusinessHeadings = [
   '院校类型', '最高学历', '毕业时间', '专业',
 ];
 
+function currentTable() {
+  return screen.getAllByRole('table').find((table) => table.closest('.employee-table'))!;
+}
+
 function getHeadings() {
-  return within(screen.getByRole('table')).getAllByRole('columnheader')
+  return within(currentTable()).getAllByRole('columnheader')
     .map((heading) => heading.textContent?.trim() ?? '')
     .filter(Boolean);
 }
@@ -236,21 +240,21 @@ describe('EmployeeListPage', () => {
     renderPage();
 
     expect(getHeadings()).toEqual([...allBusinessHeadings, '操作']);
-    expect(within(screen.getByRole('table')).getByText('上海市 / 市辖区 / 浦东新区')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getByText('北京市 / 市辖区 / 朝阳区')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getByText('广东省 / 深圳市 / 南山区')).toBeInTheDocument();
+    expect(screen.getByText('上海市 / 市辖区 / 浦东新区')).toBeInTheDocument();
+    expect(screen.getByText('北京市 / 市辖区 / 朝阳区')).toBeInTheDocument();
+    expect(screen.getByText('广东省 / 深圳市 / 南山区')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '虚构员工甲' })).toHaveAttribute(
       'href',
       '/personnel/employees/employee-1',
     );
-    expect(within(screen.getByRole('table')).getByText('fictional.employee@example.invalid')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getByText('fictional.personal@example.invalid')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getByText('manager@example.invalid')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getByText('前台')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getByText('员工级')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).queryByText('FRONT_OFFICE')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('table')).queryByText('STAFF')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getAllByText('--').length).toBeGreaterThan(0);
+    expect(screen.getByText('fictional.employee@example.invalid')).toBeInTheDocument();
+    expect(screen.getByText('fictional.personal@example.invalid')).toBeInTheDocument();
+    expect(screen.getByText('manager@example.invalid')).toBeInTheDocument();
+    expect(screen.getByText('前台')).toBeInTheDocument();
+    expect(screen.getByText('员工级')).toBeInTheDocument();
+    expect(screen.queryByText('FRONT_OFFICE')).not.toBeInTheDocument();
+    expect(screen.queryByText('STAFF')).not.toBeInTheDocument();
+    expect(screen.getAllByText('--').length).toBeGreaterThan(0);
   });
 
   it('opens a field-selectable export dialog for the selected personnel', () => {
@@ -283,7 +287,7 @@ describe('EmployeeListPage', () => {
     expect(screen.getByText('虚构正式员工')).toBeInTheDocument();
     expect(screen.getByText('正式人员')).toBeInTheDocument();
     expect(screen.getByText('合同用工')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getAllByText('--')).toHaveLength(2);
+    expect(screen.getAllByText('--')).toHaveLength(2);
     expect(screen.getByRole('button', { name: /查看/ }).closest('a')).toHaveAttribute(
       'href',
       '/personnel/employees/regular-1',
@@ -332,11 +336,29 @@ describe('EmployeeListPage', () => {
     ]);
     expect(screen.getByText('虚构离职员工')).toBeInTheDocument();
     expect(screen.getByText('虚构离职原因')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getAllByText('--')).toHaveLength(1);
+    expect(screen.getAllByText('--')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /查看|暂无详情/ })).not.toBeInTheDocument();
   });
 
-  it('selects and clears an all-personnel employee', () => {
+  it('searches the personnel population by name and filters by employment relationship', () => {
+    renderPage('/personnel/employees?view=all&page=2&pageSize=20');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '按姓名搜索' }), { target: { value: '虚构员工' } });
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: '按姓名搜索' }), { key: 'Enter' });
+
+    expect(useEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
+      name: '虚构员工', page: 1, pageSize: 20,
+    }));
+
+    fireEvent.click(screen.getAllByText('雇佣关系')[0]!);
+    fireEvent.click(screen.getByText('内部员工'));
+
+    expect(useEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
+      name: '虚构员工', employmentRelationship: 'INTERNAL_EMPLOYEE', page: 1, pageSize: 20,
+    }));
+  });
+
+  it('clears selected all-personnel rows from the toolbar action', () => {
     renderPage();
 
     expect(screen.getByText('已选择 0 人')).toBeInTheDocument();
@@ -344,7 +366,7 @@ describe('EmployeeListPage', () => {
     fireEvent.click(within(row!).getByRole('checkbox'));
     expect(screen.getByText('已选择 1 人')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '清空' }));
+    fireEvent.click(screen.getByRole('button', { name: '清空已选' }));
     expect(screen.getByText('已选择 0 人')).toBeInTheDocument();
   });
 

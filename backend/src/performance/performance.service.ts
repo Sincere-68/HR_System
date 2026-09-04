@@ -28,7 +28,8 @@ import {
   ParsePerformanceTemplateDto,
   PerformanceTaskSubmissionDto,
   QueryPerformanceDto,
-  UpdatePerformanceAmountBaseDto,
+  CreateEmployeePerformanceAmountBaseDto,
+  QueryEmployeePerformanceAmountBaseDto,
 } from './dto/performance.dto';
 import type { PerformanceModuleDefinition } from '@hr-demo/shared';
 
@@ -170,7 +171,7 @@ export class PerformanceService {
     this.assertDatabaseMode();
     const [users, positions, jobTitles] = await this.prisma.$transaction([
       this.prisma.user.findMany({ where: { status: RecordStatus.ACTIVE, archivedAt: null }, select: { id: true, username: true, displayName: true, employeeId: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }] }),
-      this.prisma.position.findMany({ where: { status: RecordStatus.ACTIVE, archivedAt: null }, select: { id: true, code: true, name: true }, orderBy: [{ name: 'asc' }, { code: 'asc' }] }),
+      this.prisma.position.findMany({ where: { status: RecordStatus.ACTIVE, archivedAt: null }, select: { id: true, name: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] }),
       this.prisma.jobTitle.findMany({ where: { status: RecordStatus.ACTIVE, archivedAt: null }, select: { id: true, code: true, name: true }, orderBy: [{ name: 'asc' }, { code: 'asc' }] }),
     ]);
     return { users, positions, jobTitles };
@@ -361,7 +362,7 @@ export class PerformanceService {
       if (!scope?.includes(row.organizationId ?? '')) throw new ForbiddenException('绩效结果不存在');
     }
     if (!dto.reason.trim()) throw new BadRequestException('修改原因不能为空');
-    const amount = row.amountBaseSnapshot === null ? null : Number(row.amountBaseSnapshot) * dto.finalScore / 100;
+    const amount = row.employeeAmountBaseSnapshot === null ? null : Number(row.employeeAmountBaseSnapshot) * dto.finalScore / 100;
     const revisionNo = (await this.prisma.performanceResultRevision.count({ where: { instanceId: id } })) + 1;
     await this.prisma.$transaction(async (tx) => {
       await tx.performanceResultRevision.create({ data: { instanceId: id, revisionNo, previousScore: row.finalScore!, nextScore: DECIMAL(dto.finalScore), scoreDelta: DECIMAL(dto.finalScore - Number(row.finalScore)), previousAmount: row.actualAmount, nextAmount: amount === null ? null : MONEY(amount), reason: dto.reason.trim(), beforeSnapshot: { finalScore: this.number(row.finalScore), actualAmount: this.number(row.actualAmount) }, afterSnapshot: { finalScore: dto.finalScore, actualAmount: amount }, modifiedById: user.id } });
@@ -371,27 +372,49 @@ export class PerformanceService {
     return this.getResult(id);
   }
 
-  async getAmountBase() {
+  async listEmployeeAmountBases(user: AuthenticatedUser, query: QueryEmployeePerformanceAmountBaseDto) {
     this.assertDatabaseMode();
-    const row = await this.prisma.performanceAmountBaseVersion.findFirst({ orderBy: { versionNo: 'desc' }, include: { changedBy: { select: { displayName: true } } } });
-    return row ? this.presentAmountBase(row) : null;
+    const scope = await this.access.getAccessibleOrganizationIds(user);
+    const where: Prisma.EmployeePerformanceAmountBaseWhereInput = {
+      replacedAt: null,
+      ...(query.employeeId ? { employeeId: query.employeeId } : {}),
+      ...(scope === null ? {} : { employee: { assignments: { some: { organizationId: { in: scope }, status: AssignmentStatus.ACTIVE, archivedAt: null, isPrimary: true, endDate: null } } } }),
+      ...(query.keyword ? { employee: { OR: [{ name: { contains: query.keyword } }, { employeeNo: { contains: query.keyword } }] } } : {}),
+    };
+    const employeeWhere: Prisma.EmployeeWhereInput = {
+      recordStatus: RecordStatus.ACTIVE,
+      archivedAt: null,
+      ...(scope === null ? {} : { assignments: { some: { organizationId: { in: scope }, status: AssignmentStatus.ACTIVE, archivedAt: null, isPrimary: true, endDate: null } } }),
+      ...(query.employeeId ? { id: query.employeeId } : {}),
+      ...(query.keyword ? { OR: [{ name: { contains: query.keyword } }, { employeeNo: { contains: query.keyword } }] } : {}),
+    };
+    const [employees, total] = await this.prisma.$transaction([
+      this.prisma.employee.findMany({ where: employeeWhere, select: { id: true, employeeNo: true, name: true, assignments: { where: { status: AssignmentStatus.ACTIVE, archivedAt: null, isPrimary: true, endDate: null }, select: { organization: { select: { name: true } } }, take: 1 }, performanceAmountBases: { where: { replacedAt: null }, orderBy: { versionNo: 'desc' }, take: 1, include: { changedBy: { select: { displayName: true } } } } }, orderBy: { employeeNo: 'asc' }, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+      this.prisma.employee.count({ where: employeeWhere }),
+    ]);
+    return { data: employees.map((employee) => this.presentEmployeeAmountBase(employee.performanceAmountBases[0] ? { ...employee.performanceAmountBases[0], employee } : { id: `unconfigured-${employee.id}`, employeeId: employee.id, employee, versionNo: 0, amount: new Prisma.Decimal(0), effectiveAt: new Date(0), replacedAt: null, changedBy: null, changeReason: '' })), meta: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.ceil(total / query.pageSize) } };
   }
 
-  async listAmountBaseHistory() {
+  async listEmployeeAmountBaseHistory(user: AuthenticatedUser, employeeId: string) {
     this.assertDatabaseMode();
-    const rows = await this.prisma.performanceAmountBaseVersion.findMany({ orderBy: [{ versionNo: 'desc' }], include: { changedBy: { select: { displayName: true } } } });
-    return rows.map((row) => this.presentAmountBase(row));
+    await this.assertEmployeeAmountBaseScope(user, employeeId);
+    const rows = await this.prisma.employeePerformanceAmountBase.findMany({ where: { employeeId }, include: { employee: { select: { employeeNo: true, name: true, assignments: { where: { status: AssignmentStatus.ACTIVE, archivedAt: null, isPrimary: true, endDate: null }, select: { organization: { select: { name: true } } }, take: 1 } } }, changedBy: { select: { displayName: true } } }, orderBy: { versionNo: 'desc' } });
+    return rows.map((row) => this.presentEmployeeAmountBase(row));
   }
 
-  async updateAmountBase(user: AuthenticatedUser, dto: UpdatePerformanceAmountBaseDto) {
+  async createEmployeeAmountBase(user: AuthenticatedUser, dto: CreateEmployeePerformanceAmountBaseDto) {
     this.assertDatabaseMode();
-    const latest = await this.prisma.performanceAmountBaseVersion.findFirst({ orderBy: { versionNo: 'desc' } });
+    await this.assertEmployeeAmountBaseScope(user, dto.employeeId);
+    const latest = await this.prisma.employeePerformanceAmountBase.findFirst({ where: { employeeId: dto.employeeId }, orderBy: { versionNo: 'desc' } });
+    const effectiveAt = new Date(dto.effectiveAt);
+    if (Number.isNaN(effectiveAt.getTime())) throw new BadRequestException('金额基数生效时间无效');
     const row = await this.prisma.$transaction(async (tx) => {
-      const version = await tx.performanceAmountBaseVersion.create({ data: { versionNo: (latest?.versionNo ?? 0) + 1, amount: MONEY(dto.amount), previousAmount: latest?.amount ?? null, effectiveAt: new Date(dto.effectiveAt), changedById: user.id, changeReason: dto.reason.trim() } });
-      await this.audit.create({ userId: user.id }, AuditAction.UPDATE, version.id, { resource: 'performance-amount-base', versionNo: version.versionNo, previousAmount: latest ? this.number(latest.amount) : null, amount: dto.amount, reason: dto.reason.trim() }, tx, 'performance_amount_base');
-      return tx.performanceAmountBaseVersion.findUniqueOrThrow({ where: { id: version.id }, include: { changedBy: { select: { displayName: true } } } });
+      if (latest?.replacedAt === null) await tx.employeePerformanceAmountBase.update({ where: { id: latest.id }, data: { replacedAt: effectiveAt } });
+      const version = await tx.employeePerformanceAmountBase.create({ data: { employeeId: dto.employeeId, versionNo: (latest?.versionNo ?? 0) + 1, amount: MONEY(dto.amount), effectiveAt, changedById: user.id, changeReason: dto.reason.trim() }, include: { employee: { select: { employeeNo: true, name: true, assignments: { where: { status: AssignmentStatus.ACTIVE, archivedAt: null, isPrimary: true, endDate: null }, select: { organization: { select: { name: true } } }, take: 1 } } }, changedBy: { select: { displayName: true } } } });
+      await this.audit.create({ userId: user.id }, AuditAction.CREATE, version.id, { resource: 'employee-performance-amount-base', employeeId: dto.employeeId, versionNo: version.versionNo, amount: dto.amount, reason: dto.reason.trim() }, tx, 'employee_performance_amount_base');
+      return version;
     });
-    return this.presentAmountBase(row);
+    return this.presentEmployeeAmountBase(row);
   }
 
   async getDashboard() {
@@ -408,10 +431,10 @@ export class PerformanceService {
     const definition = this.parser.assertValidDefinition(dto.definition);
     const parsed = this.parser.parse(dto.sourceMarkdown, dto.sourceName ?? null);
     if (parsed.errors.length > 0) throw new BadRequestException(parsed.errors.map((error) => `${error.path}: ${error.message}`));
-    // The edited definition is the confirmed, executable projection of the
-    // source document. Legacy Markdown may not contain every machine-readable
-    // field, so it is validated independently rather than compared by JSON
-    // serialization. Declarative blocks are still parsed and validated above.
+    if (!parsed.definition) throw new BadRequestException('Markdown 未能解析为模板结构');
+    // The edited definition is the HR-confirmed executable projection of the
+    // parsed document. It may add fields unavailable in natural language, such
+    // as execution mode, data mappings and safe scoring rules.
     return definition;
   }
 
@@ -422,7 +445,7 @@ export class PerformanceService {
       && (item.moduleSnapshot as { enabled?: boolean }).enabled !== false);
     const isLast = !nextTask;
     const updatedTasks = task.instance.tasks.map((item) => item.id === task.id ? { ...item, status: TaskStatus.COMPLETED, moduleScore: DECIMAL(moduleScore) } : item);
-    const resultUpdate = isLast ? await this.resultUpdate(updatedTasks) : {};
+    const resultUpdate = isLast ? await this.resultUpdate(updatedTasks, task.employeeId) : {};
     await this.prisma.$transaction(async (tx) => {
       await tx.performanceModuleTask.update({ where: { id: task.id }, data: { status: TaskStatus.COMPLETED, moduleScore: DECIMAL(moduleScore), submission: submission as Prisma.InputJsonValue, completedAt: new Date() } });
       if (nextTask) await tx.performanceModuleTask.update({ where: { id: nextTask.id }, data: { status: TaskStatus.IN_PROGRESS } });
@@ -433,7 +456,7 @@ export class PerformanceService {
     return this.getTask(user, task.id);
   }
 
-  private async resultUpdate(tasks: Array<{ status: TaskStatus; moduleType: PerformanceModuleType; moduleWeight: Prisma.Decimal | null; moduleSnapshot: Prisma.JsonValue; moduleScore: Prisma.Decimal | null }>) {
+  private async resultUpdate(tasks: Array<{ status: TaskStatus; moduleType: PerformanceModuleType; moduleWeight: Prisma.Decimal | null; moduleSnapshot: Prisma.JsonValue; moduleScore: Prisma.Decimal | null }>, employeeId: string) {
     const completed = tasks.filter((task) => task.status === TaskStatus.COMPLETED && task.moduleScore !== null);
     const enabledTasks = tasks.filter((task) => (task.moduleSnapshot as { enabled?: boolean }).enabled !== false);
     if (enabledTasks.some((task) => task.status !== TaskStatus.COMPLETED)) throw new BadRequestException('所有启用的绩效模块完成后才能生成结果');
@@ -449,10 +472,8 @@ export class PerformanceService {
     const fixedWeightedScore = fixedTasks.reduce((sum, task) => sum + Number(task.moduleScore) * Number(task.moduleWeight ?? 0) / 100, 0);
     const rawFinalScore = fixedWeightedScore + adjustmentScore;
     const finalScore = Math.max(0, rawFinalScore);
-    const amountBase = await this.prisma.performanceAmountBaseVersion.findFirst({ where: { effectiveAt: { lte: new Date() } }, orderBy: { effectiveAt: 'desc' } });
-    if (!amountBase) throw new BadRequestException('绩效结果生成前必须先配置有效的金额基数');
-    const amount = finalScore * Number(amountBase.amount) / 100;
-    return { fixedWeightedScore: DECIMAL(fixedWeightedScore), adjustmentScore: DECIMAL(adjustmentScore), rawFinalScore: DECIMAL(rawFinalScore), finalScore: DECIMAL(finalScore), amountBaseVersionId: amountBase.id, amountBaseSnapshot: amountBase.amount, calculationFormula: 'Σ(模块得分 × 模块权重 ÷ 100) + 调整项; 最低为 0', actualAmount: amount === null ? null : MONEY(amount), status: ProcessStatus.COMPLETED };
+    const amountSnapshot = await this.resolveEmployeeAmountBaseSnapshot(employeeId, finalScore);
+    return { fixedWeightedScore: DECIMAL(fixedWeightedScore), adjustmentScore: DECIMAL(adjustmentScore), rawFinalScore: DECIMAL(rawFinalScore), finalScore: DECIMAL(finalScore), calculationFormula: 'Σ(模块得分 × 模块权重 ÷ 100) + 调整项; 最低为 0', status: ProcessStatus.COMPLETED, ...amountSnapshot };
   }
 
   private async advanceInstance(instanceId: string) {
@@ -468,7 +489,7 @@ export class PerformanceService {
         && item.status !== TaskStatus.CANCELLED
         && (item.moduleSnapshot as { enabled?: boolean }).enabled !== false);
       if (!nextTask) {
-        const resultUpdate = await this.resultUpdate(instance.tasks);
+        const resultUpdate = await this.resultUpdate(instance.tasks, instance.employeeId);
         await this.prisma.performanceInstance.update({ where: { id: instance.id }, data: { currentModuleOrder: null, ...resultUpdate } });
         return;
       }
@@ -519,14 +540,34 @@ export class PerformanceService {
     await this.prisma.performanceModuleTask.update({ where: { id: task.id }, data: { executorUserId: executor.id, executorNameSnapshot: executor.displayName, executorAccountSnapshot: executor.username, executorResolvedAt: new Date() } });
   }
 
+  private async resolveEmployeeAmountBaseSnapshot(employeeId: string, finalScore: number) {
+    const amountBase = await this.prisma.employeePerformanceAmountBase.findFirst({ where: { employeeId, replacedAt: null }, orderBy: { versionNo: 'desc' } });
+    if (!amountBase) throw new BadRequestException('绩效结果生成前必须先为该员工配置个人绩效金额基数');
+    return {
+      employeeAmountBaseId: amountBase.id,
+      employeeAmountBaseSnapshot: amountBase.amount,
+      employeeAmountBaseVersionNo: amountBase.versionNo,
+      actualAmount: MONEY(Number(amountBase.amount) * finalScore / 100),
+    };
+  }
+
+  private async assertEmployeeAmountBaseScope(user: AuthenticatedUser, employeeId: string) {
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, assignments: { where: { status: AssignmentStatus.ACTIVE, archivedAt: null, isPrimary: true, endDate: null }, select: { organizationId: true }, take: 1 } } });
+    if (!employee) throw new NotFoundException('员工不存在');
+    if (this.access.hasAllEmployeeData(user)) return;
+    const scope = await this.access.getAccessibleOrganizationIds(user);
+    const organizationId = employee.assignments[0]?.organizationId;
+    if (!organizationId || !scope?.includes(organizationId)) throw new ForbiddenException('员工不在当前账号数据范围内');
+  }
+
   private presentTemplate(row: any) { const version = row.versions[0]; return { id: row.id, name: row.name, description: row.description, status: row.status, latestVersion: version ? this.presentVersionSummary(version) : null, moduleCount: this.moduleCount(version?.definition), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
   private presentTemplateDetail(row: any) { return { ...this.presentTemplate({ ...row, versions: row.versions }), versions: row.versions.map((version: any) => ({ ...this.presentVersionSummary(version), sourceMarkdown: version.sourceMarkdown, definition: version.definition })) }; }
   private presentVersion(version: any) { return { ...this.presentVersionSummary(version), sourceMarkdown: version.sourceMarkdown, definition: version.definition }; }
   private presentVersionSummary(version: any) { return { id: version.id, versionNo: version.versionNo, status: version.status, sourceName: version.sourceName, createdAt: version.createdAt.toISOString(), publishedAt: version.publishedAt?.toISOString() ?? null }; }
   private presentCycle(row: any) { return { id: row.id, name: row.name, periodStart: this.date(row.periodStart), periodEnd: this.date(row.periodEnd), templateName: row.template?.name ?? '', templateVersionNo: row.templateVersion?.versionNo ?? 0, status: row.status, instanceCount: row._count?.instances ?? row.instances?.length ?? 0, completedInstanceCount: row.instances?.filter((instance: any) => instance.status === ProcessStatus.COMPLETED).length ?? 0, createdAt: row.createdAt.toISOString() }; }
   private presentTask(row: any) { const current = row.instance?.currentModuleOrder === row.moduleOrder && row.status === TaskStatus.IN_PROGRESS; return { id: row.id, cycleId: row.instance?.cycleId, cycleName: row.instance?.cycle?.name ?? '', instanceId: row.instanceId, employeeId: row.employeeId, employeeName: row.instance?.employee?.name ?? '', employeeNo: row.instance?.employee?.employeeNo ?? '', moduleId: row.moduleId, moduleName: row.moduleName, moduleType: row.moduleType, moduleOrder: row.moduleOrder, moduleWeight: this.number(row.moduleWeight), status: row.status, executorName: row.executorNameSnapshot ?? row.executorUser?.displayName ?? null, isCurrent: current, canSubmit: current, completedAt: row.completedAt?.toISOString() ?? null }; }
-  private presentResult(row: any) { return { id: row.id, cycleId: row.cycleId, cycleName: row.cycle?.name ?? '', employeeId: row.employeeId, employeeName: row.employee?.name ?? '', employeeNo: row.employee?.employeeNo ?? '', finalScore: this.number(row.finalScore), amountBaseSnapshot: this.number(row.amountBaseSnapshot), actualAmount: this.number(row.actualAmount), status: row.status, revisionCount: row.revisions?.length ?? 0 }; }
-  private presentAmountBase(row: any) { return { id: row.id, versionNo: row.versionNo, amount: this.number(row.amount)!, previousAmount: this.number(row.previousAmount), effectiveAt: row.effectiveAt.toISOString(), changedByName: row.changedBy?.displayName ?? null, changeReason: row.changeReason, createdAt: row.createdAt.toISOString() }; }
+  private presentResult(row: any) { return { id: row.id, cycleId: row.cycleId, cycleName: row.cycle?.name ?? '', employeeId: row.employeeId, employeeName: row.employee?.name ?? '', employeeNo: row.employee?.employeeNo ?? '', finalScore: this.number(row.finalScore), employeeAmountBaseSnapshot: this.number(row.employeeAmountBaseSnapshot), employeeAmountBaseVersionNo: row.employeeAmountBaseVersionNo ?? null, actualAmount: this.number(row.actualAmount), status: row.status, revisionCount: row.revisions?.length ?? 0 }; }
+  private presentEmployeeAmountBase(row: any) { return { id: row.id, employeeId: row.employeeId, employeeNo: row.employee.employeeNo, employeeName: row.employee.name ?? '', organizationName: row.employee.assignments[0]?.organization?.name ?? null, versionNo: row.versionNo, amount: this.number(row.amount)!, effectiveAt: row.versionNo === 0 ? null : row.effectiveAt.toISOString(), replacedAt: row.replacedAt?.toISOString() ?? null, changedByName: row.changedBy?.displayName ?? null, changeReason: row.changeReason || null, createdAt: row.versionNo === 0 ? null : row.createdAt.toISOString() }; }
   private async assertCycleScope(user: AuthenticatedUser, instances: Array<{ organizationId: string | null }>) {
     if (this.access.hasAllEmployeeData(user)) return;
     const scope = await this.access.getAccessibleOrganizationIds(user);

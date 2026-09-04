@@ -4,7 +4,7 @@ import { PERMISSIONS } from '@hr-demo/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
-import { CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceTaskSubmissionDto, QueryPerformanceDto, UpdatePerformanceAmountBaseDto } from './dto/performance.dto';
+import { CreateEmployeePerformanceAmountBaseDto, CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceTaskSubmissionDto, QueryEmployeePerformanceAmountBaseDto, QueryPerformanceDto } from './dto/performance.dto';
 import { PerformanceService } from './performance.service';
 
 @ApiTags('绩效管理')
@@ -89,15 +89,15 @@ export class PerformanceController {
   @RequirePermissions(PERMISSIONS.PERFORMANCE_RESULT_MODIFY)
   modifyResult(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: ModifyPerformanceResultDto) { return this.service.modifyResult(user, id, dto); }
 
-  @Get('settings/amount-base')
+  @Get('settings/employee-amount-bases')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
-  getAmountBase() { return this.service.getAmountBase(); }
+  listEmployeeAmountBases(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryEmployeePerformanceAmountBaseDto) { return this.service.listEmployeeAmountBases(user, query); }
 
-  @Get('settings/amount-base/history')
+  @Get('settings/employee-amount-bases/:employeeId/history')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
-  listAmountBaseHistory() { return this.service.listAmountBaseHistory(); }
+  listEmployeeAmountBaseHistory(@CurrentUser() user: AuthenticatedUser, @Param('employeeId') employeeId: string) { return this.service.listEmployeeAmountBaseHistory(user, employeeId); }
 
-  @Put('settings/amount-base')
+  @Post('settings/employee-amount-bases')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_AMOUNT_BASE_MANAGE)
-  updateAmountBase(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdatePerformanceAmountBaseDto) { return this.service.updateAmountBase(user, dto); }
+  createEmployeeAmountBase(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateEmployeePerformanceAmountBaseDto) { return this.service.createEmployeeAmountBase(user, dto); }
 }

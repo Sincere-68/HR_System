@@ -389,7 +389,7 @@ export class EmploymentService {
   async exportInterns(user: AuthenticatedUser, dto: EmployeeExportInput) {
     const query = dto.query ?? {};
     const result = await this.findInterns(user, {
-      keyword: query.keyword,
+      keyword: query.keyword ?? query.name,
       startDateFrom: (query as { startDateFrom?: string }).startDateFrom,
       startDateTo: (query as { startDateTo?: string }).startDateTo,
       page: 1,

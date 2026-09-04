@@ -119,7 +119,12 @@ export class ModifyPerformanceResultDto {
   reason!: string;
 }
 
-export class UpdatePerformanceAmountBaseDto {
+export class CreateEmployeePerformanceAmountBaseDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  employeeId!: string;
+
   @ApiProperty({ minimum: 0 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
@@ -134,6 +139,34 @@ export class UpdatePerformanceAmountBaseDto {
   @IsNotEmpty()
   @MaxLength(10_000)
   reason!: string;
+}
+
+export class QueryEmployeePerformanceAmountBaseDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  keyword?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  employeeId?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 10 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 10;
 }
 
 export class QueryPerformanceDto {

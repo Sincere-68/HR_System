@@ -3,6 +3,7 @@ import type {
   PerformanceIndicatorDefinition,
   PerformanceModuleDefinition,
   PerformanceParseError,
+  PerformanceParseWarning,
   PerformanceRuleNode,
   PerformanceTemplateDefinition,
   PerformanceTemplateParseResult,
@@ -19,16 +20,17 @@ const CONDITION_OPERATORS = new Set(['<', '<=', '>', '>=', '=', '!=']);
 export class PerformanceTemplateParser {
   parse(sourceMarkdown: string, sourceName: string | null = null): PerformanceTemplateParseResult {
     const errors: PerformanceParseError[] = [];
+    const warnings: PerformanceParseWarning[] = [];
     if (!sourceMarkdown.trim()) {
-      return { sourceName, sourceMarkdown, definition: null, errors: [{ path: 'sourceMarkdown', message: 'Markdown 内容不能为空' }] };
+      return { sourceName, sourceMarkdown, definition: null, errors: [{ path: 'sourceMarkdown', message: 'Markdown 内容不能为空' }], warnings };
     }
 
     const match = sourceMarkdown.match(JSON_BLOCK);
     if (!match?.[1]) {
-      const legacyDefinition = this.parseLegacyMarkdown(sourceMarkdown);
-      if (legacyDefinition) return { sourceName, sourceMarkdown, definition: legacyDefinition, errors };
-      errors.push({ path: 'definition', message: 'Markdown 中缺少 performance-template JSON 代码块，且未识别到模块结构表' });
-      return { sourceName, sourceMarkdown, definition: null, errors };
+      const legacyDefinition = this.parseMarkdownDocument(sourceMarkdown, warnings);
+      if (legacyDefinition) return { sourceName, sourceMarkdown, definition: legacyDefinition, errors, warnings };
+      errors.push({ path: 'definition', message: '未识别到可解析的 Markdown 模块/指标结构' });
+      return { sourceName, sourceMarkdown, definition: null, errors, warnings };
     }
 
     let value: unknown;
@@ -36,11 +38,11 @@ export class PerformanceTemplateParser {
       value = JSON.parse(match[1]);
     } catch {
       errors.push({ path: 'definition', message: 'performance-template JSON 格式无效' });
-      return { sourceName, sourceMarkdown, definition: null, errors };
+      return { sourceName, sourceMarkdown, definition: null, errors, warnings };
     }
 
     const definition = this.validateDefinition(value, errors);
-    return { sourceName, sourceMarkdown, definition, errors };
+    return { sourceName, sourceMarkdown, definition, errors, warnings };
   }
 
   validateDefinition(value: unknown, errors: PerformanceParseError[] = [], requireExecutorDetails = false): PerformanceTemplateDefinition | null {
@@ -149,8 +151,9 @@ export class PerformanceTemplateParser {
     };
   }
 
-  private parseLegacyMarkdown(markdown: string): PerformanceTemplateDefinition | null {
+  private parseMarkdownDocument(markdown: string, warnings: PerformanceParseWarning[]): PerformanceTemplateDefinition | null {
     const lines = markdown.split(/\r?\n/);
+    const lineOf = (needle: string) => Math.max(1, lines.findIndex((line) => line.includes(needle)) + 1);
     const overviewRows = lines
       .filter((line) => line.trim().startsWith('|'))
       .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
@@ -158,29 +161,46 @@ export class PerformanceTemplateParser {
     if (overviewHeaderIndex >= 0) {
       const overviewModules = new Map<string, PerformanceModuleDefinition>();
       for (const [index, row] of overviewRows.slice(overviewHeaderIndex + 2).entries()) {
-        const category = (row[0] ?? '').replace(/（[^）]*）|\([^)]*\)/g, '').trim();
+        const rawCategory = row[0] ?? '';
+        const category = rawCategory.replace(/（[^）]*）|\([^)]*\)/g, '').trim();
         const indicatorName = row[1]?.trim();
         const weightMatch = row[2]?.match(/(\d+(?:\.\d+)?)\s*%/);
         if (!category || !indicatorName || !weightMatch) continue;
         const weight = Number(weightMatch[1]);
-        const moduleId = `legacy-${overviewModules.size + 1}`;
+        const moduleId = `markdown-${overviewModules.size + 1}`;
         const existing = overviewModules.get(category);
         const module = existing ?? {
           id: moduleId,
           name: category,
-          type: /指标|运营|业务/.test(category) ? 'METRIC' as const : 'EVALUATION' as const,
+          // Natural-language category names never determine execution mode.
+          type: 'EVALUATION' as const,
           enabled: true,
           participatesInTotal: true,
           weight: 0,
           description: '',
-          executor: { type: /指标|运营|业务/.test(category) ? 'AUTO' as const : 'USER' as const },
+          executor: { type: 'USER' as const },
           indicators: [],
         };
         module.weight = (module.weight ?? 0) + weight;
-        module.indicators.push({ id: `legacy-indicator-${module.id}-${index + 1}`, name: indicatorName, description: row[3] ?? '', standards: [], weight });
+        module.indicators.push({ id: `markdown-indicator-${module.id}-${index + 1}`, name: indicatorName, description: row[3] ?? '', standards: [], weight });
         overviewModules.set(category, module);
+        warnings.push({ path: `modules.${module.id}.type`, sourceLine: lineOf(rawCategory), message: `“${category}”的模块类型需要在编辑器中确认；未根据名称自动推断为业务指标或人工评估。` });
       }
-      if (overviewModules.size > 0) return { schemaVersion: 1, name: (markdown.match(/^#\s+(.+)$/m)?.[1] ?? '未命名绩效模板').trim(), modules: [...overviewModules.values()] };
+      const modules = [...overviewModules.values()];
+      for (const module of modules) this.enrichMarkdownModule(module, lines, warnings);
+      if (modules.length > 0) {
+        const otherWork = modules.find((module) => /其他工作/.test(module.name));
+        if (otherWork) {
+          otherWork.participatesInTotal = false;
+          otherWork.weight = null;
+          otherWork.type = 'ADJUSTMENT';
+          otherWork.adjustmentDirection = 'ADD';
+          otherWork.adjustmentMin = 0;
+          otherWork.adjustmentMax = 20;
+          warnings.push({ path: `modules.${otherWork.id}`, message: `“${otherWork.name}”不参与固定权重，已按确认口径设为最终得分后的额外加分项，最高 20 分。` });
+        }
+        return this.finalizeMarkdownDefinition(markdown, modules, warnings);
+      }
     }
     const modules: PerformanceModuleDefinition[] = [];
     let currentModule: PerformanceModuleDefinition | null = null;
@@ -263,8 +283,49 @@ export class PerformanceTemplateParser {
         module.indicators.push({ id: `legacy-indicator-${module.id}-1`, name: module.name, description: '', standards: [], weight: 100 });
       }
     }
+    return this.finalizeMarkdownDefinition(markdown, modules, warnings);
+  }
+
+  private enrichMarkdownModule(module: PerformanceModuleDefinition, lines: string[], warnings: PerformanceParseWarning[]) {
+    for (const indicator of module.indicators) {
+      const headingIndex = lines.findIndex((line) => line.replace(/^###\s+\d+[.、]?\s*/, '').includes(indicator.name));
+      if (headingIndex < 0) {
+        warnings.push({ path: `modules.${module.id}.indicators.${indicator.id}`, message: `未在 Markdown 正文章节中找到“${indicator.name}”的详细说明。` });
+        continue;
+      }
+      const nextHeadingIndex = lines.findIndex((line, index) => index > headingIndex && /^###\s+/.test(line));
+      const section = lines.slice(headingIndex + 1, nextHeadingIndex < 0 ? lines.length : nextHeadingIndex);
+      const action = this.extractMarkdownSection(section, '关键事项 / 行动计划');
+      const standard = this.extractMarkdownSection(section, '目标达成衡量标准');
+      const scoring = this.extractMarkdownSection(section, '评分参考');
+      indicator.description = action || indicator.description;
+      indicator.standards = [standard, scoring].filter(Boolean);
+      if (!indicator.description) warnings.push({ path: `modules.${module.id}.indicators.${indicator.id}.description`, sourceLine: headingIndex + 1, message: `“${indicator.name}”未提供可解析的关键事项/行动计划。` });
+      if (indicator.standards.length === 0) warnings.push({ path: `modules.${module.id}.indicators.${indicator.id}.standards`, sourceLine: headingIndex + 1, message: `“${indicator.name}”未提供可解析的衡量标准或评分参考。` });
+    }
+  }
+
+  private extractMarkdownSection(lines: string[], title: string) {
+    const start = lines.findIndex((line) => line.replace(/[：:]/g, '').trim() === title);
+    if (start < 0) return '';
+    const result: string[] = [];
+    for (const line of lines.slice(start + 1)) {
+      if (/^\*\*[^*]+\*\*/.test(line) || /^###\s+/.test(line)) break;
+      if (line.trim()) result.push(line.trim());
+    }
+    return result.join('\n');
+  }
+
+  private finalizeMarkdownDefinition(markdown: string, modules: PerformanceModuleDefinition[], warnings: PerformanceParseWarning[]) {
+    const fixedModules = modules.filter((module) => module.participatesInTotal);
+    const fixedWeight = fixedModules.reduce((sum, module) => sum + (module.weight ?? 0), 0);
+    if (Math.abs(fixedWeight - 100) > 0.0001) warnings.push({ path: 'modules', message: `Markdown 固定模块权重合计为 ${fixedWeight}%，必须在编辑器中调整至 100% 后才能发布。` });
+    for (const module of modules) {
+      const indicatorWeight = module.indicators.reduce((sum, indicator) => sum + indicator.weight, 0);
+      if (module.indicators.length && Math.abs(indicatorWeight - 100) > 0.0001) warnings.push({ path: `modules.${module.id}.indicators`, message: `“${module.name}”指标权重合计为 ${indicatorWeight}%，需确认其是模块内权重还是全局权重。` });
+    }
     return {
-      schemaVersion: 1,
+      schemaVersion: 1 as const,
       name: (markdown.match(/^#\s+(.+)$/m)?.[1] ?? '未命名绩效模板').trim(),
       modules,
     };

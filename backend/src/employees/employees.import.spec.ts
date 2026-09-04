@@ -175,11 +175,11 @@ describe('EmployeesService importEmployees', () => {
     expect(employeeCreate).not.toHaveBeenCalled();
   });
 
-  it('resolves a five-digit position code when updating an existing primary assignment', async () => {
+  it('resolves a unique position by its name when updating an existing primary assignment', async () => {
     const { service, prisma } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
-    prisma.position.findFirst.mockResolvedValue({ id: 'position-1', name: '财务总监' });
+    prisma.position.findFirst.mockResolvedValue({ id: 'position-1' });
     const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
-    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-001', '00001']]);
+    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-001', '运营经理']]);
 
     const result = await service.importEmployees(user, {
       originalname: 'employees.xlsx',
@@ -190,37 +190,25 @@ describe('EmployeesService importEmployees', () => {
     expect(result.rows[0]).toEqual(expect.objectContaining({ action: 'UPDATED', warnings: [] }));
   });
 
-  it('accepts a matching position code-and-name value', async () => {
-    const { service, prisma } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
-    prisma.position.findFirst.mockResolvedValue({ id: 'position-1', name: '财务总监' });
+  it('rejects deprecated position-number input', async () => {
+    const { service } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
     const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
     const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-002', '00001 - 财务总监']]);
-
-    await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
-
-    expect(update).toHaveBeenCalledWith(user, 'existing-employee', { positionId: 'position-1' }, { userId: user.id });
-  });
-
-  it('warns when a position code and name disagree', async () => {
-    const { service, prisma } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
-    prisma.position.findFirst.mockResolvedValue({ id: 'position-1', name: '财务总监' });
-    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
-    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-003', '00001 - 财务副经理']]);
 
     const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
 
     expect(update).not.toHaveBeenCalled();
-    expect(result.rows[0]?.warnings).toContain('职位编号“00001”对应“财务总监”，与导入名称“财务副经理”不一致，未导入');
+    expect(result.rows[0]?.warnings).toContain('职位“00001 - 财务总监”包含已废止的职位编号，请仅填写职位名称');
   });
 
   it('warns when the position catalog is uninitialized', async () => {
     const { service } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
     const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
-    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-004', '00001']]);
+    const buffer = await createXlsx(['工号', '职位'], [['EXISTING-POSITION-003', '运营经理']]);
 
     const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
 
-    expect(result.rows[0]?.warnings).toContain('职位目录未初始化，请先执行安全职位目录同步脚本');
+    expect(result.rows[0]?.warnings).toContain('职位目录未初始化，请先执行安全职位名称目录同步脚本');
     expect(update).not.toHaveBeenCalled();
   });
 

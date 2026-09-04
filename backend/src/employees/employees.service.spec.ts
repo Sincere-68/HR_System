@@ -18,7 +18,7 @@ function createServices() {
   return { demo, access, employees };
 }
 
-function query(overrides: Partial<{ keyword: string; organizationId: string; status: EmploymentStatus; page: number; pageSize: number }> = {}) {
+function query(overrides: Partial<{ name: string; keyword: string; organizationId: string; status: EmploymentStatus; page: number; pageSize: number }> = {}) {
   return { page: 1, pageSize: 10, ...overrides } as never;
 }
 
@@ -29,7 +29,7 @@ describe('EmployeesService in demo mode', () => {
 
     const firstPage = await employees.findAll(departmentAdmin, query({ pageSize: 2 }));
     const resigned = await employees.findAll(departmentAdmin, query({ status: EmploymentStatus.RESIGNED }));
-    const byKeyword = await employees.findAll(departmentAdmin, query({ keyword: '1002' }));
+    const byKeyword = await employees.findAll(departmentAdmin, query({ name: '周予安' }));
 
     expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 3, totalPages: 2 });
     expect(firstPage.data[0]?.mobile).toBe('13800001001');
@@ -90,6 +90,50 @@ describe('EmployeesService in demo mode', () => {
   });
 });
 
+describe('EmployeesService personnel population filters', () => {
+  it('filters the full employee population by name and current employment relationship', async () => {
+    const findMany = jest.fn().mockReturnValue({ query: 'employees' });
+    const count = jest.fn().mockReturnValue({ query: 'count' });
+    const prisma = {
+      employee: { findMany, count },
+      $transaction: jest.fn().mockResolvedValue([[], 0]),
+    };
+    const service = new EmployeesService(
+      prisma as never,
+      {
+        hasAllEmployeeData: jest.fn().mockReturnValue(true),
+        getAccessibleOrganizationIds: jest.fn(),
+      } as never,
+      { create: jest.fn() } as never,
+      { enabled: false } as never,
+    );
+    const user = {
+      id: 'user-admin', username: 'admin', displayName: '虚构管理员', role: 'ADMIN' as const,
+      roleName: '管理员', permissions: [PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_DATA_ALL], organizationIds: [],
+    };
+
+    await service.findAll(user, {
+      name: '虚构员工',
+      employmentRelationship: 'INTERNAL_EMPLOYEE',
+      page: 1,
+      pageSize: 10,
+    } as never);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        AND: expect.arrayContaining([
+          { name: { contains: '虚构员工' } },
+          expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({ assignments: { some: expect.objectContaining({ employmentRelationship: 'INTERNAL_EMPLOYEE' }) } }),
+            ]),
+          }),
+        ]),
+      },
+    }));
+  });
+});
+
 describe('EmployeesService database detail authorization', () => {
   it('returns 404 when only an archived in-scope assignment could match', async () => {
     const employeeFindFirst = jest.fn().mockResolvedValue(null);
@@ -132,17 +176,20 @@ describe('EmployeesService database detail authorization', () => {
 
 describe('EmployeesService database form options', () => {
   it('returns only directory-backed options and excludes fixed enum directories', async () => {
-    const positions = [{ id: 'position-1', code: '00105', name: 'web前端工程师', organizationId: null }];
+    const positions = [{ id: 'position-1', name: 'web前端工程师', organizationId: null }];
     const managers = [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }];
     const employingCompanies = [{ id: 'company-1', code: 'COMPANY_001', name: '虚构全日制公司' }];
+    const movementTypes = [{ id: 'movement-type-1', code: 'TRANSFER', name: '虚构调动' }];
     const prisma = {
       position: { findMany: jest.fn().mockReturnValue(undefined) },
       employee: { findMany: jest.fn().mockReturnValue(undefined) },
       employingCompany: { findMany: jest.fn().mockReturnValue(undefined) },
+      movementType: { findMany: jest.fn().mockReturnValue(undefined) },
       $transaction: jest.fn().mockResolvedValue([
         positions,
         managers,
         employingCompanies,
+        movementTypes,
       ]),
     };
     const service = new EmployeesService(
@@ -166,14 +213,15 @@ describe('EmployeesService database form options', () => {
       positions,
       managers,
       employingCompanies,
+      movementTypes,
     });
     expect(result).not.toHaveProperty('signingOrganizations');
     expect(result).not.toHaveProperty('personnelPositions');
     expect(result).not.toHaveProperty('employeeLevels');
     expect(prisma.position.findMany).toHaveBeenCalledWith({
       where: { status: 'ACTIVE', archivedAt: null },
-      select: { id: true, code: true, name: true, organizationId: true },
-      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      select: { id: true, name: true, organizationId: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
   });
 });
@@ -201,7 +249,7 @@ describe('EmployeesService database department history', () => {
     createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
   const currentAssignment = {
-    id: 'assignment-current', employmentPeriodId: 'period-1', positionId: 'position-1', position: { id: 'position-1', code: 'POS-01', name: '原职位' }, jobLevel: 'S2',
+    id: 'assignment-current', employmentPeriodId: 'period-1', positionId: 'position-1', position: { id: 'position-1', name: '原职位' }, jobLevel: 'S2',
     jobTitleId: 'job-title-1', workplaceName: '上海园区一期', assignmentType: 'PRIMARY',
     personnelPosition: 'FRONT_OFFICE', employeeLevel: 'STAFF', personnelCategory: 'NON_TALENT_PROGRAM',
     employmentRelationship: 'INTERNAL_EMPLOYEE', personnelSource: 'SOCIAL_RECRUITMENT',

@@ -20,10 +20,10 @@ function normalizeJson(value: unknown): Prisma.InputJsonValue | null {
 }
 
 export function directoryValue(
-  value: { id: string; code: string; name: string } | null | undefined,
+  value: { id: string; name: string; code?: string } | null | undefined,
 ): Prisma.InputJsonValue | null {
   if (!value) return null;
-  return { id: value.id, code: value.code, label: value.name };
+  return { id: value.id, ...(value.code ? { code: value.code } : {}), label: value.name };
 }
 
 export function enumValue(

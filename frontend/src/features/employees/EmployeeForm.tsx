@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import {
   CHINA_ADMINISTRATIVE_REGION_OPTIONS,
   getChinaAdministrativeRegionPath,
-  matchesPositionCatalogEntry,
 } from '@hr-demo/shared';
 import {
   type BankName,
@@ -191,12 +190,10 @@ export function matchesJobLevelSearch(
 
 export function matchesPositionSearch(
   input: string,
-  option?: { code?: unknown; name?: unknown },
+  option?: { name?: unknown },
 ) {
-  return matchesPositionCatalogEntry({
-    code: String(option?.code ?? ''),
-    name: String(option?.name ?? ''),
-  }, input);
+  const keyword = input.trim().toLocaleLowerCase();
+  return !keyword || String(option?.name ?? '').toLocaleLowerCase().includes(keyword);
 }
 
 function regionPathValue(code: string | null | undefined): string[] | undefined {
@@ -235,7 +232,7 @@ export function EmployeeForm({
   const contractTermType = Form.useWatch('contractTermType', form);
   const entryDate = Form.useWatch('entryDate', form);
   const positionOptions = (formOptions?.positions ?? [])
-    .map(({ id, code, name }) => ({ value: id, label: `${code} - ${name}`, code, name }));
+    .map(({ id, name }) => ({ value: id, label: name, name }));
   const managerOptions = (formOptions?.managers ?? []).map(({ id, name, employeeNo }) => ({
     value: id,
     label: `${name}（${employeeNo}）`,

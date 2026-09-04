@@ -109,7 +109,7 @@ erDiagram
 
 | 表 | 主要字段 | 用途 |
 | --- | --- | --- |
-| `positions` | code、name、organization_id、category、status、archived_at | 公司内部职位目录；当前以用户提供的 434 条五位编号/名称为唯一标准。每个编号独立，即使名称相同也不合并；新业务选择只使用有效、未归档项。 |
+| `positions` | name、organization_id、category、status、archived_at | 公司内部职位目录；原 434 条编号/名称已按名称去重为 288 条唯一职位。新业务选择只使用有效、未归档的名称，不再保存或使用职位编号。 |
 | `employee_identity_documents` | document_type、document_number、is_primary、expiry_date、status | 证件类型使用用户确认的 60 项 `IdentityDocumentType`；只有 `NATIONAL_ID` 同步迁移期 `employees.id_card_no`，其余证件号码仅保存在规范证件记录。 |
 | `employee_assignments.job_level` | `JobLevelCode` enum | 固定职级 code：`S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`；通过新迁移从旧目录精确回填 |
 | `employing_companies` | code、name、status | 全日制公司目录；仅内部合同协议通过该目录关联，不写入部门任职；外部履历和项目经历的公司文字字段保持原语义 |

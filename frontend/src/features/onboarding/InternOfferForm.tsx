@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import {
-  matchesPositionCatalogEntry,
   type AgreementType,
   type ContractTermType,
   type CreateInternOfferInput,
@@ -321,7 +320,7 @@ export function InternOfferForm({ formId, formOptions, onSubmit, conversionPrefi
   const birthDate = Form.useWatch('birthDate', form);
 
   const positionOptions = useMemo(
-    () => formOptions.positions.map(({ id, code, name }) => ({ value: id, label: code ? `${code} - ${name}` : name, code, name })),
+    () => formOptions.positions.map(({ id, name }) => ({ value: id, label: name, name })),
     [formOptions.positions],
   );
   const managerOptions = useMemo(
@@ -383,7 +382,7 @@ export function InternOfferForm({ formId, formOptions, onSubmit, conversionPrefi
         <FormLine name="organizationId" label="录用部门" required rules={[{ required: true, message: '请选择录用部门' }]}><OrganizationTreeSelect aria-label="录用部门" organizations={formOptions.organizations} placeholder="请选择" /></FormLine>
         <FormLine name="proposedEntryDate" label="计划入职日期" required rules={[{ required: true, message: '请选择计划入职日期' }]}><DatePicker aria-label="计划入职日期" placeholder="请选择" /></FormLine>
         <FormLine label="组织全称" note={ORGANIZATION_FULL_NAME_NOTE}><ReadonlyInput ariaLabel="组织全称" value={EMPTY_VALUE} /></FormLine>
-        <FormLine name="positionId" label="职位" required rules={[{ required: true, message: '请选择职位' }]}><Select aria-label="职位" placeholder="按职位编号或名称搜索" showSearch filterOption={(input, option) => matchesPositionCatalogEntry({ code: String(option?.code ?? ''), name: String(option?.name ?? '') }, input)} options={positionOptions} /></FormLine>
+        <FormLine name="positionId" label="职位" required rules={[{ required: true, message: '请选择职位' }]}><Select aria-label="职位" placeholder="按职位名称搜索" showSearch optionFilterProp="label" options={positionOptions} /></FormLine>
         <FormLine name="source" label="人员来源" required rules={[{ required: true, message: '请选择人员来源' }]}><Select aria-label="人员来源" placeholder="请选择" virtual={false} options={sourceOptions} /></FormLine>
         <FormLine name="jobLevel" label="职级"><Select aria-label="职级" placeholder="请选择" showSearch optionFilterProp="label" options={jobLevelOptions} /></FormLine>
         <FormLine name="employeeLevel" label="员工层级"><Select aria-label="员工层级" placeholder="请选择" options={employeeLevelOptions} /></FormLine>

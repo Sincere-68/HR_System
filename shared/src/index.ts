@@ -469,7 +469,7 @@ export interface EmployeeExportInput {
   format: PersonnelTransferFormat;
   fields: PersonnelTransferFieldKey[];
   employeeIds?: string[];
-  query?: Pick<EmployeeListQuery, 'keyword' | 'organizationId' | 'status'> & {
+  query?: Pick<EmployeeListQuery, 'name' | 'keyword' | 'organizationId' | 'status' | 'employmentRelationship'> & {
     startDateFrom?: string;
     startDateTo?: string;
     entryDateFrom?: string;
@@ -510,9 +510,13 @@ export interface Paginated<T> {
 }
 
 export interface EmployeeListQuery {
+  /** Employee name keyword for the personnel page. */
+  name?: string;
+  /** Other personnel sublists still support their existing name-or-employee-number keyword. */
   keyword?: string;
   organizationId?: string;
   status?: EmploymentStatus;
+  employmentRelationship?: EmploymentRelationship;
   page?: number;
   pageSize?: number;
 }
@@ -787,8 +791,6 @@ export interface InternOfferOption {
   name: string;
   /** Present for department directory entries so the frontend can render a hierarchy. */
   parentId?: string | null;
-  /** Present for position directory entries; preserves the company position number. */
-  code?: string;
   organizationId?: string | null;
 }
 
@@ -1534,7 +1536,6 @@ export interface EmployeeFormOption {
 }
 
 export interface EmployeePositionOption extends EmployeeFormOption {
-  code: string;
   organizationId: string | null;
 }
 
@@ -1716,6 +1717,14 @@ export interface PerformanceTemplateDetail extends PerformanceTemplateListItem {
 export interface PerformanceParseError {
   path: string;
   message: string;
+  sourceLine?: number;
+}
+
+/** A non-blocking Markdown extraction notice that HR must confirm in the editor. */
+export interface PerformanceParseWarning {
+  path: string;
+  message: string;
+  sourceLine?: number;
 }
 
 export interface PerformanceTemplateParseResult {
@@ -1723,12 +1732,14 @@ export interface PerformanceTemplateParseResult {
   sourceMarkdown: string;
   definition: PerformanceTemplateDefinition | null;
   errors: PerformanceParseError[];
+  warnings: PerformanceParseWarning[];
 }
 
 export interface PerformanceDirectoryOption {
   id: string;
-  code: string;
   name: string;
+  /** Job-title directories retain their independent code; Position does not. */
+  code?: string;
 }
 
 export interface PerformanceUserOption {
@@ -1807,7 +1818,8 @@ export interface PerformanceResultListItem {
   employeeName: string;
   employeeNo: string;
   finalScore: number | null;
-  amountBaseSnapshot: number | null;
+  employeeAmountBaseSnapshot: number | null;
+  employeeAmountBaseVersionNo: number | null;
   actualAmount: number | null;
   status: ProcessStatus;
   revisionCount: number;
@@ -1829,15 +1841,26 @@ export interface PerformanceDashboardSummary {
   pendingResultCount: number;
 }
 
-export interface PerformanceAmountBase {
+export interface EmployeePerformanceAmountBase {
   id: string;
+  employeeId: string;
+  employeeNo: string;
+  employeeName: string;
+  organizationName: string | null;
   versionNo: number;
   amount: number;
-  previousAmount: number | null;
-  effectiveAt: string;
+  effectiveAt: string | null;
+  replacedAt: string | null;
   changedByName: string | null;
-  changeReason: string;
-  createdAt: string;
+  changeReason: string | null;
+  createdAt: string | null;
+}
+
+export interface EmployeePerformanceAmountBaseListQuery {
+  keyword?: string;
+  employeeId?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface PerformanceCreateTemplateInput {
@@ -1868,7 +1891,8 @@ export interface PerformanceResultModificationInput {
   reason: string;
 }
 
-export interface PerformanceAmountBaseInput {
+export interface EmployeePerformanceAmountBaseInput {
+  employeeId: string;
   amount: number;
   effectiveAt: string;
   reason: string;

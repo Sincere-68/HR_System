@@ -47,7 +47,7 @@ export class PersonnelResignedService {
   async exportAll(user: AuthenticatedUser, dto: EmployeeExportInput) {
     const query = dto.query ?? {};
     const result = await this.findAll(user, {
-      keyword: query.keyword,
+      keyword: query.keyword ?? query.name,
       lastWorkingDateFrom: (query as { lastWorkingDateFrom?: string }).lastWorkingDateFrom,
       lastWorkingDateTo: (query as { lastWorkingDateTo?: string }).lastWorkingDateTo,
       page: 1,

@@ -95,8 +95,8 @@ const organizations = [
 ];
 const formOptions: EmployeeFormOptions = {
   positions: [
-    { id: 'position-1', code: '00105', name: 'web前端工程师', organizationId: null },
-    { id: 'position-2', code: '00427', name: '开发工程师', organizationId: null },
+    { id: 'position-1', name: 'web前端工程师', organizationId: null },
+    { id: 'position-2', name: '开发工程师', organizationId: null },
   ],
   managers: [{ id: 'manager-1', name: '虚构经理甲', employeeNo: 'FAKE-M001' }],
   employingCompanies: [{ id: 'company-1', name: '虚构公司', code: 'COMPANY_001' }],
@@ -114,9 +114,8 @@ describe('EmployeeForm', () => {
     expect(matchesJobLevelSearch('s', { label: 'S1', value: 'S1' })).toBe(true);
   });
 
-  it('matches position options separately by position code and name', () => {
-    const option = { code: '00105', name: 'web前端工程师' };
-    expect(matchesPositionSearch('00105', option)).toBe(true);
+  it('matches position options by position name', () => {
+    const option = { name: 'web前端工程师' };
     expect(matchesPositionSearch('前端工程师', option)).toBe(true);
     expect(matchesPositionSearch('开发工程师', option)).toBe(false);
   });
@@ -192,8 +191,8 @@ describe('EmployeeForm', () => {
     );
 
     fireEvent.mouseDown(screen.getAllByRole('combobox').find((control) => control.getAttribute('id') === 'positionId')!);
-    expect(screen.getByText('00105 - web前端工程师')).toBeInTheDocument();
-    expect(screen.getByText('00427 - 开发工程师')).toBeInTheDocument();
+    expect(screen.getByText('web前端工程师')).toBeInTheDocument();
+    expect(screen.getByText('开发工程师')).toBeInTheDocument();
   });
 
   it('renders the confirmed employee creation fields in their sections', () => {

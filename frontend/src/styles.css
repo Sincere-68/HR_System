@@ -275,10 +275,13 @@ a { text-decoration: none; }
 .ant-table-sticky-scroll { border-top: 1px solid #e7edef !important; background: rgba(255,255,255,.96) !important; box-shadow: 0 -2px 8px rgba(35,57,67,.06); }
 .ant-table-sticky-scroll-bar { background: #aeb9be !important; }
 .ant-table-sticky-scroll-bar:hover, .ant-table-sticky-scroll-bar-active { background: #859399 !important; }
-/* Sticky tables use Ant Design's synced viewport scrollbar. Hide only the
-   duplicate horizontal track on the table body; vertical scrolling remains. */
-.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-content::-webkit-scrollbar:horizontal,
-.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body::-webkit-scrollbar:horizontal { height: 0; display: none; }
+/* Ant Design creates a separate, viewport-synced horizontal scrollbar for
+   sticky tables. Keep that bar and suppress only the native duplicate. */
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-content,
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body { scrollbar-width: none; }
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body { overflow-x: hidden !important; }
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-content::-webkit-scrollbar,
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body::-webkit-scrollbar { height: 0 !important; }
 .detail-heading { align-items: flex-end; }
 .detail-sections { max-width: 1440px; margin-inline: auto; display: grid; gap: 16px; }
 .detail-sections > .ant-card, .detail-grid > .ant-card { width: 100%; }
@@ -427,7 +430,10 @@ a { text-decoration: none; }
 .handover-divider { height: 1px; background: #edf1f2; }
 .handover-option-secondary { padding-top: 42px; }
 .handover-option-secondary p { margin-bottom: 0; }
-.employee-table-surface { min-height: calc(100dvh - 107px); position: relative; overflow: hidden; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 2px 16px rgba(30,56,69,.055); }
+/* A sticky scrollbar cannot escape an overflow-clipped shell. The visual
+   clipping belongs to the table container instead, so it can remain pinned
+   to the visible bottom edge while the page scrolls. */
+.employee-table-surface { min-height: calc(100dvh - 107px); position: relative; overflow: visible; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 2px 16px rgba(30,56,69,.055); }
 .employee-filter-toolbar { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 5px 16px; border-bottom: 1px solid #edf1f2; }
 .employee-filter-controls { min-width: 0; display: flex; align-items: center; gap: 56px; }
 .employee-status-select { width: 140px; }
@@ -469,7 +475,7 @@ a { text-decoration: none; }
 .employee-roster-table .ant-table-tbody > tr > .ant-table-cell-fix-left { background: #fff; }
 .employee-roster-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left { background: #f7fcfc !important; }
 .onboarding-content-alert { margin: 0 0 16px; }
-.onboarding-table-surface { width: 100%; min-width: 0; min-height: calc(100dvh - 107px); position: relative; overflow: hidden; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 2px 16px rgba(30,56,69,.055); }
+.onboarding-table-surface { width: 100%; min-width: 0; min-height: calc(100dvh - 107px); position: relative; overflow: visible; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 2px 16px rgba(30,56,69,.055); }
 .onboarding-table { min-width: 0; }
 .onboarding-table .ant-table { background: transparent; }
 .onboarding-table .ant-table-container { border: 0; }
@@ -488,7 +494,7 @@ a { text-decoration: none; }
 .subsets-page-heading { height: 59px; display: flex; align-items: center; padding: 0 8px; }
 .subsets-page-heading h1.ant-typography { margin: 0; color: #203847; font-size: 16px; font-weight: 700; line-height: 28px; }
 .subsets-content-alert { margin: 0 0 16px; }
-.subsets-table-surface { width: 100%; min-width: 0; min-height: calc(100dvh - 107px); position: relative; overflow: hidden; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 2px 16px rgba(30,56,69,.055); }
+.subsets-table-surface { width: 100%; min-width: 0; min-height: calc(100dvh - 107px); position: relative; overflow: visible; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 2px 16px rgba(30,56,69,.055); }
 .subsets-table { min-width: 0; }
 .subsets-table .ant-table { background: transparent; }
 .subsets-table .ant-table-container { border: 0; }

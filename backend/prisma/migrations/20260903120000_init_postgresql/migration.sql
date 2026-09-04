@@ -1031,8 +1031,9 @@ CREATE TABLE "performance_instances" (
     "adjustment_score" DECIMAL(10,4) NOT NULL DEFAULT 0,
     "raw_final_score" DECIMAL(10,4),
     "final_score" DECIMAL(10,4),
-    "amount_base_version_id" TEXT,
-    "amount_base_snapshot" DECIMAL(12,2),
+    "employee_amount_base_id" TEXT,
+    "employee_amount_base_snapshot" DECIMAL(12,2),
+    "employee_amount_base_version_no" INTEGER,
     "calculation_formula" TEXT,
     "actual_amount" DECIMAL(12,2),
     "status" "ProcessStatus" NOT NULL DEFAULT 'DRAFT',
@@ -1073,17 +1074,18 @@ CREATE TABLE "performance_module_tasks" (
 );
 
 -- CreateTable
-CREATE TABLE "performance_amount_base_versions" (
+CREATE TABLE "employee_performance_amount_bases" (
     "id" TEXT NOT NULL,
+    "employee_id" TEXT NOT NULL,
     "version_no" INTEGER NOT NULL,
     "amount" DECIMAL(12,2) NOT NULL,
-    "previous_amount" DECIMAL(12,2),
     "effective_at" TIMESTAMP(3) NOT NULL,
+    "replaced_at" TIMESTAMP(3),
     "changed_by_id" TEXT NOT NULL,
     "change_reason" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "performance_amount_base_versions_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "employee_performance_amount_bases_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1630,13 +1632,13 @@ CREATE INDEX "performance_module_tasks_employee_id_status_idx" ON "performance_m
 CREATE UNIQUE INDEX "performance_module_tasks_instance_id_module_order_key" ON "performance_module_tasks"("instance_id", "module_order");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "performance_amount_base_versions_version_no_key" ON "performance_amount_base_versions"("version_no");
+CREATE UNIQUE INDEX "employee_performance_amount_bases_employee_id_version_no_key" ON "employee_performance_amount_bases"("employee_id", "version_no");
 
 -- CreateIndex
-CREATE INDEX "performance_amount_base_versions_effective_at_idx" ON "performance_amount_base_versions"("effective_at");
+CREATE INDEX "employee_performance_amount_bases_employee_id_effective_at_idx" ON "employee_performance_amount_bases"("employee_id", "effective_at");
 
 -- CreateIndex
-CREATE INDEX "performance_amount_base_versions_changed_by_id_created_at_idx" ON "performance_amount_base_versions"("changed_by_id", "created_at");
+CREATE INDEX "employee_performance_amount_bases_changed_by_id_created_at_idx" ON "employee_performance_amount_bases"("changed_by_id", "created_at");
 
 -- CreateIndex
 CREATE INDEX "performance_result_revisions_modified_by_id_created_at_idx" ON "performance_result_revisions"("modified_by_id", "created_at");
@@ -2002,7 +2004,7 @@ ALTER TABLE "performance_instances" ADD CONSTRAINT "performance_instances_organi
 ALTER TABLE "performance_instances" ADD CONSTRAINT "performance_instances_cycle_id_fkey" FOREIGN KEY ("cycle_id") REFERENCES "performance_cycles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "performance_instances" ADD CONSTRAINT "performance_instances_amount_base_version_id_fkey" FOREIGN KEY ("amount_base_version_id") REFERENCES "performance_amount_base_versions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "performance_instances" ADD CONSTRAINT "performance_instances_employee_amount_base_id_fkey" FOREIGN KEY ("employee_amount_base_id") REFERENCES "employee_performance_amount_bases"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "performance_module_tasks" ADD CONSTRAINT "performance_module_tasks_instance_id_fkey" FOREIGN KEY ("instance_id") REFERENCES "performance_instances"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2014,7 +2016,10 @@ ALTER TABLE "performance_module_tasks" ADD CONSTRAINT "performance_module_tasks_
 ALTER TABLE "performance_module_tasks" ADD CONSTRAINT "performance_module_tasks_executor_user_id_fkey" FOREIGN KEY ("executor_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "performance_amount_base_versions" ADD CONSTRAINT "performance_amount_base_versions_changed_by_id_fkey" FOREIGN KEY ("changed_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "employee_performance_amount_bases" ADD CONSTRAINT "employee_performance_amount_bases_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "employee_performance_amount_bases" ADD CONSTRAINT "employee_performance_amount_bases_changed_by_id_fkey" FOREIGN KEY ("changed_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "performance_result_revisions" ADD CONSTRAINT "performance_result_revisions_modified_by_id_fkey" FOREIGN KEY ("modified_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

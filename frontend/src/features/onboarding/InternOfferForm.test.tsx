@@ -13,8 +13,8 @@ import {
 const formOptions: InternOfferFormOptions = {
   organizations: [{ id: 'org-1', name: '虚构研发部' }],
   positions: [
-    { id: 'position-1', code: '00001', name: '财务总监', organizationId: null },
-    { id: 'position-2', code: '00105', name: 'web前端工程师', organizationId: null },
+    { id: 'position-1', name: '财务总监', organizationId: null },
+    { id: 'position-2', name: 'web前端工程师', organizationId: null },
   ],
   employingCompanies: [{ id: 'company-1', name: '虚构全日制公司' }],
   managers: [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }],
@@ -72,12 +72,12 @@ describe('InternOfferForm', () => {
     expect(screen.queryByText(/活动 Offer 模板|应用模板/)).not.toBeInTheDocument();
   });
 
-  it('uses code-name position labels and keeps office address unavailable', () => {
+  it('uses position-name labels and keeps office address unavailable', () => {
     renderForm();
     expect(field('办公地址')).toHaveValue('--');
     fireEvent.mouseDown(field('职位'));
     expect(screen.getAllByRole('option').map((option) => option.getAttribute('aria-label'))).toEqual([
-      '00001 - 财务总监', '00105 - web前端工程师',
+      '财务总监', 'web前端工程师',
     ]);
     expect(calculateAge(dayjs('2000-09-02'), dayjs('2026-09-01'))).toBe(25);
     expect(calculateAge(undefined, dayjs('2026-09-01'))).toBeNull();

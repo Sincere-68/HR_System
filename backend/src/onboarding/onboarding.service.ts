@@ -153,8 +153,8 @@ export class OnboardingService {
       }),
       this.prisma.position.findMany({
         where: positionWhere,
-        select: { id: true, code: true, name: true, organizationId: true },
-        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        select: { id: true, name: true, organizationId: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.employee.findMany({
         where: { ...managerWhere, name: { not: null } },

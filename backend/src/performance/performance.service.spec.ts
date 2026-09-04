@@ -15,7 +15,7 @@ const definition = {
 const markdown = `# 测试\n\n\`\`\`performance-template\n${JSON.stringify(definition)}\n\`\`\``;
 
 function service(overrides: Record<string, unknown> = {}) {
-  const prisma = { performanceTemplate: {}, performanceTemplateVersion: {}, performanceCycle: {}, performanceInstance: {}, performanceModuleTask: {}, performanceResultRevision: {}, performanceAmountBaseVersion: {}, employee: {}, user: {}, $transaction: jest.fn(), ...overrides };
+  const prisma = { performanceTemplate: {}, performanceTemplateVersion: {}, performanceCycle: {}, performanceInstance: {}, performanceModuleTask: {}, performanceResultRevision: {}, employeePerformanceAmountBase: {}, employee: {}, user: {}, $transaction: jest.fn(), ...overrides };
   const access = { getAccessibleOrganizationIds: jest.fn().mockResolvedValue(null), hasPermission: jest.fn().mockReturnValue(true) };
   const demo = { enabled: false };
   const audit = { create: jest.fn().mockResolvedValue(undefined) };
@@ -25,7 +25,7 @@ function service(overrides: Record<string, unknown> = {}) {
 describe('PerformanceTemplateParser', () => {
   it('rejects scripts and requires a declarative block', () => {
     const parser = new PerformanceTemplateParser();
-    expect(parser.parse('# x\n<script>alert(1)</script>').errors[0]?.message).toContain('缺少');
+    expect(parser.parse('# x\n<script>alert(1)</script>').errors[0]?.message).toContain('未识别');
     expect(parser.parse(markdown).errors).toEqual([]);
   });
 
@@ -41,6 +41,24 @@ describe('PerformanceRuleEngine', () => {
     const engine = new PerformanceRuleEngine();
     expect(engine.evaluate({ op: 'if', condition: { field: 'completionRate', operator: '>=', value: 1 }, then: { op: 'constant', value: 100 }, otherwise: { op: 'multiply', args: [{ op: 'field', field: 'completionRate' }, { op: 'constant', value: 100 }] } }, { completionRate: 0.75 })).toBe(75);
     expect(() => engine.evaluate({ op: 'divide', args: [{ op: 'constant', value: 1 }, { op: 'constant', value: 0 }] }, {})).toThrow(BadRequestException);
+  });
+});
+
+describe('Employee personal performance amount bases', () => {
+  it('freezes the latest personal base and recalculates from that snapshot', async () => {
+    const personalBase = { id: 'base-2', amount: { toFixed: () => '3000', valueOf: () => 3000 } as never, versionNo: 2 };
+    const prisma = { employeePerformanceAmountBase: { findFirst: jest.fn().mockResolvedValue(personalBase) } };
+    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+    const snapshot = await (instance as any).resolveEmployeeAmountBaseSnapshot('employee-1', 85);
+    expect(snapshot.employeeAmountBaseId).toBe('base-2');
+    expect(snapshot.employeeAmountBaseVersionNo).toBe(2);
+    expect(Number(snapshot.actualAmount)).toBe(2550);
+  });
+
+  it('rejects finalization where no personal amount base exists', async () => {
+    const prisma = { employeePerformanceAmountBase: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+    await expect((instance as any).resolveEmployeeAmountBaseSnapshot('employee-1', 85)).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
