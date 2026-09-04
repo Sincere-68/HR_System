@@ -275,6 +275,10 @@ a { text-decoration: none; }
 .ant-table-sticky-scroll { border-top: 1px solid #e7edef !important; background: rgba(255,255,255,.96) !important; box-shadow: 0 -2px 8px rgba(35,57,67,.06); }
 .ant-table-sticky-scroll-bar { background: #aeb9be !important; }
 .ant-table-sticky-scroll-bar:hover, .ant-table-sticky-scroll-bar-active { background: #859399 !important; }
+/* Sticky tables use Ant Design's synced viewport scrollbar. Hide only the
+   duplicate horizontal track on the table body; vertical scrolling remains. */
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-content::-webkit-scrollbar:horizontal,
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body::-webkit-scrollbar:horizontal { height: 0; display: none; }
 .detail-heading { align-items: flex-end; }
 .detail-sections { max-width: 1440px; margin-inline: auto; display: grid; gap: 16px; }
 .detail-sections > .ant-card, .detail-grid > .ant-card { width: 100%; }
