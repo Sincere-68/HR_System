@@ -118,7 +118,6 @@ function getEmployeeDetailInclude(now = new Date()) {
       isHighestEducation: true,
     },
   },
-  importedWorkYears: true,
   workExperiences: {
     where: { status: RecordStatus.ACTIVE, archivedAt: null },
     select: { startDate: true, endDate: true },
@@ -221,7 +220,6 @@ function getEmployeeListInclude(now: Date) {
         isHighestEducation: true,
       },
     },
-    importedWorkYears: true,
     workExperiences: {
       where: { status: RecordStatus.ACTIVE, archivedAt: null },
       select: { startDate: true, endDate: true },
