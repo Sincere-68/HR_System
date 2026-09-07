@@ -2,6 +2,8 @@ export { POSITION_CATALOG, matchesPositionCatalogEntry, searchPositionCatalog } 
 export type { PositionCatalogEntry } from './position-catalog';
 export { ORGANIZATION_CATALOG } from './organization-catalog';
 export type { OrganizationCatalogEntry } from './organization-catalog';
+export { EMPLOYING_COMPANY_CATALOG } from './employing-company-catalog';
+export type { EmployingCompanyCatalogEntry } from './employing-company-catalog';
 export {
   CHINA_ADMINISTRATIVE_REGIONS,
   CHINA_ADMINISTRATIVE_REGION_OPTIONS,

@@ -35,7 +35,7 @@ function createService(existingEmployee: { id: string } | null = null) {
     },
     organization: { findFirst: jest.fn() },
     position: { findMany: positionFindMany, findFirst: jest.fn(), count: jest.fn().mockResolvedValue(0) },
-    employingCompany: { findMany: jest.fn() },
+    employingCompany: { findMany: jest.fn(), findFirst: jest.fn() },
     $transaction: jest.fn((callback: (client: unknown) => unknown) => callback({
       employee: { create: employeeCreate, findMany: jest.fn() },
       employeeIdentityDocument: { create: jest.fn() },

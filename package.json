@@ -24,6 +24,7 @@
     "db:seed": "npm run prisma:seed --workspace=@hr-demo/backend",
     "db:replace-position-catalog": "npm run prisma:replace-position-catalog --workspace=@hr-demo/backend",
     "db:upsert-position-catalog": "npm run prisma:upsert-position-catalog --workspace=@hr-demo/backend",
+    "db:upsert-employing-company-catalog": "npm run prisma:upsert-employing-company-catalog --workspace=@hr-demo/backend",
     "db:replace-organization-catalog": "npm run prisma:replace-organization-catalog --workspace=@hr-demo/backend"
   },
   "overrides": {

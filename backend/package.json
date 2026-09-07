@@ -17,6 +17,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:replace-position-catalog": "tsx prisma/replace-position-catalog.ts",
     "prisma:upsert-position-catalog": "tsx prisma/upsert-position-catalog.ts",
+    "prisma:upsert-employing-company-catalog": "tsx prisma/upsert-employing-company-catalog.ts",
     "prisma:replace-organization-catalog": "tsx prisma/replace-organization-catalog.ts"
   },
   "dependencies": {

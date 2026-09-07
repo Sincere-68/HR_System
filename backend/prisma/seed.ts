@@ -19,17 +19,10 @@ import {
   RecordStatus,
   WorkArrangement,
 } from '@prisma/client';
-import { ORGANIZATION_CATALOG } from '@hr-demo/shared';
+import { EMPLOYING_COMPANY_CATALOG, ORGANIZATION_CATALOG } from '@hr-demo/shared';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
-
-// Only clearly fictional directory data belongs in local demo seed data.
-const companyNames = [
-  '虚构全日制公司一号',
-  '虚构全日制公司二号',
-  '虚构全日制公司三号',
-] as const;
 
 const permissionDefinitions = [
   ['employee.read', '查看员工'],
@@ -93,10 +86,13 @@ async function upsertRole(
 }
 
 async function main() {
-  for (const [index, name] of companyNames.entries()) {
-    const code = `COMPANY_${String(index + 1).padStart(3, '0')}`;
-    const id = `employing-company-${String(index + 1).padStart(3, '0')}`;
-    await prisma.employingCompany.upsert({ where: { code }, update: { name, sortOrder: index + 1 }, create: { id, code, name, sortOrder: index + 1 } });
+  for (const { code, name, sortOrder } of EMPLOYING_COMPANY_CATALOG) {
+    const id = `employing-company-${String(sortOrder).padStart(3, '0')}`;
+    await prisma.employingCompany.upsert({
+      where: { code },
+      update: { name, sortOrder, status: RecordStatus.ACTIVE, archivedAt: null },
+      create: { id, code, name, sortOrder, status: RecordStatus.ACTIVE },
+    });
   }
 
   for (const [code, name] of permissionDefinitions) {

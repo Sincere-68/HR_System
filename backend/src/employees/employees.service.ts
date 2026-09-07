@@ -1918,7 +1918,7 @@ export class EmployeesService {
       ))?.[0];
       if (!code) {
         const title = PERSONNEL_FIELDS.find(({ key }) => key === field)?.title ?? field;
-        throw new BadRequestException(`${title} 不支持“${value}”`);
+        throw new BadRequestException(`${title} 枚举值不支持“${value}”`);
       }
       update[field] = code;
     }
@@ -1953,18 +1953,8 @@ export class EmployeesService {
     warnings: string[],
   ) {
     if (input.fullTimeCompany !== undefined) {
-      const companies = await this.prisma.employingCompany.findMany({
-        where: { name: input.fullTimeCompany, status: RecordStatus.ACTIVE, archivedAt: null },
-        select: { id: true },
-        take: 2,
-      });
-      if (companies.length === 1) {
-        update.agreementEmployingCompanyId = companies[0]!.id;
-      } else {
-        warnings.push(companies.length === 0
-          ? `全日制公司“${input.fullTimeCompany}”不存在，未导入`
-          : `全日制公司“${input.fullTimeCompany}”匹配多个目录项，未导入`);
-      }
+      const company = await this.resolveImportEmployingCompany(input.fullTimeCompany, warnings);
+      if (company) update.agreementEmployingCompanyId = company.id;
     }
     if (input.managerName !== undefined) {
       const managers = await this.prisma.employee.findMany({
@@ -1985,6 +1975,26 @@ export class EmployeesService {
           : `直线经理“${input.managerName}”匹配多个员工，未导入`);
       }
     }
+  }
+
+  private async resolveImportEmployingCompany(value: string, warnings: string[]) {
+    const normalized = value.trim();
+    const byCode = await this.prisma.employingCompany.findFirst({
+      where: { code: normalized, status: RecordStatus.ACTIVE, archivedAt: null },
+      select: { id: true },
+    });
+    if (byCode) return byCode;
+
+    const byName = await this.prisma.employingCompany.findMany({
+      where: { name: normalized, status: RecordStatus.ACTIVE, archivedAt: null },
+      select: { id: true },
+      take: 2,
+    });
+    if (byName.length === 1) return byName[0]!;
+    warnings.push(byName.length === 0
+      ? `全日制公司“${normalized}”不存在，未导入`
+      : `全日制公司“${normalized}”匹配多个目录项，未导入`);
+    return null;
   }
 
   private async applyImportStandaloneRelatedRecords(
@@ -2066,12 +2076,18 @@ export class EmployeesService {
     }
 
     if (input.fullTimeCompany !== undefined) {
-      const companies = await tx.employingCompany.findMany({
-        where: { name: input.fullTimeCompany, status: RecordStatus.ACTIVE, archivedAt: null },
+      const normalized = input.fullTimeCompany.trim();
+      const byCode = await tx.employingCompany.findFirst({
+        where: { code: normalized, status: RecordStatus.ACTIVE, archivedAt: null },
+        select: { id: true },
+      });
+      const byName = byCode ? [] : await tx.employingCompany.findMany({
+        where: { name: normalized, status: RecordStatus.ACTIVE, archivedAt: null },
         select: { id: true },
         take: 2,
       });
-      if (companies.length === 1) {
+      const companyId = byCode?.id ?? (byName.length === 1 ? byName[0]!.id : null);
+      if (companyId) {
         const agreementNo = `${employeeId}-P${employmentPeriodId}-IMPORT`;
         const existingAgreement = await tx.employeeAgreement.findUnique({
           where: { agreementNo },
@@ -2080,7 +2096,7 @@ export class EmployeesService {
         if (existingAgreement) {
           await tx.employeeAgreement.update({
             where: { id: existingAgreement.id },
-            data: { employingCompanyId: companies[0]!.id },
+            data: { employingCompanyId: companyId },
           });
         } else {
           await tx.employeeAgreement.create({
@@ -2089,7 +2105,7 @@ export class EmployeesService {
               employmentPeriodId,
               agreementNo,
               agreementType: this.getAgreementType(profile.employmentRelationship ?? 'INTERNAL_EMPLOYEE'),
-              employingCompanyId: companies[0]!.id,
+              employingCompanyId: companyId,
               signingDate: entryDate,
               startDate: entryDate,
               status: AgreementStatus.ACTIVE,
@@ -2097,9 +2113,9 @@ export class EmployeesService {
           });
         }
       } else {
-        warnings.push(companies.length === 0
-          ? `全日制公司“${input.fullTimeCompany}”不存在，未导入`
-          : `全日制公司“${input.fullTimeCompany}”匹配多个目录项，未导入`);
+        warnings.push(byName.length === 0
+          ? `全日制公司“${normalized}”不存在，未导入`
+          : `全日制公司“${normalized}”匹配多个目录项，未导入`);
       }
     }
 
