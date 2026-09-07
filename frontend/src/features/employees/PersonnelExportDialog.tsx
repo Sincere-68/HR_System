@@ -22,7 +22,7 @@ const exportableFields = PERSONNEL_FIELDS;
 interface PersonnelExportDialogProps {
   open: boolean;
   selectedEmployeeIds: string[];
-  query: Pick<EmployeeListQuery, 'name' | 'organizationId' | 'status' | 'employmentRelationship'>;
+  query: Pick<EmployeeListQuery, 'keyword' | 'organizationId' | 'status' | 'employmentRelationship'>;
   onClose: () => void;
 }
 

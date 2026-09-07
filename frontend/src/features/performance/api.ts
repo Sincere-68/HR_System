@@ -11,6 +11,7 @@ import type {
   PerformanceTaskDetail,
   PerformanceTaskListItem,
   PerformanceTaskSubmissionInput,
+  PerformanceTemplateCopyResult,
   PerformanceTemplateDetail,
   PerformanceTemplateListItem,
   PerformanceTemplateParseResult,
@@ -46,6 +47,7 @@ export const performanceApi = {
   getTemplate: (id: string) => apiRequest<PerformanceTemplateDetail>(`/performance/templates/${id}`),
   parseTemplate: (sourceMarkdown: string, sourceName?: string) => apiRequest<PerformanceTemplateParseResult>('/performance/templates/parse', { method: 'POST', body: JSON.stringify({ sourceMarkdown, sourceName }) }),
   createTemplate: (input: PerformanceCreateTemplateInput) => apiRequest<PerformanceTemplateDetail>('/performance/templates', { method: 'POST', body: JSON.stringify(input) }),
+  copyTemplate: (id: string) => apiRequest<PerformanceTemplateCopyResult>(`/performance/templates/${id}/copy`, { method: 'POST' }),
   createTemplateVersion: (id: string, input: PerformanceCreateTemplateInput) => apiRequest<PerformanceTemplateDetail>(`/performance/templates/${id}/versions`, { method: 'POST', body: JSON.stringify(input) }),
   publishTemplateVersion: (id: string, versionId: string) => apiRequest(`/performance/templates/${id}/versions/${versionId}/publish`, { method: 'POST' }),
   listCycles: (query: Record<string, unknown>) => apiRequest<Paginated<import('@hr-demo/shared').PerformanceCycleListItem>>(`/performance/cycles?${params(query)}`),
@@ -79,6 +81,7 @@ export function usePerformanceResult(id: string) { return useQuery({ queryKey: p
 export function useEmployeePerformanceAmountBases(query: Record<string, unknown> = {}) { return useQuery({ queryKey: performanceKeys.employeeAmountBases(query), queryFn: () => performanceApi.listEmployeeAmountBases(query) }); }
 export function useEmployeePerformanceAmountBaseHistory(employeeId: string) { return useQuery({ queryKey: performanceKeys.employeeAmountBaseHistory(employeeId), queryFn: () => performanceApi.listEmployeeAmountBaseHistory(employeeId), enabled: Boolean(employeeId) }); }
 export function useCreatePerformanceTemplate() { const client = useQueryClient(); return useMutation({ mutationFn: performanceApi.createTemplate, onSuccess: () => client.invalidateQueries({ queryKey: performanceKeys.templates }) }); }
+export function useCopyPerformanceTemplate() { const client = useQueryClient(); return useMutation({ mutationFn: performanceApi.copyTemplate, onSuccess: () => client.invalidateQueries({ queryKey: performanceKeys.templates }) }); }
 export function useCreatePerformanceTemplateVersion() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, input }: { id: string; input: Parameters<typeof performanceApi.createTemplateVersion>[1] }) => performanceApi.createTemplateVersion(id, input), onSuccess: (_, variables) => { client.invalidateQueries({ queryKey: performanceKeys.templates }); client.invalidateQueries({ queryKey: performanceKeys.template(variables.id) }); } }); }
 export function useCreateEmployeePerformanceAmountBase() { const client = useQueryClient(); return useMutation({ mutationFn: performanceApi.createEmployeeAmountBase, onSuccess: (_, variables) => { client.invalidateQueries({ queryKey: ['performance', 'employee-amount-bases'] }); client.invalidateQueries({ queryKey: performanceKeys.employeeAmountBaseHistory(variables.employeeId) }); } }); }
 export function useSubmitPerformanceTask() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, input }: { id: string; input: PerformanceTaskSubmissionInput }) => performanceApi.submitTask(id, input), onSuccess: (_, variables) => { client.invalidateQueries({ queryKey: performanceKeys.task(variables.id) }); client.invalidateQueries({ queryKey: performanceKeys.all }); } }); }

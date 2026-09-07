@@ -9,12 +9,12 @@ export interface PersonnelResignedPresenterRow {
     gender: string | null;
     mobile: string | null;
     identityDocuments: Array<{
-      documentNumber: string;
+      documentNumber: string | null;
       isPrimary: boolean;
     }>;
   };
   employmentPeriod: {
-    entryDate: Date;
+    entryDate: Date | null;
     assignments: Array<{
       organization: { name: string };
       position: { name: string } | null;

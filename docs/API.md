@@ -58,7 +58,8 @@ Authorization: Bearer <accessToken>
 
 | 参数 | 类型 | 说明 |
 | --- | --- | --- |
-| `name` | string | 姓名模糊搜索，最多 50 个字符 |
+| `keyword` | string | 姓名或工号模糊搜索，最多 50 个字符 |
+| `name` | string | 兼容旧链接的姓名模糊搜索；新请求请使用 `keyword` |
 | `organizationId` | string | 部门筛选，不能扩大当前用户数据范围 |
 | `employmentRelationship` | enum | `INTERNAL_EMPLOYEE`、`INTERN` 或 `LABOR_WORKER` |
 | `status` | enum | `PROBATION`、`REGULAR`、`PENDING_ENTRY`、`TRANSFERRED_OUT`、`PENDING_TRANSFER_IN`、`RETIRED`、`RESIGNED` 或 `NON_REGULAR` |
@@ -323,7 +324,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 需要 `employee.read`。仅用于“人员 > 全部在职”表右上角的字段勾选导出，支持 `XLSX` 和 `CSV`。
 
-请求包含：`format`（`XLSX` 或 `CSV`）、至少一个从人员字段注册表勾选的 `fields`、可选 `employeeIds`，以及可选当前筛选 `query.name`、`query.organizationId`、`query.employmentRelationship`、`query.status`。当首列勾选了人员时，`employeeIds` 优先；未勾选时，后端导出当前筛选下的全部有权限人员，不受列表分页限制。后端严格应用当前账号组织数据范围，响应为文件流和下载文件名。
+请求包含：`format`（`XLSX` 或 `CSV`）、至少一个从人员字段注册表勾选的 `fields`、可选 `employeeIds`，以及可选当前筛选 `query.keyword`、`query.organizationId`、`query.employmentRelationship`、`query.status`。`query.keyword` 按姓名或工号模糊匹配；旧请求的 `query.name` 仍兼容为姓名关键词。当首列勾选了人员时，`employeeIds` 优先；未勾选时，后端导出当前筛选下的全部有权限人员，不受列表分页限制。后端严格应用当前账号组织数据范围，响应为文件流和下载文件名。
 
 ### PATCH `/employees/:id`
 

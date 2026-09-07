@@ -368,7 +368,7 @@ export class EmploymentService {
           internshipOrganizationName: null,
           departmentName: assignment?.organization.name ?? null,
           positionName: assignment?.position?.name ?? null,
-          startDate: row.entryDate.toISOString().slice(0, 10),
+          startDate: row.entryDate?.toISOString().slice(0, 10) ?? null,
           approvalStatus: null,
           managerName: null,
           bankName: null,

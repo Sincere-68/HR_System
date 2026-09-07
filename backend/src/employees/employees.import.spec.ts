@@ -42,6 +42,7 @@ function createService(
     employee: {
       create: employeeCreate,
       update: employeeUpdate,
+      findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
     },
     employeeAssignment: {
@@ -177,8 +178,11 @@ describe('EmployeesService importEmployees', () => {
 
   it('preserves a partial master row and only warns about incomplete employment values', async () => {
     const organization = { id: 'org-1', code: 'ORG_1', name: '虚构部门' };
-    const { service, employeeUpdate } = createService({ id: 'partial-employee' }, { organization });
-    const buffer = await createXlsx(['工号', '姓名', '部门'], [['PARTIAL-002', '更新姓名', '虚构部门']]);
+    const { service, employeeUpdate, tx } = createService({ id: 'partial-employee' }, { organization });
+    const buffer = await createXlsx(
+      ['工号', '姓名', '部门', '用工形式'],
+      [['PARTIAL-002', '更新姓名', '虚构部门', '合同用工']],
+    );
 
     const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
 
@@ -186,7 +190,13 @@ describe('EmployeesService importEmployees', () => {
     expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ name: '更新姓名' }),
     }));
-    expect(result.rows[0]?.warnings).toContain('任职信息不完整，未创建任职周期和部门任职；缺少：入职日期、雇佣关系、用工形式');
+    expect(tx.employmentPeriod.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ entryDate: null, employmentRelationship: 'INTERNAL_EMPLOYEE' }),
+    }));
+    expect(tx.employeeAssignment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ organizationId: 'org-1', startDate: null }),
+    }));
+    expect(result.rows[0]?.warnings).toEqual([]);
     expect(result.rows[0]?.warnings).not.toContain('部门“虚构部门”不存在、不在当前范围内或已停用，未创建任职周期和部门任职');
   });
 
@@ -343,6 +353,43 @@ describe('EmployeesService importEmployees', () => {
     expect(result.rows[0]?.warnings).toEqual([]);
   });
 
+  it('creates an education record from whichever education field exists', async () => {
+    const { service, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
+    const buffer = await createXlsx(
+      ['工号', '毕业学校名称'],
+      [['EXISTING-EDUCATION-MINIMUM-001', '虚构大学']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ updated: 1, failed: 0 });
+    expect(tx.employeeEducationExperience.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        schoolName: '虚构大学', educationLevel: null, institutionType: undefined,
+        graduationDate: undefined, major: undefined,
+      }),
+    }));
+  });
+
+  it('preserves an existing education record when only one high-education field is supplied', async () => {
+    const { service, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
+    tx.employeeEducationExperience.findFirst.mockResolvedValue({
+      id: 'education-1', schoolName: '原学校', institutionType: 'RANK_211', educationLevel: 'BACHELOR',
+      graduationDate: new Date('2024-06-30T00:00:00.000Z'), major: '原专业',
+    });
+    const buffer = await createXlsx(
+      ['工号', '最高学历'],
+      [['EXISTING-EDUCATION-PARTIAL-001', '硕士研究生']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ updated: 1, failed: 0 });
+    expect(tx.employeeEducationExperience.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'education-1' }, data: expect.objectContaining({ educationLevel: 'MASTER', schoolName: '原学校' }),
+    }));
+  });
+
   it('writes workplace text while importing confirmed bank and education fields', async () => {
     const { service, employeeUpdate, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
     const buffer = await createXlsx(
@@ -369,6 +416,40 @@ describe('EmployeesService importEmployees', () => {
     expect(result.rows[0]?.warnings).toEqual([]);
   });
 
+  it('stores a typed document without a number or expiry date', async () => {
+    const { service, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
+    const buffer = await createXlsx(
+      ['工号', '证件类型'],
+      [['EXISTING-DOCUMENT-NO-EXPIRY-001', '身份证']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ updated: 1, failed: 0 });
+    expect(tx.employeeIdentityDocument.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        documentType: 'NATIONAL_ID', documentNumber: null, expiryDate: undefined,
+      }),
+    }));
+  });
+
+  it('treats placeholder document expiry dates as empty', async () => {
+    const { service, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
+    tx.employee.findFirst.mockResolvedValue(null);
+    const buffer = await createXlsx(
+      ['工号', '证件类型', '证件号码', '证件截止日期'],
+      [['EXISTING-DOCUMENT-PLACEHOLDER-001', '身份证', '110101199901015001', '长期有效']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ updated: 1, failed: 0 });
+    expect(tx.employeeIdentityDocument.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ expiryDate: undefined }),
+    }));
+    expect(result.rows[0]?.warnings).toEqual([]);
+  });
+
   it('warns about duplicate documents without losing valid master fields', async () => {
     const { service, employeeUpdate, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
     tx.employeeIdentityDocument.findFirst
@@ -390,22 +471,62 @@ describe('EmployeesService importEmployees', () => {
   it('warns about incomplete independent records without losing valid master fields', async () => {
     const { service, employeeUpdate, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
     const buffer = await createXlsx(
-      ['工号', '姓名', '证件类型', '紧急联系人', '毕业学校名称'],
-      [['EXISTING-PARTIAL-001', '更新姓名', '身份证', '虚构联系人', '虚构大学']],
+      ['工号', '姓名', '证件类型', '紧急联系人'],
+      [['EXISTING-PARTIAL-001', '更新姓名', '身份证', '虚构联系人']],
     );
 
     const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
 
     expect(result).toMatchObject({ updated: 1, failed: 0 });
     expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ name: '更新姓名' }) }));
-    expect(tx.employeeIdentityDocument.create).not.toHaveBeenCalled();
+    expect(tx.employeeIdentityDocument.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ documentType: 'NATIONAL_ID', documentNumber: null }),
+    }));
     expect(tx.employeeFamilyMember.create).not.toHaveBeenCalled();
     expect(tx.employeeEducationExperience.create).not.toHaveBeenCalled();
     expect(result.rows[0]?.warnings).toEqual(expect.arrayContaining([
-      '证件类型和证件号码必须同时提供，未导入证件',
-      '紧急联系人缺少姓名、与本人关系或电话，未创建独立联系人记录',
-      '教育信息缺少毕业学校名称或最高学历，未创建独立教育经历',
+      '紧急联系人缺少与本人关系，未创建独立联系人记录',
     ]));
+  });
+
+  it('changes an existing primary manager by ending the historical relation and creating a new one', async () => {
+    const { service, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
+    tx.employee.findMany.mockResolvedValue([{ id: 'manager-2' }]);
+    tx.reportingRelationship.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'relationship-1', managerEmployeeId: 'manager-1' });
+    const buffer = await createXlsx(
+      ['工号', '直线经理'],
+      [['EXISTING-MANAGER-001', '虚构经理']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ updated: 1, failed: 0 });
+    expect(tx.reportingRelationship.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'relationship-1' }, data: expect.objectContaining({ status: 'INACTIVE', endDate: expect.any(Date) }),
+    }));
+    expect(tx.reportingRelationship.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ managerEmployeeId: 'manager-2', isPrimary: true, status: 'ACTIVE' }),
+    }));
+  });
+
+  it('does not create a duplicate manager relation when the imported manager is already current', async () => {
+    const { service, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
+    tx.employee.findMany.mockResolvedValue([{ id: 'manager-1' }]);
+    tx.reportingRelationship.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'relationship-1', managerEmployeeId: 'manager-1' });
+    const buffer = await createXlsx(
+      ['工号', '直线经理'],
+      [['EXISTING-MANAGER-SAME-001', '虚构经理']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ updated: 1, failed: 0 });
+    expect(tx.reportingRelationship.update).not.toHaveBeenCalled();
+    expect(tx.reportingRelationship.create).not.toHaveBeenCalled();
   });
 
   it('keeps valid fields when company or manager cannot be safely matched', async () => {
@@ -423,6 +544,25 @@ describe('EmployeesService importEmployees', () => {
       '全日制公司“UNKNOWN_COMPANY”不存在，未导入',
       '直线经理“不存在经理”不存在，未导入',
     ]));
+  });
+
+  it('creates a new employee with a partial dated assignment when only organization and arrangement are supplied', async () => {
+    const organization = { id: 'org-1', code: 'ORG_1', name: '虚构部门' };
+    const { service, tx } = createService(null, { organization });
+    const buffer = await createXlsx(
+      ['工号', '姓名', '部门', '用工形式'],
+      [['IMPORT-PARTIAL-ASSIGNMENT-001', '虚构导入员工', '虚构部门', '合同用工']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ created: 1, failed: 0 });
+    expect(tx.employmentPeriod.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ entryDate: null, employmentRelationship: 'INTERNAL_EMPLOYEE' }),
+    }));
+    expect(tx.employeeAssignment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ organizationId: 'org-1', startDate: null, workArrangement: 'CONTRACT_EMPLOYMENT' }),
+    }));
   });
 
   it('creates a new employee and complete imported employment without interactive-only data', async () => {

@@ -5,12 +5,12 @@ export interface EmploymentRecordPresentationRow {
   id: string;
   employeeId: string;
   employmentPeriodId: string | null;
-  startDate: Date;
+  startDate: Date | null;
   endDate: Date | null;
   status: AssignmentStatus;
   isPrimary: boolean;
   employmentPeriod: {
-    entryDate: Date;
+    entryDate: Date | null;
     employmentRecords: Array<{
       status: EmploymentStatus;
       effectiveAt: Date;
@@ -36,19 +36,23 @@ export function presentEmploymentRecord(
   row: EmploymentRecordPresentationRow,
   options: EmploymentRecordPresentationOptions,
 ): EmploymentRecordListItem {
-  const personnelRecord = row.employmentPeriod?.employmentRecords?.find((record) => (
-    record.effectiveAt <= row.startDate
-    && (record.endedAt === null || record.endedAt >= row.startDate)
-  ));
+  const assignmentStartDate = row.startDate;
+  let personnelRecord: { status: EmploymentStatus } | undefined;
+  if (assignmentStartDate !== null && row.employmentPeriod) {
+    personnelRecord = row.employmentPeriod.employmentRecords.find((record) => (
+      record.effectiveAt <= assignmentStartDate
+      && (record.endedAt === null || record.endedAt >= assignmentStartDate)
+    ));
+  }
   return {
     id: row.id,
     employeeId: row.employeeId,
     employeeNo: row.employee.employeeNo,
     employeeName: row.employee.name ?? '--',
-    entryDate: row.employmentPeriod?.entryDate.toISOString().slice(0, 10) ?? null,
+    entryDate: row.employmentPeriod?.entryDate?.toISOString().slice(0, 10) ?? null,
     departmentName: row.organization.name,
     positionName: row.position?.name ?? null,
-    positionStartDate: row.startDate.toISOString().slice(0, 10),
+    positionStartDate: row.startDate?.toISOString().slice(0, 10) ?? null,
     positionEndDate: row.endDate?.toISOString().slice(0, 10) ?? null,
     personnelLocator: null,
     personnelStatus: personnelRecord?.status

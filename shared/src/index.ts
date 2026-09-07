@@ -512,9 +512,9 @@ export interface Paginated<T> {
 }
 
 export interface EmployeeListQuery {
-  /** Employee name keyword for the personnel page. */
+  /** @deprecated Use keyword for new personnel-page searches. */
   name?: string;
-  /** Other personnel sublists still support their existing name-or-employee-number keyword. */
+  /** Personnel and other sublists search by employee name or employee number. */
   keyword?: string;
   organizationId?: string;
   status?: EmploymentStatus;
@@ -573,10 +573,10 @@ export interface EducationListItem {
   departmentName: string | null;
   startDate: string | null;
   endDate: string | null;
-  schoolName: string;
+  schoolName: string | null;
   schoolType: null;
   major: string | null;
-  educationLevel: string;
+  educationLevel: string | null;
   degree: string | null;
   isHighestEducation: boolean;
   canViewEmployeeDetail: boolean;
@@ -589,7 +589,7 @@ export interface WorkHistoryListItem {
   employeeNo: string;
   workEmail: string | null;
   departmentName: string | null;
-  companyName: string;
+  companyName: string | null;
   jobTitleName: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -605,7 +605,7 @@ export interface FamilyListItem {
   employeeNo: string;
   workEmail: string | null;
   departmentName: string | null;
-  memberName: string;
+  memberName: string | null;
   relationshipName: string;
   gender: string | null;
   mobile: string | null;
@@ -621,8 +621,8 @@ export interface AppraisalListItem {
   workEmail: string | null;
   departmentName: string | null;
   appraisalYear: number | null;
-  periodName: string;
-  performanceActivity: string;
+  periodName: string | null;
+  performanceActivity: string | null;
   appraisalDepartment: null;
   finalScore: number | null;
   startDate: string | null;
@@ -639,7 +639,7 @@ export interface TrainingListItem {
   departmentName: string | null;
   startDate: string | null;
   endDate: string | null;
-  trainingName: string;
+  trainingName: string | null;
   trainingProvider: string | null;
   trainingResult: string | null;
   approvalStatus: null;
@@ -655,7 +655,7 @@ export interface AwardListItem {
   workEmail: string | null;
   departmentName: string | null;
   awardDate: string | null;
-  awardName: string;
+  awardName: string | null;
   summary: string | null;
   approvalStatus: null;
   canViewEmployeeDetail: boolean;
@@ -668,7 +668,7 @@ export interface CertificateListItem {
   employeeNo: string;
   workEmail: string | null;
   departmentName: string | null;
-  certificateName: string;
+  certificateName: string | null;
   certificateNo: string | null;
   issuingAuthority: string | null;
   issueDate: string | null;
@@ -686,7 +686,7 @@ export interface ProjectListItem {
   departmentName: string | null;
   startDate: string | null;
   endDate: string | null;
-  projectName: string;
+  projectName: string | null;
   projectRole: string | null;
   description: string | null;
   approvalStatus: null;
@@ -700,7 +700,7 @@ export interface SkillListItem {
   employeeNo: string;
   workEmail: string | null;
   departmentName: string | null;
-  skillName: string;
+  skillName: string | null;
   proficiencyLevel: string | null;
   skillCategory: string | null;
   approvalStatus: null;
@@ -714,7 +714,7 @@ export interface LanguageListItem {
   employeeNo: string;
   workEmail: string | null;
   departmentName: string | null;
-  language: string;
+  language: string | null;
   nativeLanguage: null;
   proficiencyLevel: null;
   writingLevel: string | null;
@@ -1051,7 +1051,7 @@ export interface InternListItem {
   internshipOrganizationName: string | null;
   departmentName: string | null;
   positionName: string | null;
-  startDate: string;
+  startDate: string | null;
   approvalStatus: string | null;
   managerName: string | null;
   bankName: string | null;
@@ -1087,7 +1087,7 @@ export interface PersonnelLaborWorkerListItem {
   /** Employee.workEmail. */
   workEmail: string | null;
   employeeNo: string;
-  entryDate: string;
+  entryDate: string | null;
   departmentName: string;
   jobTitleName: string | null;
   positionName: string | null;
@@ -1107,7 +1107,7 @@ export interface LaborWorkerListItem {
   employeeName: string;
   workEmail: string | null;
   employeeNo: string;
-  entryDate: string;
+  entryDate: string | null;
   departmentName: string | null;
   jobTitleName: string | null;
   /** Current effective EmployeeAssignment.workArrangement. */
@@ -1152,7 +1152,7 @@ export interface EmploymentRecordListItem {
   entryDate: string | null;
   departmentName: string | null;
   positionName: string | null;
-  positionStartDate: string;
+  positionStartDate: string | null;
   positionEndDate: string | null;
   personnelLocator: null;
   personnelStatus: EmploymentStatus | null;
@@ -1185,7 +1185,7 @@ export interface PartTimeListItem {
   employeeName: string;
   employeeNo: string;
   partTimeType: null;
-  startDate: string;
+  startDate: string | null;
   institutionName: null;
   departmentName: string | null;
   managerName: null;
@@ -1714,6 +1714,11 @@ export interface PerformanceTemplateDetail extends PerformanceTemplateListItem {
     sourceMarkdown: string;
     definition: PerformanceTemplateDefinition;
   }>;
+}
+
+/** A new draft template created from another template's latest version. */
+export interface PerformanceTemplateCopyResult extends PerformanceTemplateDetail {
+  sourceTemplateId: string;
 }
 
 export interface PerformanceParseError {

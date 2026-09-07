@@ -26,7 +26,7 @@ export interface EmployeeWithCurrentRecord {
     organization: { id: string; code?: string; name: string };
     status?: 'ACTIVE' | 'ENDED';
     isPrimary: boolean;
-    startDate: Date;
+    startDate: Date | null;
     endDate: Date | null;
   }>;
   employmentRecords: { status: EmploymentStatus }[];
@@ -65,7 +65,7 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
     personnelCategory?: PersonnelCategory | null;
     personnelSource?: PersonnelSource | null;
     employmentRelationship: EmploymentRelationship;
-    entryDate: Date;
+    entryDate: Date | null;
     actualExitDate: Date | null;
     agreements?: Array<{
       id?: string;
@@ -94,40 +94,40 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
     changeReason?: string | null;
     changeDescription?: string | null;
     isPrimary: boolean;
-    startDate: Date;
+    startDate: Date | null;
     endDate: Date | null;
   }>;
   reportingAsEmployee: Array<{
     manager: { id?: string; name: string | null; workEmail: string | null };
     isPrimary: boolean;
-    startDate: Date;
+    startDate: Date | null;
     endDate: Date | null;
   }>;
   identityDocuments: Array<{
     id?: string;
     documentType: IdentityDocumentType;
-    documentNumber: string;
+    documentNumber: string | null;
     expiryDate: Date | null;
     isPrimary: boolean;
   }>;
   familyMembers: Array<{
     id?: string;
-    name: string;
+    name: string | null;
     relationship: string;
     mobile: string | null;
     isEmergencyContact: boolean;
   }>;
   educationExperiences: Array<{
     id?: string;
-    schoolName: string;
-    educationLevel: string;
+    schoolName: string | null;
+    educationLevel: string | null;
     institutionType?: string | null;
     major: string | null;
     graduationDate: Date | null;
     isHighestEducation: boolean;
   }>;
   workExperiences: Array<{
-    startDate: Date;
+    startDate: Date | null;
     endDate: Date | null;
   }>;
   convertedCandidates: Array<{ source: string | null }>;
@@ -266,11 +266,14 @@ function yearsBetween(start: Date, end: Date) {
 }
 
 function sumExperienceYears(
-  records: Array<{ startDate: Date; endDate: Date | null }>,
+  records: Array<{ startDate: Date | null; endDate: Date | null }>,
   now: Date,
 ) {
-  if (records.length === 0) return null;
-  return Math.round(records.reduce(
+  const datedRecords = records.filter((record): record is { startDate: Date; endDate: Date | null } => (
+    record.startDate !== null
+  ));
+  if (datedRecords.length === 0) return null;
+  return Math.round(datedRecords.reduce(
     (total, record) => total + yearsBetween(record.startDate, record.endDate ?? now),
     0,
   ) * 100) / 100;
@@ -305,7 +308,7 @@ export function presentEmployeeListItem(
   visibleOrganizationIds?: readonly string[],
 ): EmployeeListItem {
 
-  const currentPeriod = employee.employmentPeriods[0] ?? null;
+  const currentPeriod = employee.employmentPeriods.find((period) => period.entryDate !== null) ?? null;
   const currentAgreement = currentPeriod?.agreements?.[0] ?? null;
   const allowedAssignments = visibleOrganizationIds
     ? employee.assignments.filter((assignment) => visibleOrganizationIds.includes(assignment.organization.id))
@@ -398,7 +401,7 @@ export function presentEmployeeDetail(
     ? employee.assignments.filter((assignment) => visibleOrganizationIds.includes(assignment.organization.id))
     : employee.assignments;
   const assignment = allowedAssignments.find((candidate) => candidate.isPrimary) ?? allowedAssignments[0] ?? null;
-  const currentPeriod = employee.employmentPeriods[0] ?? null;
+  const currentPeriod = employee.employmentPeriods.find((period) => period.entryDate !== null) ?? null;
   const currentAgreement = currentPeriod?.agreements?.[0] ?? null;
   const currentManager = assignment
     ? (employee.reportingAsEmployee.find((relationship) => relationship.isPrimary)

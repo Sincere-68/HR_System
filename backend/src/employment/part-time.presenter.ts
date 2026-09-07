@@ -4,7 +4,7 @@ import type { PartTimeListItem } from '@hr-demo/shared';
 interface PartTimePresentationRow {
   id: string;
   employeeId: string;
-  startDate: Date;
+  startDate: Date | null;
   endDate: Date | null;
   status: AssignmentStatus;
   employee: {
@@ -25,7 +25,7 @@ export function presentPartTime(
     employeeName: row.employee.name ?? '--',
     employeeNo: row.employee.employeeNo,
     partTimeType: null,
-    startDate: row.startDate.toISOString().slice(0, 10),
+    startDate: row.startDate?.toISOString().slice(0, 10) ?? null,
     institutionName: null,
     departmentName: row.organization.name,
     managerName: null,

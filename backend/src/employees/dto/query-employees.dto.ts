@@ -4,7 +4,14 @@ import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class QueryEmployeesDto {
-  @ApiPropertyOptional({ description: '姓名关键字' })
+  @ApiPropertyOptional({ description: '姓名或工号关键字' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  keyword?: string;
+
+  @ApiPropertyOptional({ description: '姓名关键字（兼容旧链接）', deprecated: true })
   @IsOptional()
   @IsString()
   @MaxLength(50)

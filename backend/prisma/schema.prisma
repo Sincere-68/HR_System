@@ -669,7 +669,7 @@ model EmploymentPeriod {
   personnelCategory      PersonnelCategory?     @map("personnel_category")
   personnelSource        PersonnelSource?       @map("personnel_source")
   employmentRelationship EmploymentRelationship @map("employment_relationship")
-  entryDate              DateTime               @map("entry_date") @db.Date
+  entryDate              DateTime?              @map("entry_date") @db.Date
   plannedExitDate        DateTime?              @map("planned_exit_date") @db.Date
   actualExitDate         DateTime?              @map("actual_exit_date") @db.Date
   employmentStatus       EmploymentStatus       @default(REGULAR) @map("employment_status")
@@ -718,7 +718,7 @@ model EmployeeAssignment {
   trialPostEndDate       DateTime?                @map("trial_post_end_date") @db.Date
   movementTypeId         String?                  @map("movement_type_id")
   isPrimary              Boolean                  @default(false) @map("is_primary")
-  startDate              DateTime                 @map("start_date") @db.Date
+  startDate              DateTime?                @map("start_date") @db.Date
   endDate                DateTime?                @map("end_date") @db.Date
   status                 AssignmentStatus         @default(ACTIVE)
   changeReason           String?                  @map("change_reason") @db.Text
@@ -753,7 +753,7 @@ model ReportingRelationship {
   managerEmployeeId String                    @map("manager_employee_id")
   relationshipType  ReportingRelationshipType @map("relationship_type")
   isPrimary         Boolean                   @default(false) @map("is_primary")
-  startDate         DateTime                  @map("start_date") @db.Date
+  startDate         DateTime?                 @map("start_date") @db.Date
   endDate           DateTime?                 @map("end_date") @db.Date
   status            RecordStatus              @default(ACTIVE)
   archivedAt        DateTime?                 @map("archived_at")
@@ -771,7 +771,7 @@ model EmployeeIdentityDocument {
   id                String               @id @default(cuid())
   employeeId        String               @map("employee_id")
   documentType      IdentityDocumentType @map("document_type")
-  documentNumber    String               @map("document_number")
+  documentNumber    String?              @map("document_number")
   isPrimary         Boolean              @default(false) @map("is_primary")
   issuingCountry    String?              @map("issuing_country")
   issuingAuthority  String?              @map("issuing_authority")
@@ -842,7 +842,7 @@ model EmployeeFamilyMember {
   id                 String       @id @default(cuid())
   employeeId         String       @map("employee_id")
   relationship       String
-  name               String
+  name               String?
   gender             Gender?
   birthDate          DateTime?    @map("birth_date") @db.Date
   identityDocumentNo String?      @map("identity_document_no")
@@ -866,9 +866,9 @@ model EmployeeFamilyMember {
 model EmployeeEducationExperience {
   id                 String           @id @default(cuid())
   employeeId         String           @map("employee_id")
-  schoolName         String           @map("school_name")
+  schoolName         String?          @map("school_name")
   institutionType    InstitutionType? @map("institution_type")
-  educationLevel     EducationLevel   @map("education_level")
+  educationLevel     EducationLevel?  @map("education_level")
   degree             String?
   major              String?
   studyType          String?          @map("study_type")
@@ -892,10 +892,10 @@ model EmployeeEducationExperience {
 model EmployeeWorkExperience {
   id              String       @id @default(cuid())
   employeeId      String       @map("employee_id")
-  companyName     String       @map("company_name")
+  companyName     String?      @map("company_name")
   departmentName  String?      @map("department_name")
   positionName    String?      @map("position_name")
-  startDate       DateTime     @map("start_date") @db.Date
+  startDate       DateTime?    @map("start_date") @db.Date
   endDate         DateTime?    @map("end_date") @db.Date
   jobDescription  String?      @map("job_description") @db.Text
   leavingReason   String?      @map("leaving_reason") @db.Text
@@ -915,8 +915,8 @@ model EmployeeWorkExperience {
 model EmployeeAppraisal {
   id              String       @id @default(cuid())
   employeeId      String       @map("employee_id")
-  appraisalPeriod String       @map("appraisal_period")
-  appraisalType   String       @map("appraisal_type")
+  appraisalPeriod String?      @map("appraisal_period")
+  appraisalType   String?      @map("appraisal_type")
   score           Decimal?     @db.Decimal(8, 2)
   grade           String?
   result          String?
@@ -938,7 +938,7 @@ model EmployeeAppraisal {
 model EmployeeTrainingRecord {
   id               String       @id @default(cuid())
   employeeId       String       @map("employee_id")
-  trainingName     String       @map("training_name")
+  trainingName     String?      @map("training_name")
   trainingProvider String?      @map("training_provider")
   trainingType     String?      @map("training_type")
   startDate        DateTime?    @map("start_date") @db.Date
@@ -960,7 +960,7 @@ model EmployeeTrainingRecord {
 model EmployeeAward {
   id                   String       @id @default(cuid())
   employeeId           String       @map("employee_id")
-  awardName            String       @map("award_name")
+  awardName            String?      @map("award_name")
   awardLevel           String?      @map("award_level")
   awardingOrganization String?      @map("awarding_organization")
   awardDate            DateTime?    @map("award_date") @db.Date
@@ -979,8 +979,8 @@ model EmployeeAward {
 model EmployeeCertificate {
   id               String          @id @default(cuid())
   employeeId       String          @map("employee_id")
-  certificateType  String          @map("certificate_type")
-  certificateName  String          @map("certificate_name")
+  certificateType  String?         @map("certificate_type")
+  certificateName  String?         @map("certificate_name")
   certificateNo    String?         @map("certificate_no")
   issuingAuthority String?         @map("issuing_authority")
   issueDate        DateTime?       @map("issue_date") @db.Date
@@ -1002,7 +1002,7 @@ model EmployeeCertificate {
 model EmployeeProjectExperience {
   id                 String       @id @default(cuid())
   employeeId         String       @map("employee_id")
-  projectName        String       @map("project_name")
+  projectName        String?      @map("project_name")
   companyName        String?      @map("company_name")
   projectRole        String?      @map("project_role")
   startDate          DateTime?    @map("start_date") @db.Date
@@ -1023,7 +1023,7 @@ model EmployeeProjectExperience {
 model EmployeeSkill {
   id                String       @id @default(cuid())
   employeeId        String       @map("employee_id")
-  skillName         String       @map("skill_name")
+  skillName         String?      @map("skill_name")
   skillCategory     String?      @map("skill_category")
   proficiencyLevel  String?      @map("proficiency_level")
   yearsOfExperience Decimal?     @map("years_of_experience") @db.Decimal(5, 2)
@@ -1042,7 +1042,7 @@ model EmployeeSkill {
 model EmployeeLanguageAbility {
   id               String       @id @default(cuid())
   employeeId       String       @map("employee_id")
-  language         String
+  language         String?
   listeningLevel   String?      @map("listening_level")
   speakingLevel    String?      @map("speaking_level")
   readingLevel     String?      @map("reading_level")
@@ -1062,8 +1062,8 @@ model EmployeeLanguageAbility {
 model EmployeeDocument {
   id           String         @id @default(cuid())
   employeeId   String         @map("employee_id")
-  documentType String         @map("document_type")
-  documentName String         @map("document_name")
+  documentType String?        @map("document_type")
+  documentName String?        @map("document_name")
   attachmentId String         @map("attachment_id")
   expiryDate   DateTime?      @map("expiry_date") @db.Date
   remark       String?        @db.Text
@@ -1473,12 +1473,12 @@ model EmployeeAgreement {
   id                  String              @id @default(cuid())
   employeeId          String              @map("employee_id")
   employmentPeriodId  String?             @map("employment_period_id")
-  agreementNo         String              @unique @map("agreement_no")
+  agreementNo         String?             @unique @map("agreement_no")
   agreementType       AgreementType       @map("agreement_type")
   employingCompanyId  String?             @map("employing_company_id")
   previousAgreementId String?             @map("previous_agreement_id")
   signingDate         DateTime?           @map("signing_date") @db.Date
-  startDate           DateTime            @map("start_date") @db.Date
+  startDate           DateTime?           @map("start_date") @db.Date
   endDate             DateTime?           @map("end_date") @db.Date
   probationEndDate    DateTime?           @map("probation_end_date") @db.Date
   workLocation        String?             @map("work_location")

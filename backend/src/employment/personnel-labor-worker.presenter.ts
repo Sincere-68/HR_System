@@ -10,7 +10,7 @@ export interface PersonnelLaborWorkerListItem {
   /** Employee.workEmail. */
   workEmail: string | null;
   employeeNo: string;
-  entryDate: string;
+  entryDate: string | null;
   departmentName: string;
   jobTitleName: string | null;
   positionName: string | null;
@@ -22,7 +22,7 @@ export interface PersonnelLaborWorkerListItem {
 
 export interface PersonnelLaborWorkerPresentationRow {
   employeeId: string;
-  entryDate: Date;
+  entryDate: Date | null;
   employee: {
     employeeNo: string;
     name: string | null;
@@ -55,7 +55,7 @@ export function presentPersonnelLaborWorker(
     name: row.employee.name,
     workEmail: row.employee.workEmail,
     employeeNo: row.employee.employeeNo,
-    entryDate: row.entryDate.toISOString().slice(0, 10),
+    entryDate: row.entryDate?.toISOString().slice(0, 10) ?? null,
     departmentName: assignment.organization.name,
     jobTitleName: assignment.jobTitle?.name ?? null,
     positionName: assignment.position?.name ?? null,

@@ -36,6 +36,22 @@ describe('PerformanceTemplateParser', () => {
   });
 });
 
+describe('PerformanceTemplate copying', () => {
+  it('creates a separate draft template from the latest version', async () => {
+    const source = { id: 'source-template', name: '原绩效模板', description: '说明', versions: [{ id: 'source-version', versionNo: 3, sourceName: 'source.md', sourceMarkdown: markdown, definition }] };
+    const createdTemplate = { id: 'copied-template' };
+    const copied = { id: 'copied-template', name: '原绩效模板 副本', description: '说明', status: 'ACTIVE', createdAt: new Date(), updatedAt: new Date(), versions: [{ id: 'copied-version', versionNo: 1, sourceName: 'source.md', sourceMarkdown: markdown, definition, status: 'DRAFT', createdAt: new Date(), publishedAt: null }] };
+    const tx = { performanceTemplate: { create: jest.fn().mockResolvedValue(createdTemplate), findUniqueOrThrow: jest.fn().mockResolvedValue(copied) }, performanceTemplateVersion: { create: jest.fn().mockResolvedValue({}) } };
+    const prisma = { performanceTemplate: { findFirst: jest.fn().mockResolvedValue(source) }, $transaction: jest.fn((callback) => callback(tx)) };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const instance = new PerformanceService(prisma as never, {} as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+    const result = await instance.copyTemplate({ id: 'user-1' } as never, 'source-template');
+    expect(tx.performanceTemplate.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ name: '原绩效模板 副本' }) }));
+    expect(tx.performanceTemplateVersion.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ templateId: 'copied-template', versionNo: 1, status: 'DRAFT', sourceMarkdown: markdown }) }));
+    expect(result.sourceTemplateId).toBe('source-template');
+  });
+});
+
 describe('PerformanceRuleEngine', () => {
   it('evaluates only whitelisted arithmetic and conditions', () => {
     const engine = new PerformanceRuleEngine();

@@ -275,11 +275,12 @@ export function EmployeeListPage() {
   const [importOpen, setImportOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const view: PersonnelView = isPersonnelView(requestedView) ? requestedView : 'all';
-  const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') ?? '');
-  const [nameInput, setNameInput] = useState(searchParams.get('name') ?? '');
+  const [keywordInput, setKeywordInput] = useState(
+    searchParams.get('keyword') ?? searchParams.get('name') ?? '',
+  );
 
   const employeeQuery = useMemo<EmployeeListQuery>(() => ({
-    name: searchParams.get('name') || undefined,
+    keyword: searchParams.get('keyword') || searchParams.get('name') || undefined,
     organizationId: searchParams.get('organizationId') || undefined,
     status: (searchParams.get('status') as EmploymentStatus | null) ?? undefined,
     employmentRelationship: (searchParams.get('employmentRelationship') as EmploymentRelationship | null) ?? undefined,
@@ -329,8 +330,7 @@ export function EmployeeListPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    setKeywordInput(searchParams.get('keyword') ?? '');
-    setNameInput(searchParams.get('name') ?? '');
+    setKeywordInput(searchParams.get('keyword') ?? searchParams.get('name') ?? '');
   }, [searchParams]);
 
   const patchSearch = (changes: Record<string, string | number | undefined>) => {
@@ -344,7 +344,7 @@ export function EmployeeListPage() {
 
   const switchView = (nextView: PersonnelView) => {
     const retainedKeys: Record<PersonnelView, readonly string[]> = {
-      all: ['name', 'organizationId', 'status', 'employmentRelationship', 'pageSize'],
+      all: ['keyword', 'organizationId', 'status', 'employmentRelationship', 'pageSize'],
       regular: ['keyword', 'organizationId', 'pageSize'],
       intern: ['keyword', 'startDateFrom', 'startDateTo', 'pageSize'],
       labor: ['keyword', 'entryDateFrom', 'entryDateTo', 'pageSize'],
@@ -418,18 +418,22 @@ export function EmployeeListPage() {
     />
   );
 
-  const nameSearchInput = (
+  const personnelKeywordSearchInput = (
     <Input.Search
       className="personnel-view-keyword-input"
       allowClear
-      aria-label="按姓名搜索"
-      placeholder="请输入姓名"
-      value={nameInput}
+      aria-label="按姓名或工号搜索"
+      placeholder="请输入姓名或工号"
+      value={keywordInput}
       onChange={(event) => {
-        setNameInput(event.target.value);
-        if (!event.target.value) patchSearch({ name: undefined, page: 1 });
+        setKeywordInput(event.target.value);
+        if (!event.target.value) patchSearch({ keyword: undefined, name: undefined, page: 1 });
       }}
-      onSearch={(name) => patchSearch({ name: name.trim() || undefined, page: 1 })}
+      onSearch={(keyword) => patchSearch({
+        keyword: keyword.trim() || undefined,
+        name: undefined,
+        page: 1,
+      })}
     />
   );
 
@@ -447,7 +451,7 @@ export function EmployeeListPage() {
       return (
         <div className="employee-filter-toolbar">
           <div className="employee-filter-controls">
-            {nameSearchInput}
+            {personnelKeywordSearchInput}
             <OrganizationTreeSelect
               aria-label="筛选部门"
               className="department-filter-tree-select"
@@ -472,6 +476,21 @@ export function EmployeeListPage() {
             />
           </div>
           <div className="employee-selection-summary" aria-live="polite">
+            <Button
+              type="link"
+              size="small"
+              disabled={![employeeQuery.keyword, employeeQuery.organizationId, employeeQuery.status, employeeQuery.employmentRelationship].some(Boolean)}
+              onClick={() => patchSearch({
+                keyword: undefined,
+                name: undefined,
+                organizationId: undefined,
+                status: undefined,
+                employmentRelationship: undefined,
+                page: 1,
+              })}
+            >
+              清空所有筛选
+            </Button>
             <Typography.Text type="secondary">已选择 {selectedRowKeys.length} 人</Typography.Text>
             {selectedRowKeys.length > 0 ? (
               <Button type="link" size="small" onClick={() => setSelectedRowKeys([])}>清空已选</Button>
@@ -705,7 +724,7 @@ export function EmployeeListPage() {
         open={exportOpen}
         selectedEmployeeIds={selectedRowKeys.map(String)}
         query={{
-          name: employeeQuery.name,
+          keyword: employeeQuery.keyword,
           organizationId: employeeQuery.organizationId,
           status: employeeQuery.status,
           employmentRelationship: employeeQuery.employmentRelationship,

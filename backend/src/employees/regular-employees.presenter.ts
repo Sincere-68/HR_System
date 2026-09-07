@@ -5,7 +5,7 @@ export interface RegularEmployeeListItem {
   canViewEmployeeDetail: boolean;
   name: string;
   employeeNo: string;
-  entryDate: string;
+  entryDate: string | null;
   departmentName: string;
   positionName: string | null;
   jobLevel: JobLevel | null;
@@ -31,7 +31,7 @@ export interface RegularEmployeeSnapshot {
   bankAccountNumber: string | null;
   bankBranchName: string | null;
   employmentPeriods: Array<{
-    entryDate: Date;
+    entryDate: Date | null;
     assignments: Array<{
       organization: { name: string };
       position: { name: string } | null;
@@ -47,8 +47,8 @@ export interface RegularEmployeeSnapshot {
   }>;
 }
 
-function formatDate(value: Date) {
-  return value.toISOString().slice(0, 10);
+function formatDate(value: Date | null) {
+  return value?.toISOString().slice(0, 10) ?? null;
 }
 
 /** Maps the already-filtered current-period, primary-assignment snapshot. */

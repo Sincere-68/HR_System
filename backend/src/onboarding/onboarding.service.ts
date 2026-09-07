@@ -483,7 +483,7 @@ export class OnboardingService {
       source: period.personnelSource as InternConversionOfferPrefill['source'],
       gender: employee.gender,
       birthDate: formatDate(employee.birthDate),
-      identityDocument: document
+      identityDocument: document?.documentNumber
         ? {
           documentType: document.documentType,
           documentNumber: document.documentNumber,
@@ -491,7 +491,7 @@ export class OnboardingService {
           ...(documentExpiryDate ? { expiryDate: documentExpiryDate } : {}),
         }
         : null,
-      educationExperience: education
+      educationExperience: education?.schoolName && education.educationLevel
         ? {
           schoolName: education.schoolName,
           educationLevel: education.educationLevel,
@@ -751,7 +751,7 @@ export class OnboardingService {
           employmentRelationship: null,
           fullTimeCompany: agreement?.employingCompany?.name ?? null,
           contractType: agreement?.agreementType ?? null,
-          effectiveDate: agreement?.startDate.toISOString().slice(0, 10) ?? null,
+          effectiveDate: agreement?.startDate?.toISOString().slice(0, 10) ?? null,
           terminationDate: agreement?.terminationDate?.toISOString().slice(0, 10) ?? null,
           dataSource: row.offer?.candidate?.source ?? null,
           currentApproverName: null,
@@ -853,7 +853,7 @@ export class OnboardingService {
         employeeName: row.employee.name ?? '--',
         organizationName: row.employee.assignments[0]?.organization.name ?? null,
         jobTitleName: row.employee.assignments[0]?.jobTitle?.name ?? null,
-        entryDate: row.employee.employmentPeriods[0]?.entryDate.toISOString().slice(0, 10) ?? null,
+        entryDate: row.employee.employmentPeriods[0]?.entryDate?.toISOString().slice(0, 10) ?? null,
         managerName: row.employee.reportingAsEmployee[0]?.manager.name ?? null,
         integrationStatus: row.status,
         integrationProgress: null,
@@ -944,7 +944,7 @@ export class OnboardingService {
         gender: row.employee.gender,
         organizationName: row.employee.assignments[0]?.organization.name ?? null,
         positionName: row.employee.assignments[0]?.position?.name ?? null,
-        entryDate: row.employee.employmentPeriods[0]?.entryDate.toISOString().slice(0, 10) ?? null,
+        entryDate: row.employee.employmentPeriods[0]?.entryDate?.toISOString().slice(0, 10) ?? null,
         introductionStatus: row.status,
       })),
       meta: {
@@ -1064,6 +1064,7 @@ export class OnboardingService {
               && assignment.status === AssignmentStatus.ACTIVE
               && assignment.archivedAt === null
               && assignment.isPrimary
+              && assignment.startDate !== null
               && assignment.startDate.getTime() <= actualLastWorkingDate.getTime()
               && (assignment.endDate === null || assignment.endDate.getTime() >= actualLastWorkingDate.getTime())
             ))

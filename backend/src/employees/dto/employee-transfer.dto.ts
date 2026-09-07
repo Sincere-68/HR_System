@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -11,17 +11,25 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { EmploymentStatus } from '@prisma/client';
+import { EmploymentRelationship, EmploymentStatus } from '@prisma/client';
 import { PERSONNEL_FIELDS, PERSONNEL_TRANSFER_FORMATS, type PersonnelTransferFieldKey } from '@hr-demo/shared';
 
 const personnelFieldKeys = PERSONNEL_FIELDS.map(({ key }) => key);
 
 class EmployeeExportQueryDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: '姓名或工号关键字' })
   @IsOptional()
   @IsString()
   @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   keyword?: string;
+
+  @ApiPropertyOptional({ description: '姓名关键字（兼容旧导出请求）', deprecated: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  name?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -32,6 +40,11 @@ class EmployeeExportQueryDto {
   @IsOptional()
   @IsEnum(EmploymentStatus)
   status?: EmploymentStatus;
+
+  @ApiPropertyOptional({ enum: EmploymentRelationship })
+  @IsOptional()
+  @IsEnum(EmploymentRelationship)
+  employmentRelationship?: EmploymentRelationship;
 
   @ApiPropertyOptional()
   @IsOptional()

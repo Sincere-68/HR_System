@@ -130,6 +130,39 @@ export class PerformanceService {
     return this.presentTemplateDetail(row);
   }
 
+  async copyTemplate(user: AuthenticatedUser, sourceTemplateId: string) {
+    this.assertDatabaseMode();
+    const source = await this.prisma.performanceTemplate.findFirst({
+      where: { id: sourceTemplateId, status: RecordStatus.ACTIVE, archivedAt: null },
+      include: { versions: { orderBy: { versionNo: 'desc' }, take: 1 } },
+    });
+    const sourceVersion = source?.versions[0];
+    if (!source || !sourceVersion) throw new NotFoundException('绩效模板不存在或没有可复制的版本');
+    const copied = await this.prisma.$transaction(async (tx) => {
+      const template = await tx.performanceTemplate.create({
+        data: {
+          name: `${source.name} 副本`,
+          description: source.description,
+          createdById: user.id,
+        },
+      });
+      await tx.performanceTemplateVersion.create({
+        data: {
+          templateId: template.id,
+          versionNo: 1,
+          sourceName: sourceVersion.sourceName,
+          sourceMarkdown: sourceVersion.sourceMarkdown,
+          definition: sourceVersion.definition as Prisma.InputJsonValue,
+          status: PerformanceVersionStatus.DRAFT,
+          createdById: user.id,
+        },
+      });
+      await this.audit.create({ userId: user.id }, AuditAction.CREATE, template.id, { resource: 'performance-template', action: 'copy', sourceTemplateId, sourceVersionId: sourceVersion.id }, tx, 'performance_template');
+      return tx.performanceTemplate.findUniqueOrThrow({ where: { id: template.id }, include: { versions: { orderBy: { versionNo: 'desc' } } } });
+    });
+    return { ...this.presentTemplateDetail(copied), sourceTemplateId };
+  }
+
   async createTemplateVersion(user: AuthenticatedUser, templateId: string, dto: CreatePerformanceTemplateDto) {
     this.assertDatabaseMode();
     const template = await this.prisma.performanceTemplate.findFirst({ where: { id: templateId, status: RecordStatus.ACTIVE, archivedAt: null } });

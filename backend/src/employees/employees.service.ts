@@ -74,7 +74,7 @@ function getEmployeeDetailInclude(now = new Date()) {
         where: {
           status: AgreementStatus.ACTIVE,
           archivedAt: null,
-          startDate: { lte: now },
+          startDate: { not: null, lte: now },
           AND: [
             { OR: [{ endDate: null }, { endDate: { gte: now } }] },
             { OR: [{ terminationDate: null }, { terminationDate: { gt: now } }] },
@@ -90,7 +90,7 @@ function getEmployeeDetailInclude(now = new Date()) {
     where: {
       status: RecordStatus.ACTIVE,
       archivedAt: null,
-      startDate: { lte: now },
+      startDate: { not: null, lte: now },
       OR: [{ endDate: null }, { endDate: { gte: now } }],
     },
     orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
@@ -128,7 +128,7 @@ function getEmployeeDetailInclude(now = new Date()) {
     where: {
       status: AssignmentStatus.ACTIVE,
       archivedAt: null,
-      employmentPeriod: { entryDate: { lte: now } },
+      employmentPeriod: { entryDate: { not: null, lte: now } },
     },
     orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
     include: {
@@ -161,7 +161,7 @@ function getEmployeeListInclude(now: Date) {
           where: {
             status: AgreementStatus.ACTIVE,
             archivedAt: null,
-            startDate: { lte: now },
+            startDate: { not: null, lte: now },
             AND: [
               { OR: [{ endDate: null }, { endDate: { gte: now } }] },
               { OR: [{ terminationDate: null }, { terminationDate: { gt: now } }] },
@@ -177,7 +177,7 @@ function getEmployeeListInclude(now: Date) {
       where: {
         status: AssignmentStatus.ACTIVE,
         archivedAt: null,
-        startDate: { lte: now },
+        startDate: { not: null, lte: now },
         OR: [{ endDate: null }, { endDate: { gte: now } }],
       },
       orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
@@ -191,7 +191,7 @@ function getEmployeeListInclude(now: Date) {
       where: {
         status: RecordStatus.ACTIVE,
         archivedAt: null,
-        startDate: { lte: now },
+        startDate: { not: null, lte: now },
         OR: [{ endDate: null }, { endDate: { gte: now } }],
       },
       orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
@@ -344,8 +344,14 @@ export class EmployeesService {
         });
       }
     }
-    if (query.name) {
-      conditions.push({ name: { contains: query.name } });
+    const keyword = query.keyword || query.name;
+    if (keyword) {
+      conditions.push({
+        OR: [
+          { name: { contains: keyword } },
+          { employeeNo: { contains: keyword } },
+        ],
+      });
     }
     if (query.employmentRelationship) {
       conditions.push({
@@ -621,11 +627,33 @@ export class EmployeesService {
       if (visibleOrganizationIds) {
         conditions.push(await this.access.getEmployeeWhere(user, visibleOrganizationIds, now));
       }
-      if (query.keyword) {
+      const keyword = query.keyword || query.name;
+      if (keyword) {
         conditions.push({
           OR: [
-            { name: { contains: query.keyword } },
-            { employeeNo: { contains: query.keyword } },
+            { name: { contains: keyword } },
+            { employeeNo: { contains: keyword } },
+          ],
+        });
+      }
+      if (query.employmentRelationship) {
+        conditions.push({
+          OR: [
+            {
+              assignments: {
+                some: {
+                  status: AssignmentStatus.ACTIVE,
+                  archivedAt: null,
+                  startDate: { lte: now },
+                  OR: [{ endDate: null }, { endDate: { gte: now } }],
+                  employmentRelationship: query.employmentRelationship,
+                },
+              },
+            },
+            {
+              assignments: { none: {} },
+              employmentPeriods: { some: { employmentRelationship: query.employmentRelationship } },
+            },
           ],
         });
       }
@@ -1330,7 +1358,7 @@ export class EmployeesService {
         }
         if (currentAssignment && dto.assignmentStartDate !== undefined) {
           const assignmentStartDate = this.toDate(dto.assignmentStartDate);
-          if (assignmentStartDate.getTime() !== currentAssignment.startDate.getTime()) {
+          if (assignmentStartDate.getTime() !== currentAssignment.startDate?.getTime()) {
             await tx.employeeAssignment.update({
               where: { id: currentAssignment.id },
               data: { startDate: assignmentStartDate },
@@ -1340,7 +1368,7 @@ export class EmployeesService {
                 employeeId: id,
                 assignmentId: currentAssignment.id,
                 changedField: 'assignmentStartDate',
-                oldValue: currentAssignment.startDate.toISOString().slice(0, 10),
+                oldValue: currentAssignment.startDate?.toISOString().slice(0, 10) ?? undefined,
                 newValue: dto.assignmentStartDate,
                 changedById: auditContext.userId,
               },
@@ -1861,12 +1889,14 @@ export class EmployeesService {
     return input;
   }
 
-  private toImportUpdateInput(input: Partial<Record<PersonnelTransferFieldKey, string>>): UpdateEmployeeDto {
+  private toImportUpdateInput(
+    input: Partial<Record<PersonnelTransferFieldKey, string>>,
+    warnings: string[] = [],
+  ): UpdateEmployeeDto {
     const update: Record<string, string> = {};
     const passthroughFields: PersonnelTransferFieldKey[] = [
       'name', 'workEmail', 'personalEmail', 'mobile', 'documentNumber', 'nativePlace',
-      'nativePlaceRegionCode', 'householdRegionCode', 'householdAddress',
-      'residentialRegionCode', 'residentialAddress', 'jobLevel', 'workplaceName', 'bankBranchName', 'bankAccountNumber',
+      'householdAddress', 'residentialAddress', 'jobLevel', 'workplaceName', 'bankBranchName', 'bankAccountNumber',
       'graduationSchoolName', 'major', 'totalWorkYears',
       'emergencyContactName', 'emergencyContactRelationship', 'emergencyContactMobile',
     ];
@@ -1886,21 +1916,55 @@ export class EmployeesService {
       const code = Object.entries(labels ?? {}).find(([candidate, label]) => (
         candidate === value || label === value
       ))?.[0];
-      if (!code) {
+      if (code) {
+        update[field] = code;
+      } else {
         const title = PERSONNEL_FIELDS.find(({ key }) => key === field)?.title ?? field;
-        throw new BadRequestException(`${title} 枚举值不支持“${value}”`);
+        warnings.push(`${title}“${value}”不在当前系统枚举中，未导入该字段`);
       }
-      update[field] = code;
     }
     if (input.totalWorkYears !== undefined) {
-      update.totalWorkYears = this.normalizeImportWorkYears(input.totalWorkYears);
+      try {
+        update.totalWorkYears = this.normalizeImportWorkYears(input.totalWorkYears);
+      } catch {
+        warnings.push(`累计工龄（年）“${input.totalWorkYears}”格式不正确，未导入该字段`);
+        delete update.totalWorkYears;
+      }
     }
-    this.validateRegionCodes(update);
+    const regionFields: Array<[PersonnelTransferFieldKey, string]> = [
+      ['nativePlaceRegionCode', '籍贯地区'],
+      ['householdRegionCode', '户籍所在地地区'],
+      ['residentialRegionCode', '联系地址地区'],
+    ];
+    for (const [field, title] of regionFields) {
+      const value = input[field];
+      if (value === undefined) continue;
+      if (isChinaAdministrativeRegionCode(value)) {
+        update[field] = value;
+      } else {
+        warnings.push(`${title}行政区划代码“${value}”不存在，未导入该字段`);
+      }
+    }
     for (const field of ['birthDate', 'documentExpiryDate', 'graduationDate'] as const) {
       const value = input[field];
-      if (value !== undefined) update[field] = this.normalizeImportDate(value, field);
+      if (value === undefined) continue;
+      const normalized = this.normalizeOptionalImportDate(value, field, warnings);
+      if (normalized !== undefined) update[field] = normalized;
     }
     return update as UpdateEmployeeDto;
+  }
+
+  private normalizeOptionalImportDate(value: string, field: string, warnings: string[]) {
+    const normalized = value.trim();
+    if (['-', '--', '—', '无', '暂无', '未填写', '不详', '长期', '长期有效', '无固定期限', '至今'].includes(normalized)) {
+      return undefined;
+    }
+    try {
+      return this.normalizeImportDate(normalized, field);
+    } catch {
+      warnings.push(`${field}“${value}”格式不正确，未导入该字段`);
+      return undefined;
+    }
   }
 
   private normalizeImportDate(value: string, field: string) {
@@ -1922,15 +1986,18 @@ export class EmployeesService {
     input: Partial<Record<PersonnelTransferFieldKey, string>>,
     auditContext: AuditContext,
   ) {
-    const profile = this.toImportUpdateInput(input);
     const warnings: string[] = [];
+    const profile = this.toImportUpdateInput(input, warnings);
     const importedOrganization = input.organizationName === undefined
       ? null
       : await this.resolveImportOrganization(user, input.organizationName, warnings);
     const employment = this.resolveImportEmployment(input, profile, importedOrganization, warnings);
-    const importedEntryDate = input.entryDate === undefined
+    const importedEntryDateValue = input.entryDate === undefined
       ? undefined
-      : this.toDate(this.normalizeImportDate(input.entryDate, '入职日期'));
+      : this.normalizeOptionalImportDate(input.entryDate, '入职日期', warnings);
+    const importedEntryDate = importedEntryDateValue === undefined
+      ? undefined
+      : this.toDate(importedEntryDateValue);
     const importedEmploymentStatus = input.employmentStatus === undefined
       ? undefined
       : this.normalizeImportEmploymentStatus(input.employmentStatus);
@@ -1980,7 +2047,7 @@ export class EmployeesService {
         input,
         warnings,
         currentEmployment
-          ? (createdEmployment ? currentEmployment.period.entryDate : this.utcCalendarDay())
+          ? (createdEmployment ? currentEmployment.period.entryDate ?? undefined : this.utcCalendarDay())
           : undefined,
       );
       await this.audit.create(auditContext, AuditAction.UPDATE, employeeId, {
@@ -1998,35 +2065,32 @@ export class EmployeesService {
     organization: { id: string; code: string; name: string } | null,
     warnings: string[],
   ) {
-    const requiredFields: Array<[PersonnelTransferFieldKey, string]> = [
-      ['organizationName', '部门'],
-      ['entryDate', '入职日期'],
-      ['employmentRelationship', '雇佣关系'],
-      ['workArrangement', '用工形式'],
-    ];
-    const supplied = requiredFields.filter(([field]) => input[field] !== undefined);
-    if (supplied.length === 0) return null;
-
-    const missing = requiredFields
-      .filter(([field]) => input[field] === undefined)
-      .map(([, label]) => label);
-    if (missing.length > 0) {
-      warnings.push(`任职信息不完整，未创建任职周期和部门任职；缺少：${missing.join('、')}`);
+    const assignmentSupplied = [
+      'organizationName',
+      'employmentRelationship',
+      'workArrangement',
+    ].some((field) => input[field as PersonnelTransferFieldKey] !== undefined);
+    if (!assignmentSupplied || !organization || !profile.workArrangement) {
+      if (assignmentSupplied && !organization) {
+        warnings.push('部门未匹配，未创建部门任职');
+      }
       return null;
     }
 
     const employmentStatus = input.employmentStatus === undefined
       ? EmploymentStatus.REGULAR
       : this.normalizeImportEmploymentStatus(input.employmentStatus);
-    if (!organization || !profile.employmentRelationship || !profile.workArrangement || !employmentStatus) {
-      if (!employmentStatus) warnings.push(`人员状态“${input.employmentStatus}”不支持，未创建任职周期和部门任职`);
+    if (!employmentStatus) {
+      warnings.push(`人员状态“${input.employmentStatus}”不支持，未创建任职周期和部门任职`);
       return null;
     }
-
+    const normalizedEntryDate = input.entryDate === undefined
+      ? undefined
+      : this.normalizeOptionalImportDate(input.entryDate, '入职日期', warnings);
     return {
       organization,
-      entryDate: this.toDate(this.normalizeImportDate(input.entryDate!, '入职日期')),
-      employmentRelationship: profile.employmentRelationship,
+      entryDate: normalizedEntryDate ? this.toDate(normalizedEntryDate) : null,
+      employmentRelationship: profile.employmentRelationship ?? null,
       workArrangement: profile.workArrangement,
       employmentStatus,
     };
@@ -2112,8 +2176,8 @@ export class EmployeesService {
     employeeId: string,
     employment: {
       organization: { id: string; code: string; name: string };
-      entryDate: Date;
-      employmentRelationship: EmploymentRelationship;
+      entryDate: Date | null;
+      employmentRelationship: EmploymentRelationship | null;
       workArrangement: WorkArrangement;
       employmentStatus: EmploymentStatus;
     },
@@ -2131,7 +2195,7 @@ export class EmployeesService {
         sequenceNo: (latestPeriod?.sequenceNo ?? 0) + 1,
         personnelCategory: profile.personnelCategory,
         personnelSource: profile.personnelSource,
-        employmentRelationship: employment.employmentRelationship,
+        employmentRelationship: employment.employmentRelationship ?? EmploymentRelationship.INTERNAL_EMPLOYEE,
         entryDate: employment.entryDate,
         employmentStatus: employment.employmentStatus,
         isRehire: Boolean(latestPeriod),
@@ -2185,7 +2249,7 @@ export class EmployeesService {
         employeeId,
         employmentPeriodId: period.id,
         status: employment.employmentStatus,
-        effectiveAt: employment.entryDate,
+        effectiveAt: employment.entryDate ?? this.utcCalendarDay(),
         currentFlag: true,
       },
     });
@@ -2249,7 +2313,7 @@ export class EmployeesService {
         changeReason: string | null;
         changeDescription: string | null;
       };
-      period: { id: string; entryDate: Date; employmentRelationship: EmploymentRelationship };
+      period: { id: string; entryDate: Date | null; employmentRelationship: EmploymentRelationship };
     },
     profile: UpdateEmployeeDto,
     positionId: string | undefined,
@@ -2317,7 +2381,7 @@ export class EmployeesService {
             employeeId,
             employmentPeriodId: currentEmployment.period.id,
             status: employmentStatus,
-            effectiveAt: entryDate ?? currentEmployment.period.entryDate,
+            effectiveAt: entryDate ?? currentEmployment.period.entryDate ?? this.utcCalendarDay(),
             currentFlag: true,
           },
         });
@@ -2436,37 +2500,41 @@ export class EmployeesService {
       select: { id: true, documentType: true, documentNumber: true },
     });
     const documentType = profile.documentType ?? current?.documentType;
-    const documentNumber = input.documentNumber?.toUpperCase() ?? current?.documentNumber;
-    if (!documentType || !documentNumber) {
-      warnings.push('证件类型和证件号码必须同时提供，未导入证件');
+    const documentNumber = input.documentNumber?.toUpperCase() ?? current?.documentNumber ?? null;
+    if (!documentType) {
+      warnings.push('证件类型未识别，未导入证件');
       return;
     }
-    const duplicateDocument = await tx.employeeIdentityDocument.findFirst({
-      where: {
-        documentType,
-        documentNumber,
-        ...(current ? { id: { not: current.id } } : {}),
-      },
-      select: { id: true },
-    });
-    if (duplicateDocument) {
-      warnings.push(`证件类型和号码“${documentNumber}”已被其他人员使用，未导入证件`);
-      return;
-    }
-    if (documentType === 'NATIONAL_ID') {
-      const duplicateLegacyId = await tx.employee.findFirst({
-        where: { id: { not: employeeId }, idCardNo: documentNumber },
+    if (documentNumber) {
+      const duplicateDocument = await tx.employeeIdentityDocument.findFirst({
+        where: {
+          documentType,
+          documentNumber,
+          ...(current ? { id: { not: current.id } } : {}),
+        },
         select: { id: true },
       });
-      if (duplicateLegacyId) {
-        warnings.push(`身份证号码“${documentNumber}”已被其他人员使用，未导入证件`);
+      if (duplicateDocument) {
+        warnings.push(`证件类型和号码“${documentNumber}”已被其他人员使用，未导入证件`);
         return;
+      }
+      if (documentType === 'NATIONAL_ID') {
+        const duplicateLegacyId = await tx.employee.findFirst({
+          where: { id: { not: employeeId }, idCardNo: documentNumber },
+          select: { id: true },
+        });
+        if (duplicateLegacyId) {
+          warnings.push(`身份证号码“${documentNumber}”已被其他人员使用，未导入证件`);
+          return;
+        }
       }
     }
     const data = {
       documentType,
       documentNumber,
-      expiryDate: profile.documentExpiryDate ? this.toDate(profile.documentExpiryDate) : undefined,
+      expiryDate: profile.documentExpiryDate === undefined
+        ? undefined
+        : this.toDate(profile.documentExpiryDate),
     };
     if (current) {
       await tx.employeeIdentityDocument.update({ where: { id: current.id }, data });
@@ -2495,11 +2563,11 @@ export class EmployeesService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, name: true, relationship: true, mobile: true },
     });
-    const name = profile.emergencyContactName ?? current?.name;
+    const name = profile.emergencyContactName ?? current?.name ?? null;
     const relationship = profile.emergencyContactRelationship ?? current?.relationship;
     const mobile = profile.emergencyContactMobile ?? current?.mobile;
-    if (!name || !relationship || !mobile) {
-      warnings.push('紧急联系人缺少姓名、与本人关系或电话，未创建独立联系人记录');
+    if (!relationship) {
+      warnings.push('紧急联系人缺少与本人关系，未创建独立联系人记录');
       return;
     }
     const data = { name, relationship, mobile };
@@ -2539,12 +2607,8 @@ export class EmployeesService {
         major: true,
       },
     });
-    const schoolName = profile.graduationSchoolName ?? current?.schoolName;
-    const educationLevel = profile.highestEducation ?? current?.educationLevel;
-    if (!schoolName || !educationLevel) {
-      warnings.push('教育信息缺少毕业学校名称或最高学历，未创建独立教育经历');
-      return;
-    }
+    const schoolName = profile.graduationSchoolName ?? current?.schoolName ?? null;
+    const educationLevel = profile.highestEducation ?? current?.educationLevel ?? null;
     const data = {
       schoolName,
       institutionType: profile.institutionType ?? current?.institutionType,
@@ -2566,7 +2630,7 @@ export class EmployeesService {
   private async applyImportedNamedRelations(
     tx: Prisma.TransactionClient,
     employeeId: string,
-    period: { id: string; entryDate: Date; employmentRelationship: EmploymentRelationship } | undefined,
+    period: { id: string; entryDate: Date | null; employmentRelationship: EmploymentRelationship } | undefined,
     input: Partial<Record<PersonnelTransferFieldKey, string>>,
     warnings: string[],
     relationshipStartDate: Date | undefined,
@@ -2598,10 +2662,11 @@ export class EmployeesService {
     }
 
     if (input.managerName !== undefined) {
+      const managerName = input.managerName.trim();
       const managers = await tx.employee.findMany({
         where: {
           id: { not: employeeId },
-          name: input.managerName,
+          name: managerName,
           recordStatus: RecordStatus.ACTIVE,
           archivedAt: null,
         },
@@ -2610,9 +2675,15 @@ export class EmployeesService {
       });
       if (managers.length !== 1) {
         warnings.push(managers.length === 0
-          ? `直线经理“${input.managerName}”不存在，未导入`
-          : `直线经理“${input.managerName}”匹配多个员工，未导入`);
-      } else if (period) {
+          ? `直线经理“${managerName}”不存在，未导入`
+          : `直线经理“${managerName}”匹配多个员工，未导入`);
+      } else {
+        const nextManagerId = managers[0]!.id;
+        if (await this.wouldCreateImportReportingCycle(tx, employeeId, nextManagerId)) {
+          warnings.push(`直线经理“${managerName}”会形成循环汇报关系，未导入`);
+          return;
+        }
+        const startDate = relationshipStartDate ?? period?.entryDate ?? this.utcCalendarDay();
         const current = await tx.reportingRelationship.findFirst({
           where: {
             employeeId,
@@ -2620,31 +2691,62 @@ export class EmployeesService {
             isPrimary: true,
             status: RecordStatus.ACTIVE,
             archivedAt: null,
+            startDate: { lte: startDate },
+            OR: [{ endDate: null }, { endDate: { gte: startDate } }],
           },
           orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
-          select: { id: true },
+          select: { id: true, managerEmployeeId: true },
         });
+        if (current?.managerEmployeeId === nextManagerId) return;
         if (current) {
+          const endDate = new Date(startDate);
+          endDate.setUTCDate(endDate.getUTCDate() - 1);
           await tx.reportingRelationship.update({
             where: { id: current.id },
-            data: { managerEmployeeId: managers[0]!.id },
-          });
-        } else {
-          await tx.reportingRelationship.create({
-            data: {
-              employeeId,
-              managerEmployeeId: managers[0]!.id,
-              relationshipType: ReportingRelationshipType.ADMINISTRATIVE,
-              isPrimary: true,
-              startDate: relationshipStartDate ?? period.entryDate,
-              status: RecordStatus.ACTIVE,
-            },
+            data: { endDate, status: RecordStatus.INACTIVE },
           });
         }
-      } else {
-        warnings.push('当前员工未建立有效任职周期，直线经理未导入');
+        await tx.reportingRelationship.create({
+          data: {
+            employeeId,
+            managerEmployeeId: nextManagerId,
+            relationshipType: ReportingRelationshipType.ADMINISTRATIVE,
+            isPrimary: true,
+            startDate,
+            status: RecordStatus.ACTIVE,
+          },
+        });
       }
     }
+  }
+
+  private async wouldCreateImportReportingCycle(
+    tx: Prisma.TransactionClient,
+    employeeId: string,
+    managerEmployeeId: string,
+  ) {
+    if (employeeId === managerEmployeeId) return true;
+    const visited = new Set<string>([employeeId]);
+    let currentEmployeeId = managerEmployeeId;
+    while (!visited.has(currentEmployeeId)) {
+      visited.add(currentEmployeeId);
+      const relationship = await tx.reportingRelationship.findFirst({
+        where: {
+          employeeId: currentEmployeeId,
+          relationshipType: ReportingRelationshipType.ADMINISTRATIVE,
+          isPrimary: true,
+          status: RecordStatus.ACTIVE,
+          archivedAt: null,
+          startDate: { lte: this.utcCalendarDay() },
+          OR: [{ endDate: null }, { endDate: { gte: this.utcCalendarDay() } }],
+        },
+        orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+        select: { managerEmployeeId: true },
+      });
+      if (!relationship) return false;
+      currentEmployeeId = relationship.managerEmployeeId;
+    }
+    return true;
   }
 
   private async resolveImportEmployingCompanyInTransaction(
@@ -2727,8 +2829,8 @@ export class EmployeesService {
       throw new BadRequestException('工号不能为空');
     }
 
-    const profile = this.toImportUpdateInput(input);
     const warnings: string[] = [];
+    const profile = this.toImportUpdateInput(input, warnings);
     const importedOrganization = input.organizationName === undefined
       ? null
       : await this.resolveImportOrganization(user, input.organizationName, warnings);
@@ -2775,7 +2877,7 @@ export class EmployeesService {
         currentEmployment?.period,
         input,
         warnings,
-        currentEmployment?.period.entryDate,
+        currentEmployment?.period.entryDate ?? undefined,
       );
       await this.audit.create(
         auditContext,
@@ -2851,9 +2953,13 @@ export class EmployeesService {
         ? employees.filter((employee) => employee.organizationId === query.organizationId)
         : [];
     }
-    if (query.name) {
-      const name = query.name.toLocaleLowerCase();
-      employees = employees.filter((employee) => employee.name.toLocaleLowerCase().includes(name));
+    const keyword = query.keyword || query.name;
+    if (keyword) {
+      const normalizedKeyword = keyword.toLocaleLowerCase();
+      employees = employees.filter((employee) => (
+        employee.name.toLocaleLowerCase().includes(normalizedKeyword)
+        || employee.employeeNo.toLocaleLowerCase().includes(normalizedKeyword)
+      ));
     }
     if (query.employmentRelationship) {
       // The in-memory Demo model does not retain normalized employment periods,

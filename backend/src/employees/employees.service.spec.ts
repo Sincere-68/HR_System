@@ -18,7 +18,7 @@ function createServices() {
   return { demo, access, employees };
 }
 
-function query(overrides: Partial<{ name: string; keyword: string; organizationId: string; status: EmploymentStatus; page: number; pageSize: number }> = {}) {
+function query(overrides: Partial<{ keyword: string; organizationId: string; status: EmploymentStatus; page: number; pageSize: number }> = {}) {
   return { page: 1, pageSize: 10, ...overrides } as never;
 }
 
@@ -29,12 +29,12 @@ describe('EmployeesService in demo mode', () => {
 
     const firstPage = await employees.findAll(departmentAdmin, query({ pageSize: 2 }));
     const resigned = await employees.findAll(departmentAdmin, query({ status: EmploymentStatus.RESIGNED }));
-    const byKeyword = await employees.findAll(departmentAdmin, query({ name: '周予安' }));
+    const byKeyword = await employees.findAll(departmentAdmin, query({ keyword: 'DEMO-2001' }));
 
     expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 3, totalPages: 2 });
     expect(firstPage.data[0]?.mobile).toBe('13800001001');
     expect(resigned.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
-    expect(byKeyword.data.map((employee) => employee.name)).toEqual(['周予安']);
+    expect(byKeyword.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
   });
 
   it('does not expose departments or employees outside the user scope', async () => {
@@ -113,7 +113,7 @@ describe('EmployeesService personnel population filters', () => {
     };
 
     await service.findAll(user, {
-      name: '虚构员工',
+      keyword: 'FAKE-1001',
       employmentRelationship: 'INTERNAL_EMPLOYEE',
       page: 1,
       pageSize: 10,
@@ -122,7 +122,12 @@ describe('EmployeesService personnel population filters', () => {
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         AND: expect.arrayContaining([
-          { name: { contains: '虚构员工' } },
+          {
+            OR: [
+              { name: { contains: 'FAKE-1001' } },
+              { employeeNo: { contains: 'FAKE-1001' } },
+            ],
+          },
           expect.objectContaining({
             OR: expect.arrayContaining([
               expect.objectContaining({ assignments: { some: expect.objectContaining({ employmentRelationship: 'INTERNAL_EMPLOYEE' }) } }),

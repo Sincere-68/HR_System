@@ -340,21 +340,36 @@ describe('EmployeeListPage', () => {
     expect(screen.queryByRole('button', { name: /查看|暂无详情/ })).not.toBeInTheDocument();
   });
 
-  it('searches the personnel population by name and filters by employment relationship', () => {
+  it('searches the personnel population by name or employee number and filters by employment relationship', () => {
     renderPage('/personnel/employees?view=all&page=2&pageSize=20');
 
-    fireEvent.change(screen.getByRole('searchbox', { name: '按姓名搜索' }), { target: { value: '虚构员工' } });
-    fireEvent.keyDown(screen.getByRole('searchbox', { name: '按姓名搜索' }), { key: 'Enter' });
+    fireEvent.change(screen.getByRole('searchbox', { name: '按姓名或工号搜索' }), { target: { value: 'DEMO-1001' } });
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: '按姓名或工号搜索' }), { key: 'Enter' });
 
     expect(useEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
-      name: '虚构员工', page: 1, pageSize: 20,
+      keyword: 'DEMO-1001', page: 1, pageSize: 20,
     }));
 
     fireEvent.click(screen.getAllByText('雇佣关系')[0]!);
     fireEvent.click(screen.getByText('内部员工'));
 
     expect(useEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
-      name: '虚构员工', employmentRelationship: 'INTERNAL_EMPLOYEE', page: 1, pageSize: 20,
+      keyword: 'DEMO-1001', employmentRelationship: 'INTERNAL_EMPLOYEE', page: 1, pageSize: 20,
+    }));
+  });
+
+  it('clears every all-personnel filter from the toolbar action', () => {
+    renderPage('/personnel/employees?keyword=DEMO-1001&organizationId=org-1&status=REGULAR&employmentRelationship=INTERNAL_EMPLOYEE&page=2&pageSize=20');
+
+    fireEvent.click(screen.getByRole('button', { name: '清空所有筛选' }));
+
+    expect(useEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
+      keyword: undefined,
+      organizationId: undefined,
+      status: undefined,
+      employmentRelationship: undefined,
+      page: 1,
+      pageSize: 20,
     }));
   });
 

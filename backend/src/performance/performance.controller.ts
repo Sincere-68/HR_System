@@ -33,6 +33,10 @@ export class PerformanceController {
   @RequirePermissions(PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE)
   createTemplate(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreatePerformanceTemplateDto) { return this.service.createTemplate(user, dto); }
 
+  @Post('templates/:id/copy')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE)
+  copyTemplate(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.service.copyTemplate(user, id); }
+
   @Post('templates/:id/versions')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE)
   createTemplateVersion(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: CreatePerformanceTemplateDto) { return this.service.createTemplateVersion(user, id, dto); }

@@ -3,7 +3,7 @@ import type { LaborWorkerListItem, WorkArrangement } from '@hr-demo/shared';
 export interface LaborWorkerPresentationRow {
   id: string;
   employeeId: string;
-  entryDate: Date;
+  entryDate: Date | null;
   employee: {
     employeeNo: string;
     name: string | null;
@@ -33,7 +33,7 @@ export function presentLaborWorker(
     employeeName: row.employee.name ?? '--',
     workEmail: row.employee.workEmail,
     employeeNo: row.employee.employeeNo,
-    entryDate: row.entryDate.toISOString().slice(0, 10),
+    entryDate: row.entryDate?.toISOString().slice(0, 10) ?? null,
     departmentName: assignment?.organization.name ?? null,
     jobTitleName: assignment?.jobTitle?.name ?? null,
     workArrangement: assignment?.workArrangement ?? null,

@@ -101,10 +101,10 @@ export class EmployeeSubsetsService {
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
         startDate: this.formatDate(row.startDate),
         endDate: this.formatDate(row.endDate),
-        schoolName: row.schoolName,
+        schoolName: row.schoolName ?? null,
         schoolType: null,
         major: row.major,
-        educationLevel: row.educationLevel,
+        educationLevel: row.educationLevel ?? null,
         degree: row.degree,
         isHighestEducation: row.isHighestEducation,
         canViewEmployeeDetail: detailEmployeeIds.has(row.employeeId),
@@ -181,7 +181,7 @@ export class EmployeeSubsetsService {
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
-        companyName: row.companyName,
+        companyName: row.companyName ?? null,
         jobTitleName: row.employee.assignments[0]?.jobTitle?.name ?? null,
         startDate: this.formatDate(row.startDate),
         endDate: this.formatDate(row.endDate),
@@ -258,7 +258,7 @@ export class EmployeeSubsetsService {
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
-        memberName: row.name,
+        memberName: row.name ?? null,
         relationshipName: row.relationship,
         gender: row.gender,
         mobile: row.mobile,
@@ -334,8 +334,8 @@ export class EmployeeSubsetsService {
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
         appraisalYear: this.extractAppraisalYear(row.appraisalPeriod),
-        periodName: row.appraisalPeriod,
-        performanceActivity: row.appraisalType,
+        periodName: row.appraisalPeriod ?? null,
+        performanceActivity: row.appraisalType ?? null,
         appraisalDepartment: null,
         finalScore: this.decimalToNumber(row.score),
         startDate: null,
@@ -414,7 +414,7 @@ export class EmployeeSubsetsService {
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
         startDate: this.formatDate(row.startDate),
         endDate: this.formatDate(row.endDate),
-        trainingName: row.trainingName,
+        trainingName: row.trainingName ?? null,
         trainingProvider: row.trainingProvider,
         trainingResult: row.result,
         approvalStatus: null,
@@ -490,7 +490,7 @@ export class EmployeeSubsetsService {
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
         awardDate: this.formatDate(row.awardDate),
-        awardName: row.awardName,
+        awardName: row.awardName ?? null,
         summary: row.reason,
         approvalStatus: null,
         canViewEmployeeDetail: detailEmployeeIds.has(row.employeeId),
@@ -565,7 +565,7 @@ export class EmployeeSubsetsService {
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
-        certificateName: row.certificateName,
+        certificateName: row.certificateName ?? null,
         certificateNo: row.certificateNo,
         issuingAuthority: row.issuingAuthority,
         issueDate: this.formatDate(row.issueDate),
@@ -645,7 +645,7 @@ export class EmployeeSubsetsService {
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
         startDate: this.formatDate(row.startDate),
         endDate: this.formatDate(row.endDate),
-        projectName: row.projectName,
+        projectName: row.projectName ?? null,
         projectRole: row.projectRole,
         description: row.projectDescription,
         approvalStatus: null,
@@ -719,7 +719,7 @@ export class EmployeeSubsetsService {
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
-        skillName: row.skillName,
+        skillName: row.skillName ?? null,
         proficiencyLevel: row.proficiencyLevel,
         skillCategory: row.skillCategory,
         approvalStatus: null,
@@ -794,7 +794,7 @@ export class EmployeeSubsetsService {
         employeeNo: row.employee.employeeNo,
         workEmail: row.employee.workEmail,
         departmentName: row.employee.assignments[0]?.organization.name ?? null,
-        language: row.language,
+        language: row.language ?? null,
         nativeLanguage: null,
         proficiencyLevel: null,
         writingLevel: row.writingLevel,
@@ -897,8 +897,8 @@ export class EmployeeSubsetsService {
     return value ? value.toISOString().slice(0, 10) : null;
   }
 
-  private extractAppraisalYear(period: string) {
-    const match = period.match(/(?:^|\D)(\d{4})(?!\d)/);
+  private extractAppraisalYear(period: string | null) {
+    const match = period?.match(/(?:^|\D)(\d{4})(?!\d)/);
     return match ? Number(match[1]) : null;
   }
 
