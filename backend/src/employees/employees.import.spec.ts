@@ -35,9 +35,13 @@ function createService(existingEmployee: { id: string } | null = null) {
     },
     organization: { findFirst: jest.fn() },
     position: { findMany: positionFindMany, findFirst: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+    employingCompany: { findMany: jest.fn() },
     $transaction: jest.fn((callback: (client: unknown) => unknown) => callback({
-      employee: { create: employeeCreate },
+      employee: { create: employeeCreate, findMany: jest.fn() },
       employeeIdentityDocument: { create: jest.fn() },
+      employeeFamilyMember: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+      employeeAgreement: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      reportingRelationship: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
       auditLog: { create: jest.fn() },
     })),
   };
@@ -126,8 +130,8 @@ describe('EmployeesService importEmployees', () => {
 
     const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
 
-    expect(result).toMatchObject({ updated: 0, failed: 1 });
-    expect(result.rows[0]?.errors[0]).toContain('补齐任职信息时必须同时提供');
+    expect(result).toMatchObject({ updated: 0, failed: 0, skipped: 1 });
+    expect(result.rows[0]?.warnings).toContain('当前员工尚未具备完整首段任职信息；已更新可确认字段，任职相关字段未写入');
   });
 
   it('requires actual Chinese business headers instead of guessing external field names', async () => {
@@ -224,6 +228,24 @@ describe('EmployeesService importEmployees', () => {
 
     expect(update).toHaveBeenCalledWith(user, 'existing-employee', { workplaceName: '上海园区' }, { userId: user.id });
     expect(result.rows[0]).toEqual(expect.objectContaining({ action: 'UPDATED', warnings: [] }));
+  });
+
+  it('writes imported total work years, native place, household, and a complete emergency contact', async () => {
+    const { service, prisma } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] } as never);
+    const update = jest.spyOn(service, 'update').mockResolvedValue({} as never);
+    const buffer = await createXlsx(
+      ['工号', '累计工龄（年）', '籍贯详细说明', '户籍详细地址', '紧急联系人', '与本人关系', '紧急联系人电话'],
+      [['EXISTING-RELATED-001', '8.25', '上海市浦东新区', '上海市浦东新区虚构路1号', '虚构联系人', '配偶', '13900001001']],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
+
+    expect(update).toHaveBeenCalledWith(user, 'existing-employee', expect.objectContaining({
+      totalWorkYears: '8.25',
+      nativePlace: '上海市浦东新区',
+      householdAddress: '上海市浦东新区虚构路1号',
+    }), { userId: user.id });
+    expect(result.rows[0]?.warnings).toEqual([]);
   });
 
   it('writes workplace text while importing confirmed bank and education fields', async () => {

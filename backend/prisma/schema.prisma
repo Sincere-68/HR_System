@@ -542,6 +542,8 @@ model Employee {
   partTimePositionName    String?          @map("part_time_position_name") @db.VarChar(191)
   partTimeHourlyRate      Decimal?         @map("part_time_hourly_rate") @db.Decimal(12, 2)
   hasCompanyEquity        Boolean          @default(false) @map("has_company_equity")
+  importedWorkYears       Decimal?         @map("imported_work_years") @db.Decimal(8, 2)
+  importedWorkYearsAt     DateTime?        @map("imported_work_years_at")
   profilePhotoId          String?          @unique @map("profile_photo_id")
   recordStatus            RecordStatus     @default(ACTIVE) @map("record_status")
   archivedAt              DateTime?        @map("archived_at")

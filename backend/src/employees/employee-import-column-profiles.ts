@@ -28,7 +28,7 @@ export const KNOWN_ACTIVE_EMPLOYEE_EXPORT_PROFILE = [
   ['EmploymentForm', 'workArrangement'],
   ['POIdEmpAdmin-ExportName', 'managerName'],
   ['POIdEmpAdmin-Email', null],
-  ['WorkYearTotal', null],
+  ['WorkYearTotal', 'totalWorkYears'],
   ['WorkYearCompanyTotal', null],
   ['parent_IDType', 'documentType'],
   ['parent_IDNumber', 'documentNumber'],

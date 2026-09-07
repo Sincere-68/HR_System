@@ -355,6 +355,12 @@ export class UpdateEmployeeDto {
   @Matches(/^\d{1,19}$/, { message: '银行账号必须为 1 至 19 位数字' })
   bankAccountNumber?: string;
 
+  @ApiPropertyOptional({ description: '导入累计工龄（年），非负且最多两位小数' })
+  @IsOptional()
+  @Transform(trim)
+  @Matches(/^\d+(?:\.\d{1,2})?$/, { message: '累计工龄（年）必须为非负且最多两位小数的数字' })
+  totalWorkYears?: string;
+
   @ApiPropertyOptional({ enum: IdentityDocumentType })
   @IsOptional()
   @IsEnum(IdentityDocumentType)

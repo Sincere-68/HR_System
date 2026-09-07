@@ -272,16 +272,22 @@ a { text-decoration: none; }
 .table-column-resize-handle::after { position: absolute; top: 7px; right: 3px; bottom: 7px; width: 1px; background: #05aaaf; content: ''; opacity: 0; transition: opacity .16s ease; }
 .table-column-resizable:hover > .table-column-resize-handle::after, .table-column-resizing .table-column-resize-handle::after { opacity: .78; }
 .table-column-resizing, .table-column-resizing * { cursor: col-resize !important; user-select: none !important; }
-.ant-table-sticky-scroll { border-top: 1px solid #e7edef !important; background: rgba(255,255,255,.96) !important; box-shadow: 0 -2px 8px rgba(35,57,67,.06); }
+.ant-table-sticky-scroll { position: fixed !important; bottom: 0 !important; z-index: 20 !important; border-top: 1px solid #e7edef !important; background: rgba(255,255,255,.96) !important; box-shadow: 0 -2px 8px rgba(35,57,67,.06); }
 .ant-table-sticky-scroll-bar { background: #aeb9be !important; }
 .ant-table-sticky-scroll-bar:hover, .ant-table-sticky-scroll-bar-active { background: #859399 !important; }
 /* Ant Design creates a separate, viewport-synced horizontal scrollbar for
    sticky tables. Keep that bar and suppress only the native duplicate. */
 .ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-content,
-.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body { scrollbar-width: none; }
-.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body { overflow-x: hidden !important; }
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body {
+  overflow-x: hidden !important;
+  scrollbar-width: none;
+}
 .ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-content::-webkit-scrollbar,
-.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body::-webkit-scrollbar { height: 0 !important; }
+.ant-table-wrapper:has(.ant-table-sticky-scroll) .ant-table-body::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none;
+}
 .detail-heading { align-items: flex-end; }
 .detail-sections { max-width: 1440px; margin-inline: auto; display: grid; gap: 16px; }
 .detail-sections > .ant-card, .detail-grid > .ant-card { width: 100%; }

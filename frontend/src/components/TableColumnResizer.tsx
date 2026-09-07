@@ -86,6 +86,26 @@ export function TableColumnResizer() {
   useEffect(() => {
     let activeResize: ActiveResize | undefined;
 
+    // rc-table renders its synced scrollbar after the body. Promote it to a
+    // viewport bar so wide tables remain horizontally usable while their
+    // rows continue below the current screen.
+    const positionStickyScrollbars = () => {
+      document.querySelectorAll<HTMLElement>('.ant-table-sticky-scroll').forEach((bar) => {
+        const wrapper = bar.closest<HTMLElement>('.ant-table-wrapper');
+        const body = wrapper?.querySelector<HTMLElement>('.ant-table-body, .ant-table-content');
+        if (!body) return;
+
+        const rect = body.getBoundingClientRect();
+        const left = Math.max(0, rect.left);
+        const width = Math.max(0, Math.min(rect.width, window.innerWidth - left));
+        bar.style.position = 'fixed';
+        bar.style.left = `${left}px`;
+        bar.style.width = `${width}px`;
+        bar.style.bottom = '0px';
+        bar.style.zIndex = '20';
+      });
+    };
+
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0 || !(event.target instanceof Element)) return;
       const handle = event.target.closest<HTMLElement>(`.${HANDLE_CLASS}`);
@@ -126,8 +146,14 @@ export function TableColumnResizer() {
     };
 
     addResizeHandles();
-    const observer = new MutationObserver(addResizeHandles);
+    const observer = new MutationObserver(() => {
+      addResizeHandles();
+      positionStickyScrollbars();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
+    positionStickyScrollbars();
+    window.addEventListener('scroll', positionStickyScrollbars, true);
+    window.addEventListener('resize', positionStickyScrollbars);
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerup', onPointerUp);
@@ -135,6 +161,8 @@ export function TableColumnResizer() {
 
     return () => {
       observer.disconnect();
+      window.removeEventListener('scroll', positionStickyScrollbars, true);
+      window.removeEventListener('resize', positionStickyScrollbars);
       document.body.classList.remove(RESIZING_BODY_CLASS);
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('pointermove', onPointerMove);

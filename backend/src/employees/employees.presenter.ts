@@ -47,6 +47,7 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
   partTimePositionName?: string | null;
   partTimeHourlyRate?: { toString(): string } | null;
   hasCompanyEquity?: boolean;
+  importedWorkYears?: { toString(): string } | null;
   ethnicity: string | null;
   maritalStatus: string | null;
   politicalStatus: string | null;
@@ -347,7 +348,10 @@ export function presentEmployeeListItem(
       : null,
     managerName: currentManager?.manager.name ?? null,
     managerEmail: currentManager?.manager.workEmail ?? null,
-    totalWorkYears: sumExperienceYears(employee.workExperiences, now),
+    totalWorkYears: employee.importedWorkYears === null || employee.importedWorkYears === undefined
+      ? sumExperienceYears(employee.workExperiences, now)
+      : Math.round(((Number(employee.importedWorkYears.toString())
+        + (sumExperienceYears(employee.workExperiences, now) ?? 0)) * 100)) / 100,
     totalServiceYears: sumExperienceYears(
       employee.employmentPeriods.map((period) => ({
         startDate: period.entryDate,
