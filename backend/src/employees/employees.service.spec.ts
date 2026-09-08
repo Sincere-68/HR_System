@@ -248,8 +248,8 @@ describe('EmployeesService database department history', () => {
     assignments: [], employmentPeriods: [], reportingAsEmployee: [], identityDocuments: [], familyMembers: [],
     educationExperiences: [], workExperiences: [], convertedCandidates: [], gender: null, workEmail: null,
     personalEmail: null, birthDate: null, ethnicity: null, maritalStatus: null, politicalStatus: null,
-    nativePlace: null, nativePlaceRegionCode: null, householdType: null, householdRegionCode: null,
-    householdAddress: null, residentialRegionCode: null, residentialAddress: null, bankName: null,
+    nativePlace: null, nativePlaceRegionName: null, householdType: null, householdRegionName: null,
+    householdAddress: null, residentialRegionName: null, residentialAddress: null, bankName: null,
     bankBranchName: null, bankAccountNumber: null, employmentRecords: [{ status: EmploymentStatus.REGULAR }],
     createdAt: new Date('2026-01-01T00:00:00.000Z'), updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
@@ -495,11 +495,11 @@ describe('EmployeesService database update document compatibility', () => {
     maritalStatus: null,
     politicalStatus: null,
     nativePlace: null,
-    nativePlaceRegionCode: null,
+    nativePlaceRegionName: null,
     householdType: null,
-    householdRegionCode: null,
+    householdRegionName: null,
     householdAddress: null,
-    residentialRegionCode: null,
+    residentialRegionName: null,
     residentialAddress: null,
     bankName: null,
     bankBranchName: null,
@@ -785,12 +785,12 @@ describe('EmployeesService database update document compatibility', () => {
     });
   });
 
-  it('persists only valid administrative-region codes and audits their changes', async () => {
+  it('persists only valid full Chinese administrative-region paths and audits their changes', async () => {
     const current = {
       ...employee,
-      nativePlaceRegionCode: '110105',
-      householdRegionCode: null,
-      residentialRegionCode: null,
+      nativePlaceRegionName: '北京市 / 市辖区 / 朝阳区',
+      householdRegionName: null,
+      residentialRegionName: null,
     };
     const employeeUpdate = jest.fn().mockResolvedValue(undefined);
     const changeLogCreate = jest.fn().mockResolvedValue(undefined);
@@ -813,26 +813,26 @@ describe('EmployeesService database update document compatibility', () => {
     );
 
     await service.update(user, employeeId, {
-      nativePlaceRegionCode: '310115',
-      householdRegionCode: '440305',
+      nativePlaceRegionName: '上海市 / 市辖区 / 浦东新区',
+      householdRegionName: '广东省 / 深圳市 / 南山区',
     } as never, auditContext);
 
     expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        nativePlaceRegionCode: '310115',
-        householdRegionCode: '440305',
+        nativePlaceRegionName: '上海市 / 市辖区 / 浦东新区',
+        householdRegionName: '广东省 / 深圳市 / 南山区',
       }),
     }));
     expect(changeLogCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        changedField: 'nativePlaceRegionCode',
-        oldValue: '110105',
-        newValue: '310115',
+        changedField: 'nativePlaceRegionName',
+        oldValue: '北京市 / 市辖区 / 朝阳区',
+        newValue: '上海市 / 市辖区 / 浦东新区',
       }),
     }));
 
-    await expect(service.update(user, employeeId, { residentialRegionCode: '999999' } as never, auditContext))
-      .rejects.toThrow('联系地址地区行政区划代码不存在');
+    await expect(service.update(user, employeeId, { residentialRegionName: '浦东新区' } as never, auditContext))
+      .rejects.toThrow('联系地址地区必须填写可确认的完整中文行政区划层级');
   });
 
   it('records fixed assignment enum changes with stable code and label snapshots', async () => {
@@ -982,11 +982,11 @@ describe('EmployeesService database creation', () => {
       maritalStatus: null,
       politicalStatus: null,
       nativePlace: null,
-      nativePlaceRegionCode: null,
+      nativePlaceRegionName: null,
       householdType: null,
-      householdRegionCode: null,
+      householdRegionName: null,
       householdAddress: null,
-      residentialRegionCode: null,
+      residentialRegionName: null,
       residentialAddress: null,
       bankName: null,
       bankBranchName: null,

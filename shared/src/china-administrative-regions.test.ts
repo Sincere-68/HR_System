@@ -1,8 +1,11 @@
 import {
   CHINA_ADMINISTRATIVE_REGIONS,
+  displayChinaAdministrativeRegion,
   formatChinaAdministrativeRegion,
+  getChinaAdministrativeRegionNameFromCode,
   getChinaAdministrativeRegionPath,
   isChinaAdministrativeRegionCode,
+  normalizeChinaAdministrativeRegionName,
 } from './china-administrative-regions';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -23,6 +26,26 @@ export function verifyChinaAdministrativeRegions() {
   assert(
     formatChinaAdministrativeRegion('310115') === '上海市 / 市辖区 / 浦东新区',
     '地区代码必须可格式化为显示路径',
+  );
+  assert(
+    getChinaAdministrativeRegionNameFromCode('420111') === '湖北省 / 武汉市 / 洪山区',
+    '旧代码必须可转换为完整中文层级',
+  );
+  assert(
+    normalizeChinaAdministrativeRegionName('湖北省 / 武汉市 / 洪山区') === '湖北省 / 武汉市 / 洪山区',
+    '完整中文层级必须规范化为存储路径',
+  );
+  assert(
+    normalizeChinaAdministrativeRegionName('湖北省武汉市洪山区') === '湖北省 / 武汉市 / 洪山区',
+    '无分隔符的完整中文层级必须规范化为存储路径',
+  );
+  assert(
+    normalizeChinaAdministrativeRegionName('洪山区') === null,
+    '末级名称可能重名，不能作为可确认地区输入',
+  );
+  assert(
+    displayChinaAdministrativeRegion(null, '310115') === '上海市 / 市辖区 / 浦东新区',
+    '新字段为空时必须兼容展示旧代码',
   );
 }
 

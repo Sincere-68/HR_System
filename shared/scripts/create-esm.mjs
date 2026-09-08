@@ -55,19 +55,24 @@ const regionCatalogModule = regionCatalogSource
   .replaceAll('export const ', 'const ')
   .replaceAll('export function ', 'function ')
   .replace('chinaAdministrativeRegionsData as ChinaAdministrativeRegion[]', 'chinaAdministrativeRegionsData')
-  .replace('new Map<string, ChinaAdministrativeRegionPath>()', 'new Map()')
+  .replace(/new Map<string, ChinaAdministrativeRegionPath>\(\)/g, 'new Map()')
+  .replace(/new Map<string, string>\(\)/g, 'new Map()')
   .replace(/regions: readonly ChinaAdministrativeRegion\[\]/g, 'regions')
   .replace(/: ChinaAdministrativeRegionCascaderOption\[\]/g, '')
   .replace(/parentPath: ChinaAdministrativeRegionPath =/g, 'parentPath =')
   .replace(/region: ChinaAdministrativeRegion/g, 'region')
   .replace(/value: string \| null \| undefined/g, 'value')
+  .replace(/(?:name|legacyCode): string \| null \| undefined/g, (match) => match.split(':')[0])
   .replace(/value: string/g, 'value')
   .replace(/: ChinaAdministrativeRegionPath \| null/g, '')
   .replace(/: string \| null/g, '')
   .replace(/: ChinaAdministrativeRegionCascaderOption/g, '')
+  .replace(/path: \{ names: string\[\] \}/g, 'path')
+  .replace(/name: string/g, 'name')
+  .replace(/index: number/g, 'index')
   .replace(/: boolean/g, '');
 
 await writeFile(
   new URL('../dist/index.mjs', import.meta.url),
-  `${positionCatalogModule}\n\n${organizationCatalogModule}\n\n${regionCatalogModule}\n\nexport { CHINA_ADMINISTRATIVE_REGIONS, CHINA_ADMINISTRATIVE_REGION_OPTIONS, formatChinaAdministrativeRegion, getChinaAdministrativeRegionPath, isChinaAdministrativeRegionCode };\n\n${Object.entries(values).map(([name, value]) => `export const ${name} = ${value};`).join('\n\n')}\n`,
+  `${positionCatalogModule}\n\n${organizationCatalogModule}\n\n${regionCatalogModule}\n\nexport { CHINA_ADMINISTRATIVE_REGIONS, CHINA_ADMINISTRATIVE_REGION_OPTIONS, displayChinaAdministrativeRegion, formatChinaAdministrativeRegion, getChinaAdministrativeRegionNameFromCode, getChinaAdministrativeRegionPath, isChinaAdministrativeRegionCode, normalizeChinaAdministrativeRegionName };\n\n${Object.entries(values).map(([name, value]) => `export const ${name} = ${value};`).join('\n\n')}\n`,
 );

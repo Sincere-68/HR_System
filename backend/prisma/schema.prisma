@@ -524,16 +524,22 @@ model Employee {
   lunarBirthDate          DateTime?        @map("lunar_birth_date") @db.Date
   ethnicity               Ethnicity?
   nativePlace             String?          @map("native_place")
+  /// Legacy GB/T 2260 code retained only for historical compatibility.
   nativePlaceRegionCode   String?          @map("native_place_region_code") @db.VarChar(12)
+  nativePlaceRegionName   String?          @map("native_place_region_name") @db.Text
   politicalStatus         PoliticalStatus? @map("political_status")
   maritalStatus           MaritalStatus?   @map("marital_status")
   mobile                  String?          @map("mobile")
   personalEmail           String?          @map("personal_email")
   workEmail               String?          @map("work_email")
   householdType           HouseholdType?   @map("household_type")
+  /// Legacy GB/T 2260 code retained only for historical compatibility.
   householdRegionCode     String?          @map("household_region_code") @db.VarChar(12)
+  householdRegionName     String?          @map("household_region_name") @db.Text
   householdAddress        String?          @map("household_address") @db.Text
+  /// Legacy GB/T 2260 code retained only for historical compatibility.
   residentialRegionCode   String?          @map("residential_region_code") @db.VarChar(12)
+  residentialRegionName   String?          @map("residential_region_name") @db.Text
   residentialAddress      String?          @map("residential_address") @db.Text
   bankName                BankName?        @map("bank_name")
   bankBranchName          String?          @map("bank_branch_name")

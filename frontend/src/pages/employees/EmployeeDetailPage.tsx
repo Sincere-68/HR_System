@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
-import { formatChinaAdministrativeRegion, PERMISSIONS } from '@hr-demo/shared';
+import { PERMISSIONS } from '@hr-demo/shared';
 import {
   educationLevelLabels,
   employmentRelationshipLabels,
@@ -81,15 +81,15 @@ export function EmployeeDetailPage() {
             <Descriptions.Item label="民族">{label(data.ethnicity, ethnicityLabels)}</Descriptions.Item>
             <Descriptions.Item label="婚姻状况">{label(data.maritalStatus, maritalStatusLabels)}</Descriptions.Item>
             <Descriptions.Item label="政治面貌">{label(data.politicalStatus, politicalStatusLabels)}</Descriptions.Item>
-            <Descriptions.Item label="籍贯地区">{label(formatChinaAdministrativeRegion(data.nativePlaceRegionCode))}</Descriptions.Item>
+            <Descriptions.Item label="籍贯地区">{label(data.nativePlaceRegionName)}</Descriptions.Item>
             <Descriptions.Item label="籍贯详细说明">{label(data.nativePlace)}</Descriptions.Item>
             <Descriptions.Item label="户口类别">{label(data.householdType, householdTypeLabels)}</Descriptions.Item>
             <Descriptions.Item label="证件类型">{label(data.documentType, identityDocumentTypeLabels)}</Descriptions.Item>
             <Descriptions.Item label="证件号码">{label(data.documentNumber)}</Descriptions.Item>
             <Descriptions.Item label="证件截止日期">{label(data.documentExpiryDate)}</Descriptions.Item>
-            <Descriptions.Item label="户籍所在地地区">{label(formatChinaAdministrativeRegion(data.householdRegionCode))}</Descriptions.Item>
+            <Descriptions.Item label="户籍所在地地区">{label(data.householdRegionName)}</Descriptions.Item>
             <Descriptions.Item label="户籍详细地址">{label(data.householdAddress)}</Descriptions.Item>
-            <Descriptions.Item label="联系地址地区">{label(formatChinaAdministrativeRegion(data.residentialRegionCode))}</Descriptions.Item>
+            <Descriptions.Item label="联系地址地区">{label(data.residentialRegionName)}</Descriptions.Item>
             <Descriptions.Item label="联系详细地址">{label(data.residentialAddress)}</Descriptions.Item>
           </Descriptions>
         </Card>

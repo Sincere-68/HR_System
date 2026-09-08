@@ -68,11 +68,11 @@ const employees = [
     maritalStatus: null,
     politicalStatus: null,
     nativePlace: null,
-    nativePlaceRegionCode: null,
+    nativePlaceRegionName: null,
     householdType: null,
-    householdRegionCode: null,
+    householdRegionName: null,
     householdAddress: null,
-    residentialRegionCode: null,
+    residentialRegionName: null,
     residentialAddress: null,
     emergencyContactName: null,
     emergencyContactRelationship: null,
@@ -233,9 +233,9 @@ describe('EmployeeListPage', () => {
   it('keeps the existing all-personnel business column order and view link', () => {
     useEmployees.mockReturnValue(queryResult([{
       ...employees[0],
-      nativePlaceRegionCode: '310115',
-      householdRegionCode: '110105',
-      residentialRegionCode: '440305',
+      nativePlaceRegionName: '上海市 / 市辖区 / 浦东新区',
+      householdRegionName: '北京市 / 市辖区 / 朝阳区',
+      residentialRegionName: '广东省 / 深圳市 / 南山区',
     }]));
     renderPage();
 

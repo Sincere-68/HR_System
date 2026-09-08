@@ -7,9 +7,12 @@ export type { EmployingCompanyCatalogEntry } from './employing-company-catalog';
 export {
   CHINA_ADMINISTRATIVE_REGIONS,
   CHINA_ADMINISTRATIVE_REGION_OPTIONS,
+  displayChinaAdministrativeRegion,
   formatChinaAdministrativeRegion,
+  getChinaAdministrativeRegionNameFromCode,
   getChinaAdministrativeRegionPath,
   isChinaAdministrativeRegionCode,
+  normalizeChinaAdministrativeRegionName,
 } from './china-administrative-regions';
 export type {
   ChinaAdministrativeRegion,
@@ -363,14 +366,14 @@ export interface EmployeeListItem extends Employee {
   maritalStatus: MaritalStatus | null;
   politicalStatus: PoliticalStatus | null;
   nativePlace: string | null;
-  /** GB/T 2260 compatible administrative-division code selected for 籍贯. */
-  nativePlaceRegionCode: string | null;
+  /** Canonical full Chinese administrative path selected for 籍贯. */
+  nativePlaceRegionName: string | null;
   householdType: HouseholdType | null;
-  /** GB/T 2260 compatible administrative-division code selected for 户籍所在地. */
-  householdRegionCode: string | null;
+  /** Canonical full Chinese administrative path selected for 户籍所在地. */
+  householdRegionName: string | null;
   householdAddress: string | null;
-  /** GB/T 2260 compatible administrative-division code selected for 联系地址. */
-  residentialRegionCode: string | null;
+  /** Canonical full Chinese administrative path selected for 联系地址. */
+  residentialRegionName: string | null;
   residentialAddress: string | null;
   emergencyContactName: string | null;
   emergencyContactRelationship: string | null;
@@ -444,11 +447,11 @@ export const PERSONNEL_FIELDS = [
   { key: 'maritalStatus', title: '婚姻状况', dataType: 'enum', importable: true, computed: false },
   { key: 'politicalStatus', title: '政治面貌', dataType: 'enum', importable: true, computed: false },
   { key: 'nativePlace', title: '籍贯详细说明', dataType: 'string', importable: true, computed: false },
-  { key: 'nativePlaceRegionCode', title: '籍贯地区', dataType: 'string', importable: true, computed: false },
+  { key: 'nativePlaceRegionName', title: '籍贯地区', dataType: 'string', importable: true, computed: false },
   { key: 'householdType', title: '户口类别', dataType: 'enum', importable: true, computed: false },
-  { key: 'householdRegionCode', title: '户籍所在地地区', dataType: 'string', importable: true, computed: false },
+  { key: 'householdRegionName', title: '户籍所在地地区', dataType: 'string', importable: true, computed: false },
   { key: 'householdAddress', title: '户籍详细地址', dataType: 'string', importable: true, computed: false },
-  { key: 'residentialRegionCode', title: '联系地址地区', dataType: 'string', importable: true, computed: false },
+  { key: 'residentialRegionName', title: '联系地址地区', dataType: 'string', importable: true, computed: false },
   { key: 'residentialAddress', title: '联系详细地址', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactName', title: '紧急联系人', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactRelationship', title: '与本人关系', dataType: 'string', importable: true, computed: false },
@@ -1500,10 +1503,10 @@ export interface CreateEmployeeInput {
   employeeLevel: EmployeeLevel;
   /** Required EmployingCompany for the EmployeeAgreement created with this employee. */
   agreementEmployingCompanyId: string;
-  nativePlaceRegionCode?: string;
+  nativePlaceRegionName?: string;
   householdType: HouseholdType;
-  householdRegionCode?: string;
-  residentialRegionCode?: string;
+  householdRegionName?: string;
+  residentialRegionName?: string;
   bankName: BankName;
   bankBranchName: string;
   bankAccountNumber: string;
@@ -1593,11 +1596,11 @@ export interface UpdateEmployeeInput {
   maritalStatus?: MaritalStatus;
   politicalStatus?: PoliticalStatus;
   nativePlace?: string;
-  nativePlaceRegionCode?: string;
+  nativePlaceRegionName?: string;
   householdType?: HouseholdType;
-  householdRegionCode?: string;
+  householdRegionName?: string;
   householdAddress?: string;
-  residentialRegionCode?: string;
+  residentialRegionName?: string;
   residentialAddress?: string;
   bankName?: BankName;
   bankBranchName?: string;

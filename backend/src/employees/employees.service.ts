@@ -16,7 +16,7 @@ import {
   WorkArrangement,
 } from '@prisma/client';
 import {
-  isChinaAdministrativeRegionCode,
+  normalizeChinaAdministrativeRegionName,
   PERSONNEL_FIELDS,
   type EmployeeFormOptions,
   type EmployeeImportResult,
@@ -776,7 +776,7 @@ export class EmployeesService {
     }
 
     await this.validateCreateRelations(user, dto);
-    this.validateRegionCodes(dto);
+    this.validateRegionNames(dto);
     const entryDate = this.toDate(dto.entryDate);
     const probationEndDate = dto.probationEndDate ? this.toDate(dto.probationEndDate) : undefined;
     const contractEndDate = dto.contractEndDate ? this.toDate(dto.contractEndDate) : undefined;
@@ -819,11 +819,11 @@ export class EmployeesService {
             ethnicity: dto.ethnicity,
             maritalStatus: dto.maritalStatus,
             politicalStatus: dto.politicalStatus,
-            nativePlaceRegionCode: dto.nativePlaceRegionCode,
+            nativePlaceRegionName: dto.nativePlaceRegionName,
             householdType: dto.householdType,
-            householdRegionCode: dto.householdRegionCode,
+            householdRegionName: dto.householdRegionName,
             householdAddress: dto.householdAddress,
-            residentialRegionCode: dto.residentialRegionCode,
+            residentialRegionName: dto.residentialRegionName,
             residentialAddress: dto.residentialAddress,
             bankName: dto.bankName,
             bankBranchName: dto.bankBranchName,
@@ -1023,7 +1023,7 @@ export class EmployeesService {
       await this.access.assertOrganizationAccess(user, dto.initialEmployment.organizationId);
     }
     const changedFields = Object.keys(dto);
-    this.validateRegionCodes(dto);
+    this.validateRegionNames(dto);
     if (changedFields.length === 0) {
       if (this.demo.enabled) return presentDemoEmployeeDetail(current as DemoEmployeeRecord);
       const visibleOrganizationIds = this.access.hasAllEmployeeData(user)
@@ -1132,11 +1132,11 @@ export class EmployeesService {
           'maritalStatus',
           'politicalStatus',
           'nativePlace',
-          'nativePlaceRegionCode',
+          'nativePlaceRegionName',
           'householdType',
-          'householdRegionCode',
+          'householdRegionName',
           'householdAddress',
-          'residentialRegionCode',
+          'residentialRegionName',
           'residentialAddress',
           'bankName',
           'bankBranchName',
@@ -1175,9 +1175,9 @@ export class EmployeesService {
             workEmail: dto.workEmail, personalEmail: dto.personalEmail,
             mobile: dto.mobile, gender: dto.gender, birthDate: dto.birthDate ? this.toDate(dto.birthDate) : undefined,
             ethnicity: dto.ethnicity, maritalStatus: dto.maritalStatus, politicalStatus: dto.politicalStatus,
-            nativePlace: dto.nativePlace, nativePlaceRegionCode: dto.nativePlaceRegionCode,
-            householdType: dto.householdType, householdRegionCode: dto.householdRegionCode,
-            householdAddress: dto.householdAddress, residentialRegionCode: dto.residentialRegionCode,
+            nativePlace: dto.nativePlace, nativePlaceRegionName: dto.nativePlaceRegionName,
+            householdType: dto.householdType, householdRegionName: dto.householdRegionName,
+            householdAddress: dto.householdAddress, residentialRegionName: dto.residentialRegionName,
             residentialAddress: dto.residentialAddress, bankName: dto.bankName, bankBranchName: dto.bankBranchName,
             bankAccountNumber: dto.bankAccountNumber,
             fullTimeDutyDescription: dto.fullTimeDutyDescription,
@@ -1854,7 +1854,20 @@ export class EmployeesService {
       ));
       if (field && !columns.has(field.key)) columns.set(field.key, index);
     });
-    if (columns.has('employeeNo')) return columns;
+    // A file may use the Chinese personnel table headers for its core columns
+    // while retaining exact, confirmed legacy-export field names for other
+    // columns. Map only the fields explicitly declared in that export profile;
+    // do not infer values from arbitrary external names.
+    if (columns.has('employeeNo')) {
+      KNOWN_ACTIVE_EMPLOYEE_EXPORT_PROFILE.forEach(([header, field]) => {
+        if (!field || columns.has(field)) return;
+        const columnIndex = values.findIndex((value) => (
+          this.normalizeImportHeader(this.exportCellValue(value)) === this.normalizeImportHeader(header)
+        ));
+        if (columnIndex >= 0) columns.set(field, columnIndex);
+      });
+      return columns;
+    }
 
     const externalHeaders = values.slice(1).map((value) => this.normalizeImportHeader(this.exportCellValue(value)));
     while (externalHeaders.at(-1) === '') externalHeaders.pop();
@@ -1932,17 +1945,18 @@ export class EmployeesService {
       }
     }
     const regionFields: Array<[PersonnelTransferFieldKey, string]> = [
-      ['nativePlaceRegionCode', '籍贯地区'],
-      ['householdRegionCode', '户籍所在地地区'],
-      ['residentialRegionCode', '联系地址地区'],
+      ['nativePlaceRegionName', '籍贯地区'],
+      ['householdRegionName', '户籍所在地地区'],
+      ['residentialRegionName', '联系地址地区'],
     ];
     for (const [field, title] of regionFields) {
       const value = input[field];
       if (value === undefined) continue;
-      if (isChinaAdministrativeRegionCode(value)) {
-        update[field] = value;
+      const canonicalName = normalizeChinaAdministrativeRegionName(value);
+      if (canonicalName) {
+        update[field] = canonicalName;
       } else {
-        warnings.push(`${title}行政区划代码“${value}”不存在，未导入该字段`);
+        warnings.push(`${title}“${value}”不是可确认的完整中文行政区划层级，未导入该字段`);
       }
     }
     for (const field of ['birthDate', 'documentExpiryDate', 'graduationDate'] as const) {
@@ -2275,11 +2289,11 @@ export class EmployeesService {
         maritalStatus: profile.maritalStatus,
         politicalStatus: profile.politicalStatus,
         nativePlace: profile.nativePlace,
-        nativePlaceRegionCode: profile.nativePlaceRegionCode,
+        nativePlaceRegionName: profile.nativePlaceRegionName,
         householdType: profile.householdType,
-        householdRegionCode: profile.householdRegionCode,
+        householdRegionName: profile.householdRegionName,
         householdAddress: profile.householdAddress,
-        residentialRegionCode: profile.residentialRegionCode,
+        residentialRegionName: profile.residentialRegionName,
         residentialAddress: profile.residentialAddress,
         bankName: profile.bankName,
         bankBranchName: profile.bankBranchName,
@@ -2850,11 +2864,11 @@ export class EmployeesService {
           maritalStatus: profile.maritalStatus,
           politicalStatus: profile.politicalStatus,
           nativePlace: profile.nativePlace,
-          nativePlaceRegionCode: profile.nativePlaceRegionCode,
+          nativePlaceRegionName: profile.nativePlaceRegionName,
           householdType: profile.householdType,
-          householdRegionCode: profile.householdRegionCode,
+          householdRegionName: profile.householdRegionName,
           householdAddress: profile.householdAddress,
-          residentialRegionCode: profile.residentialRegionCode,
+          residentialRegionName: profile.residentialRegionName,
           residentialAddress: profile.residentialAddress,
           bankName: profile.bankName,
           bankBranchName: profile.bankBranchName,
@@ -3041,19 +3055,19 @@ export class EmployeesService {
     if (invalidIndex >= 0) throw new BadRequestException(labels[invalidIndex]);
   }
 
-  private validateRegionCodes(dto: Pick<
+  private validateRegionNames(dto: Pick<
     CreateEmployeeDto | UpdateEmployeeDto,
-    'nativePlaceRegionCode' | 'householdRegionCode' | 'residentialRegionCode'
+    'nativePlaceRegionName' | 'householdRegionName' | 'residentialRegionName'
   >) {
     const fields = [
-      ['nativePlaceRegionCode', '籍贯地区'],
-      ['householdRegionCode', '户籍所在地地区'],
-      ['residentialRegionCode', '联系地址地区'],
+      ['nativePlaceRegionName', '籍贯地区'],
+      ['householdRegionName', '户籍所在地地区'],
+      ['residentialRegionName', '联系地址地区'],
     ] as const;
     for (const [field, label] of fields) {
-      const code = dto[field];
-      if (code !== undefined && !isChinaAdministrativeRegionCode(code)) {
-        throw new BadRequestException(`${label}行政区划代码不存在`);
+      const value = dto[field];
+      if (value !== undefined && !normalizeChinaAdministrativeRegionName(value)) {
+        throw new BadRequestException(`${label}必须填写可确认的完整中文行政区划层级`);
       }
     }
   }

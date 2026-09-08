@@ -144,30 +144,30 @@ export class CreateEmployeeDto {
   @IsString()
   agreementEmployingCompanyId: string;
 
-  @ApiPropertyOptional({ description: '籍贯行政区划代码（GB/T 2260 兼容）', maxLength: 12 })
+  @ApiPropertyOptional({ description: '籍贯完整中文行政区划层级，例如“湖北省 / 武汉市 / 洪山区”', maxLength: 191 })
   @IsOptional()
   @Transform(trim)
   @IsString()
-  @MaxLength(12)
-  nativePlaceRegionCode?: string;
+  @MaxLength(191)
+  nativePlaceRegionName?: string;
 
   @ApiProperty({ enum: HouseholdType })
   @IsEnum(HouseholdType)
   householdType: HouseholdType;
 
-  @ApiPropertyOptional({ description: '户籍所在地行政区划代码（GB/T 2260 兼容）', maxLength: 12 })
+  @ApiPropertyOptional({ description: '户籍所在地完整中文行政区划层级', maxLength: 191 })
   @IsOptional()
   @Transform(trim)
   @IsString()
-  @MaxLength(12)
-  householdRegionCode?: string;
+  @MaxLength(191)
+  householdRegionName?: string;
 
-  @ApiPropertyOptional({ description: '联系地址行政区划代码（GB/T 2260 兼容）', maxLength: 12 })
+  @ApiPropertyOptional({ description: '联系地址完整中文行政区划层级', maxLength: 191 })
   @IsOptional()
   @Transform(trim)
   @IsString()
-  @MaxLength(12)
-  residentialRegionCode?: string;
+  @MaxLength(191)
+  residentialRegionName?: string;
 
   @ApiProperty({ enum: BankName })
   @IsEnum(BankName)

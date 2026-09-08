@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import {
   CHINA_ADMINISTRATIVE_REGION_OPTIONS,
-  getChinaAdministrativeRegionPath,
+  getChinaAdministrativeRegionNameFromCode,
+  normalizeChinaAdministrativeRegionName,
 } from '@hr-demo/shared';
 import {
   type BankName,
@@ -74,14 +75,14 @@ interface EmployeeFormValues {
   workArrangement?: WorkArrangement;
   birthDate?: Dayjs;
   nativePlace?: string;
-  nativePlaceRegionCode?: string;
+  nativePlaceRegionName?: string;
   ethnicity?: Ethnicity;
   maritalStatus?: MaritalStatus;
   politicalStatus?: PoliticalStatus;
   householdType?: HouseholdType;
-  householdRegionCode?: string;
+  householdRegionName?: string;
   householdAddress?: string;
-  residentialRegionCode?: string;
+  residentialRegionName?: string;
   residentialAddress?: string;
   bankName?: BankName;
   bankBranchName?: string;
@@ -196,8 +197,22 @@ export function matchesPositionSearch(
   return !keyword || String(option?.name ?? '').toLocaleLowerCase().includes(keyword);
 }
 
-function regionPathValue(code: string | null | undefined): string[] | undefined {
-  return getChinaAdministrativeRegionPath(code)?.codes;
+function regionPathValue(name: string | null | undefined): string[] | undefined {
+  const canonicalName = normalizeChinaAdministrativeRegionName(name);
+  if (!canonicalName) return undefined;
+  const names = canonicalName.split(' / ');
+  const findCodes = (options: typeof CHINA_ADMINISTRATIVE_REGION_OPTIONS, depth = 0): string[] | undefined => {
+    const option = options.find((candidate) => candidate.label === names[depth]);
+    if (!option) return undefined;
+    if (depth === names.length - 1) return [option.value];
+    const childCodes = findCodes(option.children ?? [], depth + 1);
+    return childCodes ? [option.value, ...childCodes] : undefined;
+  };
+  return findCodes(CHINA_ADMINISTRATIVE_REGION_OPTIONS);
+}
+
+function legacyRegionName(code: string | null | undefined) {
+  return getChinaAdministrativeRegionNameFromCode(code) ?? undefined;
 }
 
 function RegionCascader({
@@ -215,7 +230,9 @@ function RegionCascader({
       placeholder="请选择省/市/区县"
       showSearch
       value={regionPathValue(value)}
-      onChange={(codes) => onChange?.(codes.length ? String(codes.at(-1)) : undefined)}
+      onChange={(codes) => onChange?.(
+        codes.length ? getChinaAdministrativeRegionNameFromCode(String(codes.at(-1))) ?? undefined : undefined,
+      )}
     />
   );
 }
@@ -284,11 +301,11 @@ export function EmployeeForm({
         maritalStatus: detail.maritalStatus as MaritalStatus | undefined,
         politicalStatus: detail.politicalStatus as PoliticalStatus | undefined,
         nativePlace: detail.nativePlace ?? undefined,
-        nativePlaceRegionCode: detail.nativePlaceRegionCode ?? undefined,
+        nativePlaceRegionName: detail.nativePlaceRegionName ?? undefined,
         householdType: detail.householdType as HouseholdType | undefined,
-        householdRegionCode: detail.householdRegionCode ?? undefined,
+        householdRegionName: detail.householdRegionName ?? undefined,
         householdAddress: detail.householdAddress ?? undefined,
-        residentialRegionCode: detail.residentialRegionCode ?? undefined,
+        residentialRegionName: detail.residentialRegionName ?? undefined,
         residentialAddress: detail.residentialAddress ?? undefined,
         bankName: detail.bankName as BankName | undefined,
         bankBranchName: detail.bankBranchName ?? undefined,
@@ -355,9 +372,9 @@ export function EmployeeForm({
         employeeLevel: 'STAFF',
         agreementEmployingCompanyId: values.agreementEmployingCompanyId ?? employingCompanyOptions[0]?.value ?? '',
         householdType: 'NONLOCAL_URBAN',
-        nativePlaceRegionCode: values.nativePlaceRegionCode,
-        householdRegionCode: values.householdRegionCode,
-        residentialRegionCode: values.residentialRegionCode,
+        nativePlaceRegionName: values.nativePlaceRegionName,
+        householdRegionName: values.householdRegionName,
+        residentialRegionName: values.residentialRegionName,
         bankName: 'ICBC',
         bankBranchName: '本地 Demo 支行',
         bankAccountNumber: '0000000000000000001',
@@ -407,11 +424,11 @@ export function EmployeeForm({
       maritalStatus: values.maritalStatus,
       politicalStatus: values.politicalStatus,
       nativePlace: values.nativePlace?.trim(),
-      nativePlaceRegionCode: values.nativePlaceRegionCode,
+      nativePlaceRegionName: values.nativePlaceRegionName,
       householdType: values.householdType,
-      householdRegionCode: values.householdRegionCode,
+      householdRegionName: values.householdRegionName,
       householdAddress: values.householdAddress?.trim(),
-      residentialRegionCode: values.residentialRegionCode,
+      residentialRegionName: values.residentialRegionName,
       residentialAddress: values.residentialAddress?.trim(),
       bankName: values.bankName,
       bankBranchName: values.bankBranchName?.trim(),
@@ -543,9 +560,9 @@ export function EmployeeForm({
         <FormLine name="documentNumber" label="证件号码" rules={[{ max: 64, message: '证件号码不能超过 64 个字符' }]}><Input maxLength={64} autoComplete="off" /></FormLine>
         <FormLine name="mobile" label="手机号码" rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1\d{10}$/, message: '请输入 11 位中国大陆手机号' }]}><Input inputMode="numeric" maxLength={11} autoComplete="off" /></FormLine>
         <FormLine name="gender" label="性别"><Select placeholder="请选择" options={[{ value: 'MALE', label: '男' }, { value: 'FEMALE', label: '女' }, { value: 'UNDISCLOSED', label: '保密' }]} /></FormLine>
-        <FormLine name="nativePlaceRegionCode" label="籍贯地区"><RegionCascader /></FormLine>
-        <FormLine name="householdRegionCode" label="户籍所在地地区"><RegionCascader /></FormLine>
-        <FormLine name="residentialRegionCode" label="联系地址地区"><RegionCascader /></FormLine>
+        <FormLine name="nativePlaceRegionName" label="籍贯地区"><RegionCascader /></FormLine>
+        <FormLine name="householdRegionName" label="户籍所在地地区"><RegionCascader /></FormLine>
+        <FormLine name="residentialRegionName" label="联系地址地区"><RegionCascader /></FormLine>
         <FormLine name="inviteAccount" label="邀请激活账号"><Radio.Group options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></FormLine>
       </FormSection>
 

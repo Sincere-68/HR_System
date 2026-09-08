@@ -1,6 +1,5 @@
 import { ExportOutlined, EyeOutlined, ImportOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import {
-  formatChinaAdministrativeRegion,
   PERMISSIONS,
   type EmployeeListItem,
   type EmployeeListQuery,
@@ -155,12 +154,12 @@ const employeeColumns: ColumnsType<EmployeeListItem> = [
   { title: '民族', dataIndex: 'ethnicity', width: 100, render: (value) => displayValue(value ? ethnicityLabels[value as keyof typeof ethnicityLabels] ?? value : null) },
   { title: '婚姻状况', dataIndex: 'maritalStatus', width: 110, render: (value) => displayValue(value ? maritalStatusLabels[value as keyof typeof maritalStatusLabels] ?? value : null) },
   { title: '政治面貌', dataIndex: 'politicalStatus', width: 120, render: (value) => displayValue(value ? politicalStatusLabels[value as keyof typeof politicalStatusLabels] ?? value : null) },
-  { title: '籍贯地区', dataIndex: 'nativePlaceRegionCode', width: 200, render: (value) => displayValue(formatChinaAdministrativeRegion(value)) },
+  { title: '籍贯地区', dataIndex: 'nativePlaceRegionName', width: 200, render: displayValue },
   { title: '籍贯详细说明', dataIndex: 'nativePlace', width: 160, render: displayValue },
   { title: '户口类别', dataIndex: 'householdType', width: 120, render: (value) => displayValue(value ? householdTypeLabels[value as keyof typeof householdTypeLabels] ?? value : null) },
-  { title: '户籍所在地地区', dataIndex: 'householdRegionCode', width: 200, render: (value) => displayValue(formatChinaAdministrativeRegion(value)) },
+  { title: '户籍所在地地区', dataIndex: 'householdRegionName', width: 200, render: displayValue },
   { title: '户籍详细地址', dataIndex: 'householdAddress', width: 240, render: displayValue },
-  { title: '联系地址地区', dataIndex: 'residentialRegionCode', width: 200, render: (value) => displayValue(formatChinaAdministrativeRegion(value)) },
+  { title: '联系地址地区', dataIndex: 'residentialRegionName', width: 200, render: displayValue },
   { title: '联系详细地址', dataIndex: 'residentialAddress', width: 240, render: displayValue },
   { title: '紧急联系人', dataIndex: 'emergencyContactName', width: 130, render: displayValue },
   { title: '与本人关系', dataIndex: 'emergencyContactRelationship', width: 120, render: displayValue },

@@ -1,5 +1,6 @@
 import type { EmploymentStatus } from '@prisma/client';
 import {
+  displayChinaAdministrativeRegion,
   type EmployeeDetail,
   type EmployeeLevel,
   type EmployeeListItem,
@@ -52,10 +53,16 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
   maritalStatus: string | null;
   politicalStatus: string | null;
   nativePlace: string | null;
+  nativePlaceRegionName?: string | null;
+  /** Legacy code is read only as fallback for pre-migration records. */
   nativePlaceRegionCode?: string | null;
   householdType?: string | null;
+  householdRegionName?: string | null;
+  /** Legacy code is read only as fallback for pre-migration records. */
   householdRegionCode?: string | null;
   householdAddress: string | null;
+  residentialRegionName?: string | null;
+  /** Legacy code is read only as fallback for pre-migration records. */
   residentialRegionCode?: string | null;
   residentialAddress: string | null;
   bankName?: string | null;
@@ -205,11 +212,11 @@ export function presentDemoEmployeeListItem(
     maritalStatus: null,
     politicalStatus: null,
     nativePlace: null,
-    nativePlaceRegionCode: null,
+    nativePlaceRegionName: null,
     householdType: null,
-    householdRegionCode: null,
+    householdRegionName: null,
     householdAddress: null,
-    residentialRegionCode: null,
+    residentialRegionName: null,
     residentialAddress: null,
     emergencyContactName: null,
     emergencyContactRelationship: null,
@@ -371,11 +378,20 @@ export function presentEmployeeListItem(
     maritalStatus: employee.maritalStatus as EmployeeListItem['maritalStatus'],
     politicalStatus: employee.politicalStatus as EmployeeListItem['politicalStatus'],
     nativePlace: employee.nativePlace,
-    nativePlaceRegionCode: employee.nativePlaceRegionCode ?? null,
+    nativePlaceRegionName: displayChinaAdministrativeRegion(
+      employee.nativePlaceRegionName,
+      employee.nativePlaceRegionCode,
+    ),
     householdType: employee.householdType as EmployeeListItem['householdType'] ?? null,
-    householdRegionCode: employee.householdRegionCode ?? null,
+    householdRegionName: displayChinaAdministrativeRegion(
+      employee.householdRegionName,
+      employee.householdRegionCode,
+    ),
     householdAddress: employee.householdAddress,
-    residentialRegionCode: employee.residentialRegionCode ?? null,
+    residentialRegionName: displayChinaAdministrativeRegion(
+      employee.residentialRegionName,
+      employee.residentialRegionCode,
+    ),
     residentialAddress: employee.residentialAddress,
     emergencyContactName: emergencyContact?.name ?? null,
     emergencyContactRelationship: emergencyContact?.relationship ?? null,

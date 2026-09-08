@@ -106,11 +106,11 @@ Authorization: Bearer <accessToken>
       "maritalStatus": null,
       "politicalStatus": null,
       "nativePlace": null,
-      "nativePlaceRegionCode": null,
+      "nativePlaceRegionName": null,
       "householdType": null,
-      "householdRegionCode": null,
+      "householdRegionName": null,
       "householdAddress": null,
-      "residentialRegionCode": null,
+      "residentialRegionName": null,
       "residentialAddress": null,
       "emergencyContactName": null,
       "emergencyContactRelationship": null,
@@ -136,7 +136,7 @@ Authorization: Bearer <accessToken>
 }
 ```
 
-`null` 表示该信息尚未录入或当前关系没有对应记录。人员页面的地区字段使用 `nativePlaceRegionCode`、`householdRegionCode`、`residentialRegionCode` 保存 GB/T 2260 兼容的末级行政区划代码；共享静态三层目录负责前端级联展示，创建和编辑接口会拒绝不存在的代码。`nativePlace`、`householdAddress`、`residentialAddress` 保留为详细说明/详细地址，既有自由文本不会被猜测性拆分或回填。人员页面固定为 46 个业务字段，列表、详情、新增、编辑与后续导入导出字段注册表使用同一语义；人员子集页面与人员页面没有接口依赖。当前主要任职提供人员定位、职级、员工层级、人员类别、人员来源、雇佣关系和用工形式：人员定位使用固定 code `FRONT_OFFICE`、`MIDDLE_OFFICE`、`BACK_OFFICE`；职级使用固定 code `S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`；员工层级使用固定 code `STAFF`、`SUPERVISOR`、`MANAGER`、`DIRECTOR`、`PRESIDENT`、`EXPERT`。三者均直接存于 `EmployeeAssignment` 并由 API 返回 code，前端映射中文标签；职级新增下拉支持按 code 子串搜索（例如输入 `1` 可匹配 `S1`、`E1`、`T1`、`M1`）。全日制公司不是任职字段，`fullTimeCompany` 读取当前任职周期中当前有效 `EmployeeAgreement.employingCompany.name`；无可确认有效协议或目录关系时返回 `null`。人员类别、人员来源、雇佣关系和用工形式分别使用 `personnelCategory`、`personnelSource`、`employmentRelationship`、`workArrangement`，不得相互替代，人员来源不使用 `Candidate.source` 代替。员工主档的户口类别和银行资料、最高教育记录的院校类型也按各自明确来源返回，未录入时为 `null`。人员状态为八项：`PROBATION`、`REGULAR`、`PENDING_ENTRY`、`TRANSFERRED_OUT`、`PENDING_TRANSFER_IN`、`RETIRED`、`RESIGNED`、`NON_REGULAR`；当前有效人员查询只纳入 `PROBATION`、`REGULAR` 和 `NON_REGULAR`。性别只有 `MALE`、`FEMALE`、`UNDISCLOSED`，分别显示男、女、保密。主要证件、紧急联系人、单账户银行资料及最高教育记录分别提供对应快照。由于本系统仅供 HR 使用，有可靠来源的人员字段按正常值返回；访问仍受员工读取权限和组织数据范围约束。
+`null` 表示该信息尚未录入或当前关系没有对应记录。人员页面的地区字段使用 `nativePlaceRegionName`、`householdRegionName`、`residentialRegionName` 保存完整中文行政区划层级，例如“湖北省 / 武汉市 / 洪山区”；创建、编辑和导入会将可确认的完整中文层级规范化保存，不接受不完整或歧义的末级名称。旧 GB/T 2260 code 仅保留作历史数据兼容读取，API 不再返回其数字编号。`nativePlace`、`householdAddress`、`residentialAddress` 保留为详细说明/详细地址，既有自由文本不会被猜测性拆分或回填。人员页面固定为 46 个业务字段，列表、详情、新增、编辑与后续导入导出字段注册表使用同一语义；人员子集页面与人员页面没有接口依赖。当前主要任职提供人员定位、职级、员工层级、人员类别、人员来源、雇佣关系和用工形式：人员定位使用固定 code `FRONT_OFFICE`、`MIDDLE_OFFICE`、`BACK_OFFICE`；职级使用固定 code `S1`–`S7`、`E1`–`E7`、`T1`–`T7`、`M1`–`M7`；员工层级使用固定 code `STAFF`、`SUPERVISOR`、`MANAGER`、`DIRECTOR`、`PRESIDENT`、`EXPERT`。三者均直接存于 `EmployeeAssignment` 并由 API 返回 code，前端映射中文标签；职级新增下拉支持按 code 子串搜索（例如输入 `1` 可匹配 `S1`、`E1`、`T1`、`M1`）。全日制公司不是任职字段，`fullTimeCompany` 读取当前任职周期中当前有效 `EmployeeAgreement.employingCompany.name`；无可确认有效协议或目录关系时返回 `null`。人员类别、人员来源、雇佣关系和用工形式分别使用 `personnelCategory`、`personnelSource`、`employmentRelationship`、`workArrangement`，不得相互替代，人员来源不使用 `Candidate.source` 代替。员工主档的户口类别和银行资料、最高教育记录的院校类型也按各自明确来源返回，未录入时为 `null`。人员状态为八项：`PROBATION`、`REGULAR`、`PENDING_ENTRY`、`TRANSFERRED_OUT`、`PENDING_TRANSFER_IN`、`RETIRED`、`RESIGNED`、`NON_REGULAR`；当前有效人员查询只纳入 `PROBATION`、`REGULAR` 和 `NON_REGULAR`。性别只有 `MALE`、`FEMALE`、`UNDISCLOSED`，分别显示男、女、保密。主要证件、紧急联系人、单账户银行资料及最高教育记录分别提供对应快照。由于本系统仅供 HR 使用，有可靠来源的人员字段按正常值返回；访问仍受员工读取权限和组织数据范围约束。
 
 ### GET `/employees/regular`
 
@@ -179,12 +179,12 @@ Authorization: Bearer <accessToken>
   "ethnicity": "HAN",
   "maritalStatus": "UNMARRIED",
   "politicalStatus": "NON_PARTY",
-  "nativePlaceRegionCode": "310115",
+  "nativePlaceRegionName": "上海市 / 市辖区 / 浦东新区",
   "nativePlace": "虚构籍贯详细说明",
   "householdType": "LOCAL_URBAN",
-  "householdRegionCode": "110105",
+  "householdRegionName": "北京市 / 市辖区 / 朝阳区",
   "householdAddress": "虚构户籍详细地址",
-  "residentialRegionCode": "440305",
+  "residentialRegionName": "广东省 / 深圳市 / 南山区",
   "residentialAddress": "虚构联系详细地址",
   "entryDate": "2026-08-25",
   "organizationId": "部门 ID",

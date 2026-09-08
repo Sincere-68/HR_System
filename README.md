@@ -308,6 +308,25 @@ CREATE DATABASE hr_personnel_demo OWNER hr_demo;
 CREATE DATABASE hr_personnel_demo_test OWNER hr_demo;
 ```
 
+#### 使用 Docker 启动本地测试 PostgreSQL
+
+项目根目录提供独立的本地测试编排，不会修改已有的 `backend/.env`，并会在首次启动时同时创建开发库 `hr_personnel_demo` 和测试库 `hr_personnel_demo_test`：
+
+```powershell
+Copy-Item docker/postgres-test.env.example docker/postgres-test.env
+docker compose -f docker-compose.postgres-test.yml up -d
+```
+
+启动后，可将 `backend/.env` 中的数据库相关配置改为：
+
+```env
+DEMO_MODE=false
+DATABASE_URL="postgresql://hr_demo:change_this_local_password@localhost:5432/hr_personnel_demo?schema=public"
+DATABASE_URL_TEST="postgresql://hr_demo:change_this_local_password@localhost:5432/hr_personnel_demo_test?schema=public"
+```
+
+`docker/postgres-test.env` 已被忽略，请在启动前修改其中的测试密码，并同步更新以上两个连接串。查看服务状态使用 `docker compose -f docker-compose.postgres-test.yml ps`；需要删除测试数据时，先停止服务，再执行 `docker compose -f docker-compose.postgres-test.yml down -v`。
+
 > 云端已有空 PostgreSQL 数据库时，不要重复创建数据库；只需确保连接账号拥有目标 schema 的建表、建类型和建索引权限。首次部署会执行仓库内的 PostgreSQL 初始 migration；旧数据库版本的迁移已移至 `backend/prisma/mysql-migrations-archive/`，不会被部署命令读取。
 >
 > 初始 migration 只建表，不自动写入 288 条唯一职位名称目录。首次需要导入人员或 Offer 前，可在确认目标库后执行安全的职位目录同步（只按职位名称创建/更新，不删除任职、Offer 或其他引用数据）：
