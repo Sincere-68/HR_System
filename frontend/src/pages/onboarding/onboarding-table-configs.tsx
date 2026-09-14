@@ -120,7 +120,7 @@ export const idCardReadColumns: ColumnsType<IdCardReadListItem> = [
   { title: '性别', dataIndex: 'gender', width: 90, render: renderGender },
   { title: '民族', dataIndex: 'ethnicity', width: 100, render: renderNullable },
   { title: '出生日期', dataIndex: 'birthDate', width: 120, render: renderNullable },
-  { title: '户籍所在地', dataIndex: 'householdAddress', width: 220, render: renderNullable },
+  { title: '户籍所在地', dataIndex: 'householdRegionName', width: 220, render: renderNullable },
   { title: '证件类型', dataIndex: 'documentType', width: 150, render: renderIdentityDocumentType },
   { title: '证件号码', dataIndex: 'documentNumber', width: 180, render: renderNullable },
   { title: '签发机关', dataIndex: 'issuingAuthority', width: 180, render: renderNullable },

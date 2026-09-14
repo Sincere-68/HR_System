@@ -336,6 +336,8 @@ DATABASE_URL_TEST="postgresql://hr_demo:change_this_local_password@localhost:543
 > ```
 >
 > 不要在已有业务数据的数据库执行 `db:replace-position-catalog`；该旧脚本会删除职位及其已确认的测试引用。
+>
+> `20260914120000_drop_employee_detail_location_fields` 会按已确认决策直接删除 `employees.native_place`、`household_address`、`residential_address` 及其历史值，不做回填。云端执行前必须先备份数据库。
 
 ### 2. 创建后端设置文件
 

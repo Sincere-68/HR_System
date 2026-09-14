@@ -16,7 +16,7 @@ const record = {
   gender: 'FEMALE',
   ethnicity: '虚构民族',
   birthDate: '1990-02-03',
-  householdAddress: null,
+  householdRegionName: null,
   documentType: 'NATIONAL_ID' as const,
   documentNumber: documentNumber,
   issuingAuthority: '虚构市公安局',
@@ -54,7 +54,7 @@ describe('IdCardReaderPage', () => {
 
   it('renders exactly 18 columns in the required order and preserves complete API values', () => {
     renderPage('/onboarding/id-card-reader?page=2&pageSize=20');
-    const table = screen.getByRole('table');
+    const table = screen.getAllByRole('table')[0]!;
     const columnHeaders = within(table).getAllByRole('columnheader');
     expect(columnHeaders.map((heading) => heading.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '性别', '民族', '出生日期', '户籍所在地', '证件类型', '证件号码', '签发机关',
@@ -71,7 +71,7 @@ describe('IdCardReaderPage', () => {
     expect(screen.getByText('2030-02-03')).toBeInTheDocument();
     expect(screen.getByText('2026-07-31')).toBeInTheDocument();
     expect(screen.getByText('2026-08-20T12:34:56.000Z')).toBeInTheDocument();
-    expect(within(table).getAllByText('--').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(4);
     expect(screen.getByRole('button', { name: '暂无操作' })).toBeDisabled();
   });
 

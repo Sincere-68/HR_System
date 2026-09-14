@@ -950,7 +950,7 @@ describe('OnboardingService', () => {
         gender: 'FEMALE',
         ethnicity: '虚构民族',
         birthDate: new Date('1990-02-03T00:00:00.000Z'),
-        householdAddress: '虚构省虚构市虚构路1号',
+        householdRegionName: '虚构省虚构市虚构路1号',
         terminationRecords: [],
       },
     }]);
@@ -961,7 +961,7 @@ describe('OnboardingService', () => {
         gender: 'FEMALE',
         ethnicity: '虚构民族',
         birthDate: '1990-02-03',
-        householdAddress: '虚构省虚构市虚构路1号',
+        householdRegionName: '虚构省虚构市虚构路1号',
         documentType: 'NATIONAL_ID',
         documentNumber: '110101199002031021',
         issuingAuthority: '虚构市公安局',
@@ -978,7 +978,7 @@ describe('OnboardingService', () => {
     });
 
     const employeeSelect = prisma.employeeIdentityDocument.findMany.mock.calls[0][0].select.employee.select;
-    expect(employeeSelect).toHaveProperty('householdAddress', true);
+    expect(employeeSelect).toHaveProperty('householdRegionName', true);
     expect(employeeSelect.terminationRecords.select).toHaveProperty('reason', true);
   });
 
@@ -997,7 +997,7 @@ describe('OnboardingService', () => {
         gender: null,
         ethnicity: null,
         birthDate: null,
-        householdAddress: null,
+        householdRegionName: null,
         terminationRecords: [
           {
             id: 'termination-old',
@@ -1063,7 +1063,7 @@ describe('OnboardingService', () => {
       id: 'identity-no-actual', documentType: 'NATIONAL_ID', documentNumber: '虚构证件编号-002',
       issuingAuthority: null, issueDate: null, expiryDate: null, createdAt: new Date('2026-08-20T00:00:00.000Z'),
       employee: {
-        name: '虚构员工丙', gender: null, ethnicity: null, birthDate: null, householdAddress: null,
+        name: '虚构员工丙', gender: null, ethnicity: null, birthDate: null, householdRegionName: null,
         terminationRecords: [{
           id: 'termination-no-actual', employmentPeriodId: null,
           actualLastWorkingDate: null, plannedLastWorkingDate: new Date('2026-08-10T00:00:00.000Z'),
@@ -1084,7 +1084,7 @@ describe('OnboardingService', () => {
       id: 'identity-no-matching-assignment', documentType: 'NATIONAL_ID', documentNumber: '虚构证件编号-003',
       issuingAuthority: null, issueDate: null, expiryDate: null, createdAt: new Date('2026-08-19T00:00:00.000Z'),
       employee: {
-        name: '虚构员工丁', gender: null, ethnicity: null, birthDate: null, householdAddress: null,
+        name: '虚构员工丁', gender: null, ethnicity: null, birthDate: null, householdRegionName: null,
         terminationRecords: [{
           id: 'termination-no-matching-assignment', employmentPeriodId: 'period-no-match',
           actualLastWorkingDate: new Date('2026-08-10T00:00:00.000Z'),

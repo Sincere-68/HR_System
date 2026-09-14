@@ -15,7 +15,7 @@ const user = {
 const employeeRow = {
   id: 'employee-1', name: '虚构员工', workEmail: 'employee@example.invalid', employeeNo: 'FAKE-001',
   gender: 'FEMALE', birthDate: new Date('1990-08-26T00:00:00.000Z'), mobile: '13900138000',
-  personalEmail: 'personal@example.invalid', nativePlace: '虚构城市', householdAddress: '虚构地址',
+  personalEmail: 'personal@example.invalid', nativePlaceRegionName: '虚构城市', householdRegionName: '虚构地址',
   ethnicity: '虚构民族', maritalStatus: '未婚', politicalStatus: '群众',
   educationExperiences: [{ educationLevel: '本科', schoolName: '虚构大学', graduationDate: new Date('2012-06-30T00:00:00.000Z'), major: '虚构专业' }],
   identityDocuments: [{ documentNumber: 'FAKE-ID-001' }],

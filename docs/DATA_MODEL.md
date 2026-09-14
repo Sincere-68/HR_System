@@ -74,7 +74,7 @@ erDiagram
 | `nationality` | String | 否 | 国籍 |
 | `ethnicity` | Enum (`Ethnicity`) | 否 | 民族；取 Prisma `Ethnicity` 枚举值 |
 | `native_place_region_name` | Text | 否 | 人员页面“籍贯”；按来源原文保存 |
-| `native_place` / `native_place_region_code` | 兼容字段 | 否 | 仅保留历史数据，不再由人员页面/API/新导入公开使用 |
+| `native_place_region_code` | 兼容字段 | 否 | 仅保留历史编号，不再由人员页面/API/新导入公开使用；`native_place` 已物理删除 |
 | `political_status` | Enum (`PoliticalStatus`) | 否 | 政治面貌；取 Prisma `PoliticalStatus` 枚举值 |
 | `marital_status` | Enum (`MaritalStatus`) | 否 | 婚姻状况；取 Prisma `MaritalStatus` 枚举值 |
 | `mobile` | String? | 完整新增是；导入否 | 当前兼容 API 使用；导入待完善人员可为空，页面显示 `--` |
@@ -82,9 +82,9 @@ erDiagram
 | `work_email` | String | 否 | 工作邮箱 |
 | `household_type` | Enum (`HouseholdType`) | 否 | 户口类别；取 Prisma `HouseholdType` 枚举值 |
 | `household_region_name` | Text | 否 | 人员页面“户籍所在地”；按来源原文保存 |
-| `household_region_code` / `household_address` | 兼容字段 | 否 | 仅保留历史数据，不再由人员页面/API/新导入公开使用 |
+| `household_region_code` | 兼容字段 | 否 | 仅保留历史编号，不再由人员页面/API/新导入公开使用；`household_address` 已物理删除 |
 | `residential_region_name` | Text | 否 | 人员页面“联系地址”；按来源原文保存 |
-| `residential_region_code` / `residential_address` | 兼容字段 | 否 | 仅保留历史数据，不再由人员页面/API/新导入公开使用 |
+| `residential_region_code` | 兼容字段 | 否 | 仅保留历史编号，不再由人员页面/API/新导入公开使用；`residential_address` 已物理删除 |
 | `bank_name` | Enum (`BankName`) | 否 | 银行名称；当前 Prisma 仅确认 `ICBC` |
 | `bank_branch_name` | String | 否 | 开户行支行 |
 | `bank_account_number` | VarChar(19) | 否 | 银行账号 |

@@ -1016,7 +1016,7 @@ export class OnboardingService {
       gender: true,
       ethnicity: true,
       birthDate: true,
-      householdAddress: true,
+      householdRegionName: true,
       terminationRecords: {
         where: { status: { in: ACTIVE_TERMINATION_STATUSES }, archivedAt: null },
         orderBy: [
@@ -1079,7 +1079,7 @@ export class OnboardingService {
           gender: row.employee.gender,
           ethnicity: row.employee.ethnicity,
           birthDate: formatDate(row.employee.birthDate),
-          householdAddress: row.employee.householdAddress,
+          householdRegionName: row.employee.householdRegionName,
           documentType: row.documentType,
           documentNumber: row.documentNumber,
           issuingAuthority: row.issuingAuthority,
@@ -1146,7 +1146,7 @@ export class OnboardingService {
 
   private idCardExportFields() {
     return [
-      ['name', '姓名'], ['gender', '性别'], ['ethnicity', '民族'], ['birthDate', '出生日期'], ['householdAddress', '户籍所在地'],
+      ['name', '姓名'], ['gender', '性别'], ['ethnicity', '民族'], ['birthDate', '出生日期'], ['householdRegionName', '户籍所在地'],
       ['documentType', '证件类型'], ['documentNumber', '证件号码'], ['issuingAuthority', '签发机关'], ['issueDate', '证件开始日期'],
       ['expiryDate', '证件截止日期'], ['lastWorkingDate', '最后工作日'], ['previousOrganizationName', '离职前部门'],
       ['terminationType', '离职类型'], ['terminationReason', '离职原因'], ['photo', '照片'], ['recordedBy', '录入人'], ['recordedAt', '录入时间'],

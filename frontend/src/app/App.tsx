@@ -1,6 +1,7 @@
 import { App as AntApp, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { TableColumnResizer } from '../components/TableColumnResizer';
+import { TableViewportFooter } from '../components/TableViewportFooter';
 import { AppRouter } from './router';
 
 export function App() {
@@ -43,6 +44,7 @@ export function App() {
     >
       <AntApp>
         <TableColumnResizer />
+        <TableViewportFooter />
         <AppRouter />
       </AntApp>
     </ConfigProvider>

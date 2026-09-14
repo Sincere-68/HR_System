@@ -1461,7 +1461,7 @@ export interface IdCardReadListItem {
   gender: string | null;
   ethnicity: string | null;
   birthDate: string | null;
-  householdAddress: string | null;
+  householdRegionName: string | null;
   documentType: IdentityDocumentType | null;
   documentNumber: string | null;
   issuingAuthority: string | null;
@@ -1950,8 +1950,8 @@ export interface EmployeeRosterListItem {
   mobile: string | null;
   documentNumber: string | null;
   personalEmail: string | null;
-  nativePlace: string | null;
-  householdAddress: string | null;
+  nativePlaceRegionName: string | null;
+  householdRegionName: string | null;
   householdType: null;
   ethnicity: string | null;
   maritalStatus: string | null;

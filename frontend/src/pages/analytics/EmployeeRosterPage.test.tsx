@@ -12,7 +12,7 @@ const row = {
   id: 'employee-1', name: '虚构员工', workEmail: 'fictional@example.invalid', employeeNo: 'FAKE-001',
   gender: 'FEMALE', birthDate: null, age: 0, highestEducation: '本科', graduationSchoolName: null,
   graduationDate: null, major: null, mobile: null, documentNumber: null, personalEmail: null,
-  nativePlace: null, householdAddress: null, householdType: null, ethnicity: null, maritalStatus: null,
+  nativePlaceRegionName: null, householdRegionName: null, householdType: null, ethnicity: null, maritalStatus: null,
   politicalStatus: null, partyLeagueJoinDate: null, workStartDate: null, emergencyContactName: null,
   emergencyContactRelationship: null, emergencyContactMobile: null, entryDate: null,
   assignmentStartDate: null, assignmentEndDate: null, departmentName: null, jobTitleName: null,
@@ -51,7 +51,7 @@ describe('EmployeeRosterPage', () => {
 
   it('renders exactly the 56 business columns in contract order', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = screen.getAllByRole('table')[0]!;
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual(expectedHeaders);
   });
 
@@ -62,8 +62,8 @@ describe('EmployeeRosterPage', () => {
     expect(screen.getByText('内部员工')).toBeInTheDocument();
     expect(screen.getByText('正式')).toBeInTheDocument();
     expect(screen.getByText('否')).toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getAllByText('0')).toHaveLength(2);
-    expect(within(screen.getByRole('table')).getAllByText('--').length).toBeGreaterThan(10);
+    expect(screen.getAllByText('0')).toHaveLength(2);
+    expect(screen.getAllByText('--').length).toBeGreaterThan(10);
   });
 
   it('passes URL filters and pagination to the isolated roster query', () => {
