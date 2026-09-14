@@ -26,6 +26,16 @@ describe('PerformanceTemplateEditorPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('固定模块权重 100% / 100%');
   });
 
+  it('allows switching to an empty manual template configuration', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><MemoryRouter><PerformanceTemplateEditorPage /></MemoryRouter></QueryClientProvider>);
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByText('手动配置'));
+    await user.click(screen.getByText('流程设置'));
+    expect(screen.getByRole('button', { name: /新增模块/ })).toBeInTheDocument();
+  });
+
   it('reorders the strict workflow when a module is dropped on another module', async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -47,7 +57,7 @@ describe('PerformanceTemplateEditorPage', () => {
     fireEvent.dragOver(bpOwnerReview, { dataTransfer });
     fireEvent.drop(bpOwnerReview, { dataTransfer });
 
-    expect(within(moduleList).getAllByRole('button').slice(0, 3).map((button) => button.textContent)).toEqual([
+    expect(within(moduleList).getAllByRole('button').filter((button) => !button.textContent?.includes('新增模块')).slice(0, 3).map((button) => button.textContent)).toEqual([
       expect.stringMatching(/^1\s*业务负责人评价/),
       expect.stringMatching(/^2\s*业务达成/),
       expect.stringMatching(/^3\s*BP负责人评价/),

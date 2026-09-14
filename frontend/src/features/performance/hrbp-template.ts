@@ -1,4 +1,5 @@
 export type PerformanceModuleKind = 'metric' | 'evaluation' | 'adjustment';
+export type PerformanceTemplateSourceKind = 'MARKDOWN' | 'MANUAL';
 
 export interface PerformanceIndicator {
   id: string;

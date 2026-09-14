@@ -1,10 +1,5 @@
 import type { ReactNode } from 'react';
 import {
-  CHINA_ADMINISTRATIVE_REGION_OPTIONS,
-  getChinaAdministrativeRegionNameFromCode,
-  normalizeChinaAdministrativeRegionName,
-} from '@hr-demo/shared';
-import {
   type BankName,
   type ContractTermType,
   type EducationLevel,
@@ -28,7 +23,7 @@ import {
   type EmploymentStatus,
   type UpdateEmployeeInput,
 } from '@hr-demo/shared';
-import { Cascader, DatePicker, Form, Input, InputNumber, Radio, Select } from 'antd';
+import { DatePicker, Form, Input, InputNumber, Radio, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect } from 'react';
 import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
@@ -74,16 +69,13 @@ interface EmployeeFormValues {
   personnelSource?: PersonnelSource;
   workArrangement?: WorkArrangement;
   birthDate?: Dayjs;
-  nativePlace?: string;
   nativePlaceRegionName?: string;
   ethnicity?: Ethnicity;
   maritalStatus?: MaritalStatus;
   politicalStatus?: PoliticalStatus;
   householdType?: HouseholdType;
   householdRegionName?: string;
-  householdAddress?: string;
   residentialRegionName?: string;
-  residentialAddress?: string;
   bankName?: BankName;
   bankBranchName?: string;
   bankAccountNumber?: string;
@@ -197,46 +189,6 @@ export function matchesPositionSearch(
   return !keyword || String(option?.name ?? '').toLocaleLowerCase().includes(keyword);
 }
 
-function regionPathValue(name: string | null | undefined): string[] | undefined {
-  const canonicalName = normalizeChinaAdministrativeRegionName(name);
-  if (!canonicalName) return undefined;
-  const names = canonicalName.split(' / ');
-  const findCodes = (options: typeof CHINA_ADMINISTRATIVE_REGION_OPTIONS, depth = 0): string[] | undefined => {
-    const option = options.find((candidate) => candidate.label === names[depth]);
-    if (!option) return undefined;
-    if (depth === names.length - 1) return [option.value];
-    const childCodes = findCodes(option.children ?? [], depth + 1);
-    return childCodes ? [option.value, ...childCodes] : undefined;
-  };
-  return findCodes(CHINA_ADMINISTRATIVE_REGION_OPTIONS);
-}
-
-function legacyRegionName(code: string | null | undefined) {
-  return getChinaAdministrativeRegionNameFromCode(code) ?? undefined;
-}
-
-function RegionCascader({
-  value,
-  onChange,
-}: {
-  value?: string;
-  onChange?: (value?: string) => void;
-}) {
-  return (
-    <Cascader
-      allowClear
-      changeOnSelect
-      options={CHINA_ADMINISTRATIVE_REGION_OPTIONS}
-      placeholder="请选择省/市/区县"
-      showSearch
-      value={regionPathValue(value)}
-      onChange={(codes) => onChange?.(
-        codes.length ? getChinaAdministrativeRegionNameFromCode(String(codes.at(-1))) ?? undefined : undefined,
-      )}
-    />
-  );
-}
-
 export function EmployeeForm({
   employee,
   organizations,
@@ -300,13 +252,10 @@ export function EmployeeForm({
         ethnicity: detail.ethnicity as Ethnicity | undefined,
         maritalStatus: detail.maritalStatus as MaritalStatus | undefined,
         politicalStatus: detail.politicalStatus as PoliticalStatus | undefined,
-        nativePlace: detail.nativePlace ?? undefined,
         nativePlaceRegionName: detail.nativePlaceRegionName ?? undefined,
         householdType: detail.householdType as HouseholdType | undefined,
         householdRegionName: detail.householdRegionName ?? undefined,
-        householdAddress: detail.householdAddress ?? undefined,
         residentialRegionName: detail.residentialRegionName ?? undefined,
-        residentialAddress: detail.residentialAddress ?? undefined,
         bankName: detail.bankName as BankName | undefined,
         bankBranchName: detail.bankBranchName ?? undefined,
         bankAccountNumber: detail.bankAccountNumber ?? undefined,
@@ -382,8 +331,6 @@ export function EmployeeForm({
         ethnicity: 'HAN',
         maritalStatus: 'UNMARRIED',
         politicalStatus: 'NON_PARTY',
-        householdAddress: '待完善',
-        residentialAddress: '待完善',
         emergencyContactName: '待完善',
         emergencyContactRelationship: '待完善',
         emergencyContactMobile: values.mobile,
@@ -423,13 +370,10 @@ export function EmployeeForm({
       ethnicity: values.ethnicity,
       maritalStatus: values.maritalStatus,
       politicalStatus: values.politicalStatus,
-      nativePlace: values.nativePlace?.trim(),
-      nativePlaceRegionName: values.nativePlaceRegionName,
+      nativePlaceRegionName: values.nativePlaceRegionName?.trim(),
       householdType: values.householdType,
-      householdRegionName: values.householdRegionName,
-      householdAddress: values.householdAddress?.trim(),
-      residentialRegionName: values.residentialRegionName,
-      residentialAddress: values.residentialAddress?.trim(),
+      householdRegionName: values.householdRegionName?.trim(),
+      residentialRegionName: values.residentialRegionName?.trim(),
       bankName: values.bankName,
       bankBranchName: values.bankBranchName?.trim(),
       bankAccountNumber: values.bankAccountNumber?.trim(),
@@ -508,11 +452,12 @@ export function EmployeeForm({
           <FormLine name="ethnicity" label="民族"><Select showSearch optionFilterProp="label" options={ethnicityOptions} /></FormLine>
           <FormLine name="maritalStatus" label="婚姻状况" required><Select options={maritalStatusOptions} /></FormLine>
           <FormLine name="politicalStatus" label="政治面貌" required><Select options={politicalStatusOptions} /></FormLine>
+          <FormLine name="nativePlaceRegionName" label="籍贯"><Input /></FormLine>
           <FormLine name="householdType" label="户口类别" required><Select options={householdTypeOptions} /></FormLine>
-          <FormLine name="householdAddress" label="户籍所在地"><Input /></FormLine>
+          <FormLine name="householdRegionName" label="户籍所在地"><Input /></FormLine>
+          <FormLine name="residentialRegionName" label="联系地址"><Input /></FormLine>
           <FormLine name="highestEducation" label="最高学历" required><Select options={educationLevelOptions} /></FormLine>
           <FormLine name="mobile" label="手机" required rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1\d{10}$/, message: '请输入 11 位中国大陆手机号' }]}><Input maxLength={11} /></FormLine>
-          <FormLine name="residentialAddress" label="联系地址" required><Input /></FormLine>
           <FormLine name="emergencyContactName" label="紧急联系人" required><Input /></FormLine>
           <FormLine name="emergencyContactRelationship" label="与本人关系" required><Input /></FormLine>
           <FormLine name="emergencyContactMobile" label="紧急联系人电话" required><Input maxLength={11} /></FormLine>
@@ -560,9 +505,9 @@ export function EmployeeForm({
         <FormLine name="documentNumber" label="证件号码" rules={[{ max: 64, message: '证件号码不能超过 64 个字符' }]}><Input maxLength={64} autoComplete="off" /></FormLine>
         <FormLine name="mobile" label="手机号码" rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1\d{10}$/, message: '请输入 11 位中国大陆手机号' }]}><Input inputMode="numeric" maxLength={11} autoComplete="off" /></FormLine>
         <FormLine name="gender" label="性别"><Select placeholder="请选择" options={[{ value: 'MALE', label: '男' }, { value: 'FEMALE', label: '女' }, { value: 'UNDISCLOSED', label: '保密' }]} /></FormLine>
-        <FormLine name="nativePlaceRegionName" label="籍贯地区"><RegionCascader /></FormLine>
-        <FormLine name="householdRegionName" label="户籍所在地地区"><RegionCascader /></FormLine>
-        <FormLine name="residentialRegionName" label="联系地址地区"><RegionCascader /></FormLine>
+        <FormLine name="nativePlaceRegionName" label="籍贯"><Input /></FormLine>
+        <FormLine name="householdRegionName" label="户籍所在地"><Input /></FormLine>
+        <FormLine name="residentialRegionName" label="联系地址"><Input /></FormLine>
         <FormLine name="inviteAccount" label="邀请激活账号"><Radio.Group options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></FormLine>
       </FormSection>
 

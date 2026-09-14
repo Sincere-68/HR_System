@@ -178,7 +178,8 @@ a { text-decoration: none; }
 .performance-indicator-table .ant-table-thead > tr > th { height: 45px; color: #445a64; background: #f6f9fa; font-weight: 600; }
 .performance-indicator-table .ant-table-tbody > tr > td { padding-top: 17px; padding-bottom: 17px; color: #354951; vertical-align: top; }
 .performance-indicator-standards { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; color: #50656d; line-height: 20px; }
-.performance-indicator-standards li::before { margin-right: 6px; color: #0ca6aa; content: '•'; }
+.performance-indicator-standards li { position: relative; padding-left: 11px; }
+.performance-indicator-standards li::before { width: 4px; height: 4px; position: absolute; top: 8px; left: 0; border-radius: 50%; background: #0ca6aa; content: ''; }
 .performance-parse-source-note { display: flex; align-items: center; gap: 8px; margin: 14px 28px 20px; color: #75868d; font-size: 12px; line-height: 18px; }
 .performance-parse-source-note .anticon { color: #159fa4; }
 .performance-permission-surface { max-width: 900px; margin-top: 18px; overflow: hidden; border: 1px solid #dce7e9; border-radius: 8px; }

@@ -27,15 +27,12 @@ function employee(): EmployeeListSnapshot {
     ethnicity: 'HAN',
     maritalStatus: 'UNMARRIED',
     politicalStatus: null,
-    nativePlace: '虚构籍贯',
-    nativePlaceRegionName: '湖北省 / 武汉市 / 洪山区',
+    nativePlaceRegionName: '虚构籍贯',
     nativePlaceRegionCode: '310115',
-    householdRegionName: '北京市 / 市辖区 / 朝阳区',
+    householdRegionName: '虚构户籍所在地',
     householdRegionCode: '110105',
-    householdAddress: '虚构户籍地址',
-    residentialRegionName: '广东省 / 深圳市 / 南山区',
+    residentialRegionName: '虚构联系地址',
     residentialRegionCode: '440305',
-    residentialAddress: '虚构联系地址',
     employmentPeriods: [{
       personnelCategory: 'NON_TALENT_PROGRAM',
       personnelSource: 'SOCIAL_RECRUITMENT',
@@ -141,11 +138,12 @@ describe('presentEmployeeListItem', () => {
     expect(result.documentNumber).toBe('110101200001011001');
     expect(result.workEmail).toBe('fictional@example.invalid');
     expect(result.personalEmail).toBe('private@example.invalid');
-    expect(result.nativePlaceRegionName).toBe('湖北省 / 武汉市 / 洪山区');
-    expect(result.householdRegionName).toBe('北京市 / 市辖区 / 朝阳区');
-    expect(result.householdAddress).toBe('虚构户籍地址');
-    expect(result.residentialRegionName).toBe('广东省 / 深圳市 / 南山区');
-    expect(result.residentialAddress).toBe('虚构联系地址');
+    expect(result.nativePlaceRegionName).toBe('虚构籍贯');
+    expect(result.householdRegionName).toBe('虚构户籍所在地');
+    expect(result.residentialRegionName).toBe('虚构联系地址');
+    expect(result).not.toHaveProperty('nativePlace');
+    expect(result).not.toHaveProperty('householdAddress');
+    expect(result).not.toHaveProperty('residentialAddress');
     expect(result.emergencyContactMobile).toBe('13900002002');
     expect(result.managerEmail).toBe('manager@example.invalid');
   });

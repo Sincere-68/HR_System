@@ -329,7 +329,7 @@ DATABASE_URL_TEST="postgresql://hr_demo:change_this_local_password@localhost:543
 
 > 云端已有空 PostgreSQL 数据库时，不要重复创建数据库；只需确保连接账号拥有目标 schema 的建表、建类型和建索引权限。首次部署会执行仓库内的 PostgreSQL 初始 migration；旧数据库版本的迁移已移至 `backend/prisma/mysql-migrations-archive/`，不会被部署命令读取。
 >
-> 初始 migration 只建表，不自动写入 288 条唯一职位名称目录。首次需要导入人员或 Offer 前，可在确认目标库后执行安全的职位目录同步（只按职位名称创建/更新，不删除任职、Offer 或其他引用数据）：
+> 初始 migration 只建表，不自动写入 288 条唯一职位名称目录。云端或已有数据库首次需要导入人员或 Offer 前，可在确认目标库后执行安全的职位目录同步（只按职位名称创建/更新，不删除任职、Offer 或其他引用数据）：
 >
 > ```bash
 > CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_288_UNIQUE_POSITION_NAMES npm run db:upsert-position-catalog
@@ -370,6 +370,12 @@ JWT_SECRET="至少32个字符、仅本机使用的随机字符串"
 npm run db:generate
 npm run db:migrate
 npm run db:seed
+```
+
+本地 `db:seed` 会同时写入组织、账号、全日制公司和 288 个唯一职位名称目录，因此本地人员导入可直接按职位名称匹配。已有本地数据库如果只需要补齐或恢复职位目录，可安全执行：
+
+```bash
+CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_288_UNIQUE_POSITION_NAMES npm run db:upsert-position-catalog
 ```
 
 然后仍使用下面两条命令启动：

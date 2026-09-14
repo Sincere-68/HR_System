@@ -43,13 +43,10 @@ const employee: EmployeeDetail = {
   ethnicity: 'HAN',
   maritalStatus: 'UNMARRIED',
   politicalStatus: 'NON_PARTY',
-  nativePlace: '虚构籍贯',
-  nativePlaceRegionName: null,
+  nativePlaceRegionName: '虚构籍贯',
   householdType: 'LOCAL_URBAN',
-  householdRegionName: null,
-  householdAddress: '虚构户籍地址',
-  residentialRegionName: null,
-  residentialAddress: '虚构联系地址',
+  householdRegionName: '虚构户籍所在地',
+  residentialRegionName: '虚构联系地址',
   emergencyContactName: '虚构联系人',
   emergencyContactRelationship: '家属',
   emergencyContactMobile: '13900002002',
@@ -210,7 +207,7 @@ describe('EmployeeForm', () => {
     ]);
     const labels = [...document.querySelectorAll('.employee-form-label')].map((label) => label.textContent?.replace('*', ''));
     expect(labels).toEqual(expect.arrayContaining([
-      '姓名', '电子邮件', '证件类型', '证件号码', '手机号码', '性别', '籍贯地区', '户籍所在地地区', '联系地址地区', '邀请激活账号',
+      '姓名', '电子邮件', '证件类型', '证件号码', '手机号码', '性别', '籍贯', '户籍所在地', '联系地址', '邀请激活账号',
       '入职日期', '工号', '部门', '职位', '职级', '是否部门负责人', '工作地点', '用工形式',
       '是否有试用期', '试用期(月)', '预计试用结束日期', '直接经理', '公司', '期限类型',
       '合同期限(月)', '终止日期',

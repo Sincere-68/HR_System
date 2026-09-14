@@ -785,7 +785,7 @@ describe('EmployeesService database update document compatibility', () => {
     });
   });
 
-  it('persists only valid full Chinese administrative-region paths and audits their changes', async () => {
+  it('persists arbitrary Chinese administrative-region source text and audits changes', async () => {
     const current = {
       ...employee,
       nativePlaceRegionName: '北京市 / 市辖区 / 朝阳区',
@@ -831,8 +831,10 @@ describe('EmployeesService database update document compatibility', () => {
       }),
     }));
 
-    await expect(service.update(user, employeeId, { residentialRegionName: '浦东新区' } as never, auditContext))
-      .rejects.toThrow('联系地址地区必须填写可确认的完整中文行政区划层级');
+    await service.update(user, employeeId, { residentialRegionName: '浦东新区' } as never, auditContext);
+    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ residentialRegionName: '浦东新区' }),
+    }));
   });
 
   it('records fixed assignment enum changes with stable code and label snapshots', async () => {

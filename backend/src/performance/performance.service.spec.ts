@@ -29,6 +29,11 @@ describe('PerformanceTemplateParser', () => {
     expect(parser.parse(markdown).errors).toEqual([]);
   });
 
+  it('accepts an explicitly configured manual template without Markdown', () => {
+    const parser = new PerformanceTemplateParser();
+    expect(() => parser.assertValidDefinition(definition)).not.toThrow();
+  });
+
   it('rejects invalid fixed weights', () => {
     const parser = new PerformanceTemplateParser();
     const invalid = { ...definition, modules: definition.modules.map((module) => module.id === 'metric' ? { ...module, weight: 30 } : module) };

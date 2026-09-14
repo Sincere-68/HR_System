@@ -4,8 +4,10 @@ import {
   ArrowUpOutlined,
   CheckCircleFilled,
   DownOutlined,
+  DeleteOutlined,
   FileMarkdownOutlined,
   InfoCircleOutlined,
+  PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
   SwapOutlined,
@@ -76,6 +78,7 @@ export function PerformanceTemplateEditorPage() {
   const [selectedModuleId, setSelectedModuleId] = useState(parsedHrbpPerformanceTemplate.modules[0]?.id ?? '');
   const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
   const [dragOverModuleId, setDragOverModuleId] = useState<string | null>(null);
+  const [sourceType, setSourceType] = useState<'MARKDOWN' | 'MANUAL'>('MARKDOWN');
   const [sourceName, setSourceName] = useState(parsedHrbpPerformanceTemplate.sourceName);
   const [initializedTemplateId, setInitializedTemplateId] = useState<string | null>(null);
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
@@ -85,8 +88,9 @@ export function PerformanceTemplateEditorPage() {
     const version = existingTemplate.data?.versions[0];
     if (!version || initializedTemplateId === templateId) return;
     setTemplateName(version.definition.name);
-    setSourceMarkdown(version.sourceMarkdown);
-    setSourceName(version.sourceName ?? parsedHrbpPerformanceTemplate.sourceName);
+    setSourceType(version.sourceType);
+    setSourceMarkdown(version.sourceMarkdown ?? '');
+    setSourceName(version.sourceName ?? '');
     setModules(version.definition.modules.map((module) => ({
       ...module,
       type: module.type.toLowerCase() as PerformanceModuleKind,
@@ -104,6 +108,31 @@ export function PerformanceTemplateEditorPage() {
 
   const updateModule = (moduleId: string, change: Partial<PerformanceTemplateModule>) => {
     setModules((current) => current.map((module) => (module.id === moduleId ? { ...module, ...change } : module)));
+  };
+
+  const addModule = () => {
+    const id = `manual-module-${Date.now()}`;
+    setModules((current) => [...current, {
+      id,
+      name: '新模块',
+      type: 'evaluation',
+      responsibleRole: '待指定执行人',
+      executor: { type: 'USER' },
+      enabled: true,
+      participatesInTotal: true,
+      weight: 0,
+      description: '',
+      indicators: [],
+    }]);
+    setSelectedModuleId(id);
+  };
+
+  const removeModule = (moduleId: string) => {
+    setModules((current) => {
+      const next = current.filter((module) => module.id !== moduleId);
+      setSelectedModuleId(next[0]?.id ?? '');
+      return next;
+    });
   };
 
   const moveModule = (moduleId: string, direction: -1 | 1) => {
@@ -129,6 +158,7 @@ export function PerformanceTemplateEditorPage() {
   };
 
   const applyMarkdown = async (markdown: string, importedSourceName = sourceName) => {
+    setSourceType('MARKDOWN');
     setSourceMarkdown(markdown);
     setSourceName(importedSourceName);
     setIsParsing(true);
@@ -201,7 +231,7 @@ export function PerformanceTemplateEditorPage() {
       })),
     };
     try {
-      const input = { name: templateName.trim(), sourceName, sourceMarkdown, definition };
+      const input = { name: templateName.trim(), sourceType, ...(sourceType === 'MARKDOWN' ? { sourceName, sourceMarkdown } : {}), definition };
       if (templateId && templateId !== 'new' && templateId !== 'hrbp-performance-v3') {
         await createTemplateVersion.mutateAsync({ id: templateId, input });
       } else {
@@ -227,7 +257,7 @@ export function PerformanceTemplateEditorPage() {
         </ul>
       ),
     },
-    { title: '指标权重', dataIndex: 'weightLabel', key: 'weightLabel', width: 120 },
+    { title: '指标权重', dataIndex: 'weightLabel', key: 'weightLabel', width: 120, render: (_, indicator) => <InputNumber min={0} max={100} precision={2} value={indicator.weight ?? (Number(indicator.weightLabel.replace('%', '')) || 0)} onChange={(weight) => updateIndicator(selectedModule?.id ?? '', indicator.id, { weight: typeof weight === 'number' ? weight : 0, weightLabel: `${typeof weight === 'number' ? weight : 0}%` })} /> },
   ];
 
   const renderModuleList = (variant: 'flow' | 'assessment' | 'dispatch') => (
@@ -235,6 +265,7 @@ export function PerformanceTemplateEditorPage() {
       <div className="performance-flow-list-heading">
         <strong>{variant === 'flow' ? '处理顺序' : variant === 'assessment' ? '考核表模块' : '已解析模块'}</strong>
         {variant === 'flow' ? <span><SwapOutlined /> 拖动调整顺序</span> : null}
+        {variant === 'flow' ? <Button size="small" icon={<PlusOutlined />} onClick={addModule}>新增模块</Button> : null}
       </div>
       <div className="performance-template-module-scroll">
         {modules.map((module, index) => (
@@ -295,10 +326,23 @@ export function PerformanceTemplateEditorPage() {
           <Input value={templateName} onChange={(event) => setTemplateName(event.target.value)} />
         </label>
         <label className="performance-template-field">
-          <span>模板说明</span>
-          <Input.TextArea value="由当前导入 Markdown 的实际模块、指标、衡量标准和评分参考组成；待确认项会在解析预览中提示。" autoSize={{ minRows: 3, maxRows: 3 }} readOnly />
+          <span>模板来源</span>
+          <Select value={sourceType} options={[{ value: 'MARKDOWN', label: 'Markdown 导入' }, { value: 'MANUAL', label: '手动配置' }]} onChange={(value: 'MARKDOWN' | 'MANUAL') => {
+            setSourceType(value);
+            setParseWarnings([]);
+            if (value === 'MANUAL') {
+              setSourceMarkdown('');
+              setSourceName('');
+              setModules([]);
+              setSelectedModuleId('');
+            }
+          }} />
         </label>
-        <div className="performance-template-source-card">
+        <label className="performance-template-field">
+          <span>模板说明</span>
+          <Input.TextArea value={sourceType === 'MARKDOWN' ? '当前结构由实际导入 Markdown 解析得到；待确认项会在解析预览中提示。' : '通过手动配置维护模块、指标、执行人和评分规则。'} autoSize={{ minRows: 3, maxRows: 3 }} readOnly />
+        </label>
+        {sourceType === 'MARKDOWN' ? <div className="performance-template-source-card">
           <div>
             <span className="performance-template-source-icon" aria-hidden="true"><FileMarkdownOutlined /></span>
             <div>
@@ -309,13 +353,15 @@ export function PerformanceTemplateEditorPage() {
           <Upload accept=".md,text/markdown" showUploadList={false} beforeUpload={importMarkdown}>
             <Button icon={<UploadOutlined />}>导入并解析</Button>
           </Upload>
-        </div>
-        <label className="performance-template-field is-source-text">
-          <span>Markdown 解析内容</span>
-          <Input.TextArea value={sourceMarkdown} onChange={(event) => setSourceMarkdown(event.target.value)} autoSize={{ minRows: 12, maxRows: 18 }} />
-        </label>
-        {parseWarnings.length ? <Alert type="warning" showIcon message="Markdown 解析需要确认" description={<ul>{parseWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>} /> : null}
-        <Button icon={<ReloadOutlined />} loading={isParsing} onClick={() => void applyMarkdown(sourceMarkdown)}>使用后端重新解析当前内容</Button>
+        </div> : null}
+        {sourceType === 'MARKDOWN' ? <>
+          <label className="performance-template-field is-source-text">
+            <span>Markdown 解析内容</span>
+            <Input.TextArea value={sourceMarkdown} onChange={(event) => setSourceMarkdown(event.target.value)} autoSize={{ minRows: 12, maxRows: 18 }} />
+          </label>
+          {parseWarnings.length ? <Alert type="warning" showIcon message="Markdown 解析需要确认" description={<ul>{parseWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>} /> : null}
+          <Button icon={<ReloadOutlined />} loading={isParsing} onClick={() => void applyMarkdown(sourceMarkdown)}>使用后端重新解析当前内容</Button>
+        </> : <Alert type="info" showIcon message="当前为手动配置模板" description="请在后续步骤新增模块、配置执行人、指标、权重与安全评分规则。" />}
       </div>
     </section>
   );
@@ -341,12 +387,19 @@ export function PerformanceTemplateEditorPage() {
               <Space size={4}>
                 <Tooltip title="上移模块"><Button aria-label="上移模块" type="text" icon={<ArrowUpOutlined />} onClick={() => moveModule(selectedModule.id, -1)} /></Tooltip>
                 <Tooltip title="下移模块"><Button aria-label="下移模块" type="text" icon={<ArrowDownOutlined />} onClick={() => moveModule(selectedModule.id, 1)} /></Tooltip>
+                <Tooltip title="删除模块"><Button aria-label="删除模块" danger type="text" icon={<DeleteOutlined />} onClick={() => removeModule(selectedModule.id)} /></Tooltip>
               </Space>
             </div>
             <div className="performance-template-detail-form">
               <label>
                 <span>模块类型</span>
-                <Input value={moduleTypeLabels[selectedModule.type]} disabled />
+                <Select value={selectedModule.type} options={[{ value: 'metric', label: '指标计算' }, { value: 'evaluation', label: '人工评估' }, { value: 'adjustment', label: '结果调整' }]} onChange={(type: PerformanceModuleKind) => updateModule(selectedModule.id, {
+                  type,
+                  participatesInTotal: type === 'adjustment' ? false : selectedModule.participatesInTotal,
+                  weight: type === 'adjustment' ? null : selectedModule.weight ?? 0,
+                  executor: type === 'metric' ? { type: 'AUTO' } : selectedModule.executor.type === 'AUTO' ? { type: 'USER' } : selectedModule.executor,
+                  ...(type === 'adjustment' ? { adjustmentDirection: selectedModule.adjustmentDirection ?? 'ADD', adjustmentMin: selectedModule.adjustmentMin ?? 0, adjustmentMax: selectedModule.adjustmentMax ?? 20 } : {}),
+                })} />
               </label>
               <label>
                 <span><i>*</i> 执行人来源</span>
@@ -384,6 +437,10 @@ export function PerformanceTemplateEditorPage() {
                   />
                 </label>
               ) : null}
+              {selectedModule.type === 'adjustment' ? <>
+                <label><span>调整方向</span><Select value={selectedModule.adjustmentDirection ?? 'ADD'} options={[{ value: 'ADD', label: '加分' }, { value: 'DEDUCT', label: '扣分' }]} onChange={(adjustmentDirection: 'ADD' | 'DEDUCT') => updateModule(selectedModule.id, { adjustmentDirection })} /></label>
+                <label><span>调整上限</span><InputNumber min={0} precision={2} value={selectedModule.adjustmentMax ?? 20} onChange={(adjustmentMax) => updateModule(selectedModule.id, { adjustmentMax: typeof adjustmentMax === 'number' ? adjustmentMax : 0 })} /></label>
+              </> : null}
               <label>
                 <span>模块说明</span>
                 <Input.TextArea value={selectedModule.description} autoSize={{ minRows: 4, maxRows: 5 }} onChange={(event) => updateModule(selectedModule.id, { description: event.target.value })} />
@@ -453,6 +510,19 @@ export function PerformanceTemplateEditorPage() {
     </section>
   );
 
+  const addIndicator = (moduleId: string) => {
+    const id = `manual-indicator-${Date.now()}`;
+    setModules((current) => current.map((module) => module.id === moduleId ? { ...module, indicators: [...module.indicators, { id, name: '新指标', description: '', standards: [], weightLabel: '0%', weight: 0, source: sourceType === 'MARKDOWN' ? `${sourceName}（手动新增）` : '手动配置' }] } : module));
+  };
+
+  const updateIndicator = (moduleId: string, indicatorId: string, change: Partial<PerformanceIndicator>) => {
+    setModules((current) => current.map((module) => module.id === moduleId ? { ...module, indicators: module.indicators.map((indicator) => indicator.id === indicatorId ? { ...indicator, ...change } : indicator) } : module));
+  };
+
+  const removeIndicator = (moduleId: string, indicatorId: string) => {
+    setModules((current) => current.map((module) => module.id === moduleId ? { ...module, indicators: module.indicators.filter((indicator) => indicator.id !== indicatorId) } : module));
+  };
+
   const renderDispatchIndicators = () => (
     <section className="performance-template-step-content" aria-labelledby="template-dispatch-title">
       <div className="performance-template-section-heading">
@@ -474,7 +544,8 @@ export function PerformanceTemplateEditorPage() {
               </div>
               <span className="performance-dispatch-module-weight">{selectedModule.participatesInTotal ? `模块权重：${selectedModule.weight ?? 0}%` : '额外调整项'}</span>
             </div>
-            <Table<PerformanceIndicator> className="performance-indicator-table" rowKey="id" columns={indicatorColumns} dataSource={selectedModule.indicators} pagination={false} scroll={{ x: 740 }} sticky={{ offsetHeader: 48, offsetScroll: 0 }} />
+            <Button size="small" icon={<PlusOutlined />} onClick={() => addIndicator(selectedModule.id)}>新增指标</Button>
+            <Table<PerformanceIndicator> className="performance-indicator-table" rowKey="id" columns={[...indicatorColumns, { title: '编辑', key: 'editor', width: 250, render: (_, indicator) => <Space><Button size="small" onClick={() => { const name = window.prompt('指标名称', indicator.name); if (name?.trim()) updateIndicator(selectedModule.id, indicator.id, { name: name.trim() }); }}>名称</Button><Button size="small" onClick={() => { const description = window.prompt('指标描述', indicator.description); if (description !== null) updateIndicator(selectedModule.id, indicator.id, { description }); }}>描述</Button><Button size="small" onClick={() => { const standards = window.prompt('衡量标准（每行一项）', indicator.standards.join('\n')); if (standards !== null) updateIndicator(selectedModule.id, indicator.id, { standards: standards.split('\n').map((item) => item.trim()).filter(Boolean) }); }}>标准</Button><Button size="small" danger onClick={() => removeIndicator(selectedModule.id, indicator.id)}>删除</Button></Space> }]} dataSource={selectedModule.indicators} pagination={false} scroll={{ x: 1000 }} sticky={{ offsetHeader: 48, offsetScroll: 0 }} />
             <div className="performance-parse-source-note"><FileMarkdownOutlined /><span>当前模块的指标来自：{selectedModule.indicators[0]?.source ?? sourceName}</span></div>
           </section>
         ) : null}

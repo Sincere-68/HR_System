@@ -290,13 +290,6 @@ export class UpdateEmployeeDto {
   @IsEnum(PoliticalStatus)
   politicalStatus?: PoliticalStatus;
 
-  @ApiPropertyOptional({ maxLength: 191 })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(191)
-  nativePlace?: string;
-
   @ApiPropertyOptional({ description: '籍贯完整中文行政区划层级，例如“湖北省 / 武汉市 / 洪山区”', maxLength: 191 })
   @IsOptional()
   @Transform(trim)
@@ -322,20 +315,6 @@ export class UpdateEmployeeDto {
   @IsString()
   @MaxLength(191)
   residentialRegionName?: string;
-
-  @ApiPropertyOptional({ maxLength: 191 })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(191)
-  householdAddress?: string;
-
-  @ApiPropertyOptional({ maxLength: 191 })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(191)
-  residentialAddress?: string;
 
   @ApiPropertyOptional({ enum: BankName })
   @IsOptional()

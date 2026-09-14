@@ -19,7 +19,7 @@ import {
   RecordStatus,
   WorkArrangement,
 } from '@prisma/client';
-import { EMPLOYING_COMPANY_CATALOG, ORGANIZATION_CATALOG } from '@hr-demo/shared';
+import { EMPLOYING_COMPANY_CATALOG, ORGANIZATION_CATALOG, POSITION_CATALOG } from '@hr-demo/shared';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -145,6 +145,15 @@ async function main() {
     if (!result) throw new Error(`组织目录缺少编码：${code}`);
     return result.id;
   };
+
+  await prisma.$transaction(
+    POSITION_CATALOG.map(({ name }) => prisma.position.upsert({
+      where: { name },
+      update: { status: RecordStatus.ACTIVE, archivedAt: null },
+      create: { name, organizationId: null, status: RecordStatus.ACTIVE },
+    })),
+  );
+
   const legacyOrganizations = await prisma.organization.findMany({
     where: { code: { notIn: ORGANIZATION_CATALOG.map(({ code }) => code) } },
     select: { id: true },

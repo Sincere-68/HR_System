@@ -52,7 +52,6 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
   ethnicity: string | null;
   maritalStatus: string | null;
   politicalStatus: string | null;
-  nativePlace: string | null;
   nativePlaceRegionName?: string | null;
   /** Legacy code is read only as fallback for pre-migration records. */
   nativePlaceRegionCode?: string | null;
@@ -60,11 +59,9 @@ export interface EmployeeListSnapshot extends EmployeeWithCurrentRecord {
   householdRegionName?: string | null;
   /** Legacy code is read only as fallback for pre-migration records. */
   householdRegionCode?: string | null;
-  householdAddress: string | null;
   residentialRegionName?: string | null;
   /** Legacy code is read only as fallback for pre-migration records. */
   residentialRegionCode?: string | null;
-  residentialAddress: string | null;
   bankName?: string | null;
   bankBranchName?: string | null;
   bankAccountNumber?: string | null;
@@ -211,13 +208,10 @@ export function presentDemoEmployeeListItem(
     ethnicity: null,
     maritalStatus: null,
     politicalStatus: null,
-    nativePlace: null,
     nativePlaceRegionName: null,
     householdType: null,
     householdRegionName: null,
-    householdAddress: null,
     residentialRegionName: null,
-    residentialAddress: null,
     emergencyContactName: null,
     emergencyContactRelationship: null,
     emergencyContactMobile: null,
@@ -377,7 +371,6 @@ export function presentEmployeeListItem(
     ethnicity: employee.ethnicity as EmployeeListItem['ethnicity'],
     maritalStatus: employee.maritalStatus as EmployeeListItem['maritalStatus'],
     politicalStatus: employee.politicalStatus as EmployeeListItem['politicalStatus'],
-    nativePlace: employee.nativePlace,
     nativePlaceRegionName: displayChinaAdministrativeRegion(
       employee.nativePlaceRegionName,
       employee.nativePlaceRegionCode,
@@ -387,12 +380,10 @@ export function presentEmployeeListItem(
       employee.householdRegionName,
       employee.householdRegionCode,
     ),
-    householdAddress: employee.householdAddress,
     residentialRegionName: displayChinaAdministrativeRegion(
       employee.residentialRegionName,
       employee.residentialRegionCode,
     ),
-    residentialAddress: employee.residentialAddress,
     emergencyContactName: emergencyContact?.name ?? null,
     emergencyContactRelationship: emergencyContact?.relationship ?? null,
     emergencyContactMobile: emergencyContact?.mobile ?? null,

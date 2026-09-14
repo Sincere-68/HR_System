@@ -5,6 +5,7 @@ import {
   PerformanceDirectoryType,
   PerformanceExecutorType,
   PerformanceModuleType,
+  PerformanceTemplateSourceType,
   PerformanceVersionStatus,
   Prisma,
   ProcessStatus,
@@ -120,8 +121,9 @@ export class PerformanceService {
         data: {
           templateId: template.id,
           versionNo: 1,
-          sourceName: dto.sourceName?.trim() || null,
-          sourceMarkdown: dto.sourceMarkdown,
+          sourceType: dto.sourceType,
+          sourceName: dto.sourceType === PerformanceTemplateSourceType.MARKDOWN ? dto.sourceName?.trim() || null : null,
+          sourceMarkdown: dto.sourceType === PerformanceTemplateSourceType.MARKDOWN ? dto.sourceMarkdown?.trim() || null : null,
           definition: definition as unknown as Prisma.InputJsonValue,
           createdById: user.id,
         },
@@ -152,6 +154,7 @@ export class PerformanceService {
         data: {
           templateId: template.id,
           versionNo: 1,
+          sourceType: sourceVersion.sourceType,
           sourceName: sourceVersion.sourceName,
           sourceMarkdown: sourceVersion.sourceMarkdown,
           definition: sourceVersion.definition as Prisma.InputJsonValue,
@@ -176,8 +179,9 @@ export class PerformanceService {
         data: {
           templateId,
           versionNo: (latest?.versionNo ?? 0) + 1,
-          sourceName: dto.sourceName?.trim() || null,
-          sourceMarkdown: dto.sourceMarkdown,
+          sourceType: dto.sourceType,
+          sourceName: dto.sourceType === PerformanceTemplateSourceType.MARKDOWN ? dto.sourceName?.trim() || null : null,
+          sourceMarkdown: dto.sourceType === PerformanceTemplateSourceType.MARKDOWN ? dto.sourceMarkdown?.trim() || null : null,
           definition: definition as unknown as Prisma.InputJsonValue,
           createdById: user.id,
         },
@@ -246,7 +250,7 @@ export class PerformanceService {
       for (const employeeId of dto.employeeIds) {
         const employeeAssignment = await tx.employeeAssignment.findFirst({ where: { employeeId, status: AssignmentStatus.ACTIVE, archivedAt: null, isPrimary: true, startDate: { lte: start }, OR: [{ endDate: null }, { endDate: { gte: start } }] }, select: { organizationId: true } });
         if (!employeeAssignment) throw new BadRequestException(`员工 ${employeeId} 在绩效周期开始日没有有效主要任职`);
-        const instance = await tx.performanceInstance.create({ data: { cycleId: created.id, employeeId, organizationId: employeeAssignment.organizationId, sourceMarkdown: version.sourceMarkdown, definitionSnapshot: definition as unknown as Prisma.InputJsonValue } });
+        const instance = await tx.performanceInstance.create({ data: { cycleId: created.id, employeeId, organizationId: employeeAssignment.organizationId, sourceMarkdown: version.sourceMarkdown ?? '', definitionSnapshot: definition as unknown as Prisma.InputJsonValue } });
         for (const [moduleOrder, module] of definition.modules.entries()) {
           await tx.performanceModuleTask.create({ data: { instanceId: instance.id, employeeId, moduleId: module.id, moduleOrder, moduleName: module.name, moduleType: module.type, moduleWeight: module.weight === null ? null : DECIMAL(module.weight), moduleSnapshot: module as unknown as Prisma.InputJsonValue, executorType: module.executor.type, executorUserId: module.executor.userId, executorDirectoryType: module.executor.directoryType, executorDirectoryId: module.executor.directoryId, status: TaskStatus.PENDING } });
         }
@@ -464,6 +468,8 @@ export class PerformanceService {
 
   private assertTemplatePayload(dto: CreatePerformanceTemplateDto) {
     const definition = this.parser.assertValidDefinition(dto.definition);
+    if (dto.sourceType === PerformanceTemplateSourceType.MANUAL) return definition;
+    if (!dto.sourceMarkdown?.trim()) throw new BadRequestException('Markdown 来源模板必须提供原始 Markdown 内容');
     const parsed = this.parser.parse(dto.sourceMarkdown, dto.sourceName ?? null);
     if (parsed.errors.length > 0) throw new BadRequestException(parsed.errors.map((error) => `${error.path}: ${error.message}`));
     if (!parsed.definition) throw new BadRequestException('Markdown 未能解析为模板结构');
@@ -624,7 +630,7 @@ export class PerformanceService {
   private presentTemplate(row: any) { const version = row.versions[0]; return { id: row.id, name: row.name, description: row.description, status: row.status, latestVersion: version ? this.presentVersionSummary(version) : null, moduleCount: this.moduleCount(version?.definition), createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
   private presentTemplateDetail(row: any) { return { ...this.presentTemplate({ ...row, versions: row.versions }), versions: row.versions.map((version: any) => ({ ...this.presentVersionSummary(version), sourceMarkdown: version.sourceMarkdown, definition: version.definition })) }; }
   private presentVersion(version: any) { return { ...this.presentVersionSummary(version), sourceMarkdown: version.sourceMarkdown, definition: version.definition }; }
-  private presentVersionSummary(version: any) { return { id: version.id, versionNo: version.versionNo, status: version.status, sourceName: version.sourceName, createdAt: version.createdAt.toISOString(), publishedAt: version.publishedAt?.toISOString() ?? null }; }
+  private presentVersionSummary(version: any) { return { id: version.id, versionNo: version.versionNo, status: version.status, sourceType: version.sourceType, sourceName: version.sourceName, createdAt: version.createdAt.toISOString(), publishedAt: version.publishedAt?.toISOString() ?? null }; }
   private presentCycle(row: any) { return { id: row.id, name: row.name, periodStart: this.date(row.periodStart), periodEnd: this.date(row.periodEnd), templateName: row.template?.name ?? '', templateVersionNo: row.templateVersion?.versionNo ?? 0, status: row.status, instanceCount: row._count?.instances ?? row.instances?.length ?? 0, completedInstanceCount: row.instances?.filter((instance: any) => instance.status === ProcessStatus.COMPLETED).length ?? 0, createdAt: row.createdAt.toISOString() }; }
   private presentTask(row: any) { const current = row.instance?.currentModuleOrder === row.moduleOrder && row.status === TaskStatus.IN_PROGRESS; return { id: row.id, cycleId: row.instance?.cycleId, cycleName: row.instance?.cycle?.name ?? '', instanceId: row.instanceId, employeeId: row.employeeId, employeeName: row.instance?.employee?.name ?? '', employeeNo: row.instance?.employee?.employeeNo ?? '', moduleId: row.moduleId, moduleName: row.moduleName, moduleType: row.moduleType, moduleOrder: row.moduleOrder, moduleWeight: this.number(row.moduleWeight), status: row.status, executorName: row.executorNameSnapshot ?? row.executorUser?.displayName ?? null, isCurrent: current, canSubmit: current, completedAt: row.completedAt?.toISOString() ?? null }; }
   private presentResult(row: any) { return { id: row.id, cycleId: row.cycleId, cycleName: row.cycle?.name ?? '', employeeId: row.employeeId, employeeName: row.employee?.name ?? '', employeeNo: row.employee?.employeeNo ?? '', finalScore: this.number(row.finalScore), employeeAmountBaseSnapshot: this.number(row.employeeAmountBaseSnapshot), employeeAmountBaseVersionNo: row.employeeAmountBaseVersionNo ?? null, actualAmount: this.number(row.actualAmount), status: row.status, revisionCount: row.revisions?.length ?? 0 }; }

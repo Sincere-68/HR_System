@@ -331,11 +331,11 @@ describe('EmployeesService importEmployees', () => {
     expect(result.rows[0]).toEqual(expect.objectContaining({ action: 'UPDATED', warnings: [] }));
   });
 
-  it('writes imported total work years, native place, household, and a complete emergency contact', async () => {
+  it('writes work years, the four confirmed profile fields, and a complete emergency contact', async () => {
     const { service, employeeUpdate, tx } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
     const buffer = await createXlsx(
-      ['工号', '累计工龄（年）', '籍贯详细说明', '户籍详细地址', '紧急联系人', '与本人关系', '紧急联系人电话'],
-      [['EXISTING-RELATED-001', '8.25', '上海市浦东新区', '上海市浦东新区虚构路1号', '虚构联系人', '配偶', '13900001001']],
+      ['工号', '累计工龄（年）', '籍贯', '户口类别', '户籍所在地', '联系地址', '紧急联系人', '与本人关系', '紧急联系人电话'],
+      [['EXISTING-RELATED-001', '8.25', '上海市浦东新区', '外地城镇', '上海市浦东新区虚构路1号', '上海市黄浦区虚构路2号', '虚构联系人', '配偶', '13900001001']],
     );
 
     const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
@@ -343,8 +343,10 @@ describe('EmployeesService importEmployees', () => {
     expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         importedWorkYears: expect.objectContaining({}),
-        nativePlace: '上海市浦东新区',
-        householdAddress: '上海市浦东新区虚构路1号',
+        nativePlaceRegionName: '上海市浦东新区',
+        householdType: 'NONLOCAL_URBAN',
+        householdRegionName: '上海市浦东新区虚构路1号',
+        residentialRegionName: '上海市黄浦区虚构路2号',
       }),
     }));
     expect(tx.employeeFamilyMember.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -353,15 +355,43 @@ describe('EmployeesService importEmployees', () => {
     expect(result.rows[0]?.warnings).toEqual([]);
   });
 
-  it('stores full Chinese administrative paths for region columns', async () => {
+  it('maps confirmed concise CSV headers to text profile fields', async () => {
     const { service, employeeUpdate } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
     const buffer = await createXlsx(
-      ['工号', '籍贯地区', '户籍所在地地区', '联系地址地区'],
+      ['工号', '籍贯', '户口类别', '户籍所在地', '联系地址'],
       [[
-        'EXISTING-REGION-NAMES-001',
-        '湖北省 / 武汉市 / 洪山区',
-        '北京市 / 市辖区 / 朝阳区',
-        '上海市 / 市辖区 / 浦东新区',
+        'EXISTING-CONCISE-ADDRESS-001',
+        '湖北省武汉市洪山区',
+        '外地城镇',
+        '武汉市洪山区虚构路1号',
+        '上海市浦东新区虚构路2号',
+      ]],
+    );
+
+    const result = await service.importEmployees(user, { originalname: 'concise-address.xlsx', buffer }, { userId: user.id });
+
+    expect(result).toMatchObject({ updated: 1, failed: 0 });
+    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        nativePlaceRegionName: '湖北省武汉市洪山区',
+        householdType: 'NONLOCAL_URBAN',
+        householdRegionName: '武汉市洪山区虚构路1号',
+        residentialRegionName: '上海市浦东新区虚构路2号',
+      }),
+    }));
+  });
+
+  it('persists the three confirmed source-text fields even when position lookup fails', async () => {
+    const { service, employeeUpdate } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
+    const buffer = await createXlsx(
+      ['工号', '籍贯', '户口类别', '户籍所在地', '联系地址', '职位'],
+      [[
+        'EXISTING-ADDRESS-TEXT-001',
+        '任意籍贯原文（无需编码）',
+        '外地城镇',
+        '任意户籍所在地原文（无需编码）',
+        '任意联系地址原文（无需编码）',
+        '未同步职位目录',
       ]],
     );
 
@@ -370,46 +400,13 @@ describe('EmployeesService importEmployees', () => {
     expect(result).toMatchObject({ updated: 1, failed: 0 });
     expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        nativePlaceRegionName: '湖北省 / 武汉市 / 洪山区',
-        householdRegionName: '北京市 / 市辖区 / 朝阳区',
-        residentialRegionName: '上海市 / 市辖区 / 浦东新区',
+        nativePlaceRegionName: '任意籍贯原文（无需编码）',
+        householdType: 'NONLOCAL_URBAN',
+        householdRegionName: '任意户籍所在地原文（无需编码）',
+        residentialRegionName: '任意联系地址原文（无需编码）',
       }),
     }));
-  });
-
-  it('warns for ambiguous or unrecognized Chinese region input without blocking text fields', async () => {
-    const { service, employeeUpdate } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
-    const buffer = await createXlsx(
-      ['工号', '姓名', '籍贯地区', '籍贯详细说明'],
-      [['EXISTING-REGION-WARNING-001', '更新姓名', '洪山区', '湖北省武汉市洪山区']],
-    );
-
-    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
-
-    expect(result).toMatchObject({ updated: 1, failed: 0 });
-    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ name: '更新姓名', nativePlace: '湖北省武汉市洪山区' }),
-    }));
-    expect(result.rows[0]?.warnings).toContain('籍贯地区“洪山区”不是可确认的完整中文行政区划层级，未导入该字段');
-  });
-
-  it('writes text address and native-place fields directly from their Chinese headers', async () => {
-    const { service, employeeUpdate } = createService({ id: 'existing-employee', assignments: [{ id: 'assignment-1' }] });
-    const buffer = await createXlsx(
-      ['工号', '籍贯详细说明', '户籍详细地址', '联系详细地址'],
-      [['EXISTING-ADDRESS-TEXT-001', '湖北省武汉市洪山区', '武汉市洪山区虚构路1号', '上海市浦东新区虚构路2号']],
-    );
-
-    const result = await service.importEmployees(user, { originalname: 'employees.xlsx', buffer }, { userId: user.id });
-
-    expect(result).toMatchObject({ updated: 1, failed: 0 });
-    expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        nativePlace: '湖北省武汉市洪山区',
-        householdAddress: '武汉市洪山区虚构路1号',
-        residentialAddress: '上海市浦东新区虚构路2号',
-      }),
-    }));
+    expect(result.rows[0]?.warnings).toContain('职位目录未初始化，请先执行安全职位名称目录同步脚本');
   });
 
   it('maps legacy address headers when they accompany Chinese template headers', async () => {
@@ -431,9 +428,9 @@ describe('EmployeesService importEmployees', () => {
     expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         name: '更新姓名',
-        householdAddress: '武汉市洪山区虚构路1号',
-        nativePlace: '湖北省武汉市洪山区',
-        residentialAddress: '上海市浦东新区虚构路2号',
+        householdRegionName: '武汉市洪山区虚构路1号',
+        nativePlaceRegionName: '湖北省武汉市洪山区',
+        residentialRegionName: '上海市浦东新区虚构路2号',
       }),
     }));
   });
@@ -455,9 +452,9 @@ describe('EmployeesService importEmployees', () => {
     expect(result).toMatchObject({ updated: 1, failed: 0 });
     expect(employeeUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        householdAddress: '武汉市洪山区虚构路1号',
-        nativePlace: '湖北省武汉市洪山区',
-        residentialAddress: '上海市浦东新区虚构路2号',
+        householdRegionName: '武汉市洪山区虚构路1号',
+        nativePlaceRegionName: '湖北省武汉市洪山区',
+        residentialRegionName: '上海市浦东新区虚构路2号',
       }),
     }));
   });

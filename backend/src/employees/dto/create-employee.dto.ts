@@ -271,20 +271,6 @@ export class CreateEmployeeDto {
   @IsString()
   @MinLength(1)
   @MaxLength(191)
-  householdAddress: string;
-
-  @ApiProperty({ maxLength: 191 })
-  @Transform(trim)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(191)
-  residentialAddress: string;
-
-  @ApiProperty({ maxLength: 191 })
-  @Transform(trim)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(191)
   emergencyContactName: string;
 
   @ApiProperty({ maxLength: 191 })

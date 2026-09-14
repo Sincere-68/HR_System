@@ -295,6 +295,8 @@ export const PERFORMANCE_DIRECTORY_TYPES = ['POSITION', 'JOB_TITLE'] as const;
 export type PerformanceDirectoryType = (typeof PERFORMANCE_DIRECTORY_TYPES)[number];
 export const PERFORMANCE_VERSION_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const;
 export type PerformanceVersionStatus = (typeof PERFORMANCE_VERSION_STATUSES)[number];
+export const PERFORMANCE_TEMPLATE_SOURCE_TYPES = ['MARKDOWN', 'MANUAL'] as const;
+export type PerformanceTemplateSourceType = (typeof PERFORMANCE_TEMPLATE_SOURCE_TYPES)[number];
 export const PERFORMANCE_ADJUSTMENT_DIRECTIONS = ['ADD', 'DEDUCT'] as const;
 export type PerformanceAdjustmentDirection = (typeof PERFORMANCE_ADJUSTMENT_DIRECTIONS)[number];
 
@@ -365,16 +367,13 @@ export interface EmployeeListItem extends Employee {
   ethnicity: Ethnicity | null;
   maritalStatus: MaritalStatus | null;
   politicalStatus: PoliticalStatus | null;
-  nativePlace: string | null;
-  /** Canonical full Chinese administrative path selected for 籍贯. */
+  /** 籍贯原文。 */
   nativePlaceRegionName: string | null;
   householdType: HouseholdType | null;
-  /** Canonical full Chinese administrative path selected for 户籍所在地. */
+  /** 户籍所在地原文。 */
   householdRegionName: string | null;
-  householdAddress: string | null;
-  /** Canonical full Chinese administrative path selected for 联系地址. */
+  /** 联系地址原文。 */
   residentialRegionName: string | null;
-  residentialAddress: string | null;
   emergencyContactName: string | null;
   emergencyContactRelationship: string | null;
   emergencyContactMobile: string | null;
@@ -446,13 +445,10 @@ export const PERSONNEL_FIELDS = [
   { key: 'ethnicity', title: '民族', dataType: 'enum', importable: true, computed: false },
   { key: 'maritalStatus', title: '婚姻状况', dataType: 'enum', importable: true, computed: false },
   { key: 'politicalStatus', title: '政治面貌', dataType: 'enum', importable: true, computed: false },
-  { key: 'nativePlace', title: '籍贯详细说明', dataType: 'string', importable: true, computed: false },
-  { key: 'nativePlaceRegionName', title: '籍贯地区', dataType: 'string', importable: true, computed: false },
+  { key: 'nativePlaceRegionName', title: '籍贯', dataType: 'string', importable: true, computed: false },
   { key: 'householdType', title: '户口类别', dataType: 'enum', importable: true, computed: false },
-  { key: 'householdRegionName', title: '户籍所在地地区', dataType: 'string', importable: true, computed: false },
-  { key: 'householdAddress', title: '户籍详细地址', dataType: 'string', importable: true, computed: false },
-  { key: 'residentialRegionName', title: '联系地址地区', dataType: 'string', importable: true, computed: false },
-  { key: 'residentialAddress', title: '联系详细地址', dataType: 'string', importable: true, computed: false },
+  { key: 'householdRegionName', title: '户籍所在地', dataType: 'string', importable: true, computed: false },
+  { key: 'residentialRegionName', title: '联系地址', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactName', title: '紧急联系人', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactRelationship', title: '与本人关系', dataType: 'string', importable: true, computed: false },
   { key: 'emergencyContactMobile', title: '紧急联系人电话', dataType: 'string', importable: true, computed: false },
@@ -1514,8 +1510,6 @@ export interface CreateEmployeeInput {
   ethnicity: Ethnicity;
   maritalStatus: MaritalStatus;
   politicalStatus: PoliticalStatus;
-  householdAddress: string;
-  residentialAddress: string;
   emergencyContactName: string;
   emergencyContactRelationship: string;
   emergencyContactMobile: string;
@@ -1595,13 +1589,10 @@ export interface UpdateEmployeeInput {
   ethnicity?: Ethnicity;
   maritalStatus?: MaritalStatus;
   politicalStatus?: PoliticalStatus;
-  nativePlace?: string;
   nativePlaceRegionName?: string;
   householdType?: HouseholdType;
   householdRegionName?: string;
-  householdAddress?: string;
   residentialRegionName?: string;
-  residentialAddress?: string;
   bankName?: BankName;
   bankBranchName?: string;
   bankAccountNumber?: string;
@@ -1696,6 +1687,7 @@ export interface PerformanceTemplateVersionSummary {
   id: string;
   versionNo: number;
   status: PerformanceVersionStatus;
+  sourceType: PerformanceTemplateSourceType;
   sourceName: string | null;
   createdAt: string;
   publishedAt: string | null;
@@ -1714,7 +1706,7 @@ export interface PerformanceTemplateListItem {
 
 export interface PerformanceTemplateDetail extends PerformanceTemplateListItem {
   versions: Array<PerformanceTemplateVersionSummary & {
-    sourceMarkdown: string;
+    sourceMarkdown: string | null;
     definition: PerformanceTemplateDefinition;
   }>;
 }
@@ -1876,8 +1868,9 @@ export interface EmployeePerformanceAmountBaseListQuery {
 export interface PerformanceCreateTemplateInput {
   name: string;
   description?: string;
+  sourceType: PerformanceTemplateSourceType;
   sourceName?: string;
-  sourceMarkdown: string;
+  sourceMarkdown?: string;
   definition: PerformanceTemplateDefinition;
 }
 

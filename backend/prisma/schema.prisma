@@ -356,6 +356,11 @@ enum PerformanceVersionStatus {
   ARCHIVED
 }
 
+enum PerformanceTemplateSourceType {
+  MARKDOWN
+  MANUAL
+}
+
 enum PerformanceAdjustmentDirection {
   ADD
   DEDUCT
@@ -1531,8 +1536,9 @@ model PerformanceTemplateVersion {
   id             String                   @id @default(cuid())
   templateId     String                   @map("template_id")
   versionNo      Int                      @map("version_no")
+  sourceType     PerformanceTemplateSourceType @default(MARKDOWN) @map("source_type")
   sourceName     String?                  @map("source_name")
-  sourceMarkdown String                   @map("source_markdown") @db.Text
+  sourceMarkdown String?                  @map("source_markdown") @db.Text
   definition     Json
   status         PerformanceVersionStatus @default(DRAFT)
   publishedAt    DateTime?                @map("published_at")

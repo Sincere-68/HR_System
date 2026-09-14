@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsDateString, IsDefined, IsEnum, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
-import { ProcessStatus } from '@prisma/client';
+import { PerformanceTemplateSourceType, ProcessStatus } from '@prisma/client';
 
 export class ParsePerformanceTemplateDto {
   @ApiProperty({ description: '原始 Markdown' })
@@ -34,17 +34,33 @@ export class PerformanceTemplateDefinitionDto {
   definition!: Record<string, unknown>;
 }
 
-export class CreatePerformanceTemplateDto extends ParsePerformanceTemplateDto {
+export class CreatePerformanceTemplateDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
   @MaxLength(191)
   name!: string;
 
+  @ApiProperty({ enum: PerformanceTemplateSourceType })
+  @IsEnum(PerformanceTemplateSourceType)
+  sourceType!: PerformanceTemplateSourceType;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ description: 'Markdown 来源文件名；手动配置模板不传' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(191)
+  sourceName?: string;
+
+  @ApiPropertyOptional({ description: 'Markdown 原文；sourceType=MARKDOWN 时必填' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_000_000)
+  sourceMarkdown?: string;
 
   @ApiProperty({ type: Object })
   @IsDefined()

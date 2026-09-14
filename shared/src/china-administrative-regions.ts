@@ -98,5 +98,5 @@ export function displayChinaAdministrativeRegion(
   name: string | null | undefined,
   legacyCode: string | null | undefined,
 ): string | null {
-  return normalizeChinaAdministrativeRegionName(name) ?? getChinaAdministrativeRegionNameFromCode(legacyCode);
+  return name?.trim() || getChinaAdministrativeRegionNameFromCode(legacyCode);
 }

@@ -16,7 +16,6 @@ import {
   WorkArrangement,
 } from '@prisma/client';
 import {
-  normalizeChinaAdministrativeRegionName,
   PERSONNEL_FIELDS,
   type EmployeeFormOptions,
   type EmployeeImportResult,
@@ -776,7 +775,6 @@ export class EmployeesService {
     }
 
     await this.validateCreateRelations(user, dto);
-    this.validateRegionNames(dto);
     const entryDate = this.toDate(dto.entryDate);
     const probationEndDate = dto.probationEndDate ? this.toDate(dto.probationEndDate) : undefined;
     const contractEndDate = dto.contractEndDate ? this.toDate(dto.contractEndDate) : undefined;
@@ -822,9 +820,7 @@ export class EmployeesService {
             nativePlaceRegionName: dto.nativePlaceRegionName,
             householdType: dto.householdType,
             householdRegionName: dto.householdRegionName,
-            householdAddress: dto.householdAddress,
             residentialRegionName: dto.residentialRegionName,
-            residentialAddress: dto.residentialAddress,
             bankName: dto.bankName,
             bankBranchName: dto.bankBranchName,
             bankAccountNumber: dto.bankAccountNumber,
@@ -962,9 +958,10 @@ export class EmployeesService {
               'ethnicity',
               'maritalStatus',
               'politicalStatus',
+              'nativePlaceRegionName',
               'householdType',
-              'householdAddress',
-              'residentialAddress',
+              'householdRegionName',
+              'residentialRegionName',
               'bankName',
               'bankBranchName',
               'bankAccountNumber',
@@ -1023,7 +1020,6 @@ export class EmployeesService {
       await this.access.assertOrganizationAccess(user, dto.initialEmployment.organizationId);
     }
     const changedFields = Object.keys(dto);
-    this.validateRegionNames(dto);
     if (changedFields.length === 0) {
       if (this.demo.enabled) return presentDemoEmployeeDetail(current as DemoEmployeeRecord);
       const visibleOrganizationIds = this.access.hasAllEmployeeData(user)
@@ -1131,13 +1127,10 @@ export class EmployeesService {
           'ethnicity',
           'maritalStatus',
           'politicalStatus',
-          'nativePlace',
           'nativePlaceRegionName',
           'householdType',
           'householdRegionName',
-          'householdAddress',
           'residentialRegionName',
-          'residentialAddress',
           'bankName',
           'bankBranchName',
           'bankAccountNumber',
@@ -1175,10 +1168,10 @@ export class EmployeesService {
             workEmail: dto.workEmail, personalEmail: dto.personalEmail,
             mobile: dto.mobile, gender: dto.gender, birthDate: dto.birthDate ? this.toDate(dto.birthDate) : undefined,
             ethnicity: dto.ethnicity, maritalStatus: dto.maritalStatus, politicalStatus: dto.politicalStatus,
-            nativePlace: dto.nativePlace, nativePlaceRegionName: dto.nativePlaceRegionName,
+            nativePlaceRegionName: dto.nativePlaceRegionName,
             householdType: dto.householdType, householdRegionName: dto.householdRegionName,
-            householdAddress: dto.householdAddress, residentialRegionName: dto.residentialRegionName,
-            residentialAddress: dto.residentialAddress, bankName: dto.bankName, bankBranchName: dto.bankBranchName,
+            residentialRegionName: dto.residentialRegionName,
+            bankName: dto.bankName, bankBranchName: dto.bankBranchName,
             bankAccountNumber: dto.bankAccountNumber,
             fullTimeDutyDescription: dto.fullTimeDutyDescription,
             partTimePositionName: dto.partTimePositionName,
@@ -1852,7 +1845,8 @@ export class EmployeesService {
       const field = PERSONNEL_FIELDS.find(({ title, importable }) => (
         importable && this.normalizeImportHeader(title) === header
       ));
-      if (field && !columns.has(field.key)) columns.set(field.key, index);
+      const key = field?.key ?? this.resolveImportHeaderAlias(header);
+      if (key && !columns.has(key)) columns.set(key, index);
     });
     // A file may use the Chinese personnel table headers for its core columns
     // while retaining exact, confirmed legacy-export field names for other
@@ -1883,6 +1877,14 @@ export class EmployeesService {
     return columns;
   }
 
+  private resolveImportHeaderAlias(header: string): PersonnelTransferFieldKey | undefined {
+    const aliases: Record<string, PersonnelTransferFieldKey> = {
+      户籍地址: 'householdRegionName',
+      现住址: 'residentialRegionName',
+    };
+    return aliases[header];
+  }
+
   private normalizeImportHeader(value: string) {
     return value
       .replace(/^﻿/, '')
@@ -1908,8 +1910,8 @@ export class EmployeesService {
   ): UpdateEmployeeDto {
     const update: Record<string, string> = {};
     const passthroughFields: PersonnelTransferFieldKey[] = [
-      'name', 'workEmail', 'personalEmail', 'mobile', 'documentNumber', 'nativePlace',
-      'householdAddress', 'residentialAddress', 'jobLevel', 'workplaceName', 'bankBranchName', 'bankAccountNumber',
+      'name', 'workEmail', 'personalEmail', 'mobile', 'documentNumber',
+      'jobLevel', 'workplaceName', 'bankBranchName', 'bankAccountNumber',
       'graduationSchoolName', 'major', 'totalWorkYears',
       'emergencyContactName', 'emergencyContactRelationship', 'emergencyContactMobile',
     ];
@@ -1944,20 +1946,17 @@ export class EmployeesService {
         delete update.totalWorkYears;
       }
     }
-    const regionFields: Array<[PersonnelTransferFieldKey, string]> = [
-      ['nativePlaceRegionName', '籍贯地区'],
-      ['householdRegionName', '户籍所在地地区'],
-      ['residentialRegionName', '联系地址地区'],
+    const regionFields: PersonnelTransferFieldKey[] = [
+      'nativePlaceRegionName',
+      'householdRegionName',
+      'residentialRegionName',
     ];
-    for (const [field, title] of regionFields) {
+    for (const field of regionFields) {
       const value = input[field];
       if (value === undefined) continue;
-      const canonicalName = normalizeChinaAdministrativeRegionName(value);
-      if (canonicalName) {
-        update[field] = canonicalName;
-      } else {
-        warnings.push(`${title}“${value}”不是可确认的完整中文行政区划层级，未导入该字段`);
-      }
+      // Region columns are source-text fields during import. Preserve their
+      // exact input rather than requiring a directory match or changing it.
+      update[field] = value;
     }
     for (const field of ['birthDate', 'documentExpiryDate', 'graduationDate'] as const) {
       const value = input[field];
@@ -2288,13 +2287,10 @@ export class EmployeesService {
         ethnicity: profile.ethnicity,
         maritalStatus: profile.maritalStatus,
         politicalStatus: profile.politicalStatus,
-        nativePlace: profile.nativePlace,
         nativePlaceRegionName: profile.nativePlaceRegionName,
         householdType: profile.householdType,
         householdRegionName: profile.householdRegionName,
-        householdAddress: profile.householdAddress,
         residentialRegionName: profile.residentialRegionName,
-        residentialAddress: profile.residentialAddress,
         bankName: profile.bankName,
         bankBranchName: profile.bankBranchName,
         bankAccountNumber: profile.bankAccountNumber,
@@ -2819,7 +2815,7 @@ export class EmployeesService {
     }
 
     const position = await this.prisma.position.findFirst({
-      where: { name: normalized, status: RecordStatus.ACTIVE, archivedAt: null },
+      where: { name: { equals: normalized, mode: 'insensitive' }, status: RecordStatus.ACTIVE, archivedAt: null },
       select: { id: true },
     });
     if (position) return position;
@@ -2863,13 +2859,10 @@ export class EmployeesService {
           ethnicity: profile.ethnicity,
           maritalStatus: profile.maritalStatus,
           politicalStatus: profile.politicalStatus,
-          nativePlace: profile.nativePlace,
           nativePlaceRegionName: profile.nativePlaceRegionName,
           householdType: profile.householdType,
           householdRegionName: profile.householdRegionName,
-          householdAddress: profile.householdAddress,
           residentialRegionName: profile.residentialRegionName,
-          residentialAddress: profile.residentialAddress,
           bankName: profile.bankName,
           bankBranchName: profile.bankBranchName,
           bankAccountNumber: profile.bankAccountNumber,
@@ -3053,23 +3046,6 @@ export class EmployeesService {
     const results = await Promise.all(checks);
     const invalidIndex = results.findIndex((count) => count === 0);
     if (invalidIndex >= 0) throw new BadRequestException(labels[invalidIndex]);
-  }
-
-  private validateRegionNames(dto: Pick<
-    CreateEmployeeDto | UpdateEmployeeDto,
-    'nativePlaceRegionName' | 'householdRegionName' | 'residentialRegionName'
-  >) {
-    const fields = [
-      ['nativePlaceRegionName', '籍贯地区'],
-      ['householdRegionName', '户籍所在地地区'],
-      ['residentialRegionName', '联系地址地区'],
-    ] as const;
-    for (const [field, label] of fields) {
-      const value = dto[field];
-      if (value !== undefined && !normalizeChinaAdministrativeRegionName(value)) {
-        throw new BadRequestException(`${label}必须填写可确认的完整中文行政区划层级`);
-      }
-    }
   }
 
   private async createInitialEmploymentForEmployee(

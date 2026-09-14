@@ -89,6 +89,9 @@ CREATE TYPE "PerformanceVersionStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED'
 CREATE TYPE "PerformanceAdjustmentDirection" AS ENUM ('ADD', 'DEDUCT');
 
 -- CreateEnum
+CREATE TYPE "PerformanceTemplateSourceType" AS ENUM ('MARKDOWN', 'MANUAL');
+
+-- CreateEnum
 CREATE TYPE "ApprovalDecision" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'SKIPPED');
 
 -- CreateEnum
@@ -991,8 +994,9 @@ CREATE TABLE "performance_template_versions" (
     "id" TEXT NOT NULL,
     "template_id" TEXT NOT NULL,
     "version_no" INTEGER NOT NULL,
+    "source_type" "PerformanceTemplateSourceType" NOT NULL DEFAULT 'MARKDOWN',
     "source_name" TEXT,
-    "source_markdown" TEXT NOT NULL,
+    "source_markdown" TEXT,
     "definition" JSONB NOT NULL,
     "status" "PerformanceVersionStatus" NOT NULL DEFAULT 'DRAFT',
     "published_at" TIMESTAMP(3),
