@@ -19,7 +19,7 @@ function service(overrides: Record<string, unknown> = {}) {
   const access = { getAccessibleOrganizationIds: jest.fn().mockResolvedValue(null), hasPermission: jest.fn().mockReturnValue(true) };
   const demo = { enabled: false };
   const audit = { create: jest.fn().mockResolvedValue(undefined) };
-  return new PerformanceService(prisma as never, access as never, audit as never, demo as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+  return new PerformanceService(prisma as never, access as never, audit as never, demo as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
 }
 
 describe('PerformanceTemplateParser', () => {
@@ -44,7 +44,7 @@ describe('PerformanceTemplate copying', () => {
     const tx = { performanceTemplate: { create: jest.fn().mockResolvedValue(createdTemplate), findUniqueOrThrow: jest.fn().mockResolvedValue(copied) }, performanceTemplateVersion: { create: jest.fn().mockResolvedValue({}) } };
     const prisma = { performanceTemplate: { findFirst: jest.fn().mockResolvedValue(source) }, $transaction: jest.fn((callback) => callback(tx)) };
     const audit = { create: jest.fn().mockResolvedValue(undefined) };
-    const instance = new PerformanceService(prisma as never, {} as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+    const instance = new PerformanceService(prisma as never, {} as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
     const result = await instance.copyTemplate({ id: 'user-1' } as never, 'source-template');
     expect(tx.performanceTemplate.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ name: '原绩效模板 副本' }) }));
     expect(tx.performanceTemplateVersion.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ templateId: 'copied-template', versionNo: 1, status: 'DRAFT', sourceMarkdown: markdown }) }));
@@ -64,7 +64,7 @@ describe('Employee personal performance amount bases', () => {
   it('freezes the latest personal base and recalculates from that snapshot', async () => {
     const personalBase = { id: 'base-2', amount: { toFixed: () => '3000', valueOf: () => 3000 } as never, versionNo: 2 };
     const prisma = { employeePerformanceAmountBase: { findFirst: jest.fn().mockResolvedValue(personalBase) } };
-    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
     const snapshot = await (instance as any).resolveEmployeeAmountBaseSnapshot('employee-1', 85);
     expect(snapshot.employeeAmountBaseId).toBe('base-2');
     expect(snapshot.employeeAmountBaseVersionNo).toBe(2);
@@ -73,15 +73,25 @@ describe('Employee personal performance amount bases', () => {
 
   it('rejects finalization where no personal amount base exists', async () => {
     const prisma = { employeePerformanceAmountBase: { findFirst: jest.fn().mockResolvedValue(null) } };
-    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
     await expect((instance as any).resolveEmployeeAmountBaseSnapshot('employee-1', 85)).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('Performance task personal notifications', () => {
+  it('does not push a task when Feishu is disabled', async () => {
+    const feishu = { enabled: false, sendTextToOpenId: jest.fn(), resolveOpenIdByEmployeeId: jest.fn() };
+    const prisma = { performanceModuleTask: { findUnique: jest.fn() } };
+    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, feishu as never);
+    await (instance as any).notifyTaskOpened('task-1');
+    expect(prisma.performanceModuleTask.findUnique).not.toHaveBeenCalled();
   });
 });
 
 describe('PerformanceService demo guard', () => {
   it('does not access Prisma in demo mode', async () => {
     const prisma = { performanceTemplate: { findMany: jest.fn() } };
-    const service = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: true } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() });
+    const service = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: true } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
     expect(() => service.parseTemplate({ sourceMarkdown: markdown })).toThrow(ConflictException);
     expect(prisma.performanceTemplate.findMany).not.toHaveBeenCalled();
   });

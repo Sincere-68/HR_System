@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9f4ef">
+  <title>鹈鹕骑车</title>
+  <style>
+    * { box-sizing: border-box; }
+    html { background: #e9f4ef; }
+    body { margin: 0; color: #293c39; font-family: system-ui, sans-serif; }
+    main { min-height: 100svh; display: grid; place-items: center; padding: 24px; }
+    figure { margin: 0; width: min(100%, 1040px); }
+    svg { display: block; width: 100%; height: auto; overflow: visible; }
+    figcaption { margin-top: -12px; text-align: center; }
+    h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0; }
+    .caption-rule { display: block; width: 28px; height: 3px; margin: 18px auto 0; background: #de7665; }
+    @media (max-width: 600px) {
+      main { padding: 16px 8px 32px; }
+      h1 { font-size: 18px; }
+      figcaption { margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <figure>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 720" role="img" aria-labelledby="scene-title scene-description">
+        <title id="scene-title">鹈鹕骑车</title>
+        <desc id="scene-description">一只戴绿色骑行帽、系红围巾的白色鹈鹕，伸着长长的黄色鸟喙，翅膀扶着车把，蹼足踩着脚踏，骑着珊瑚红自行车经过阳光下的草地。</desc>
+        <defs>
+          <g id="wheel" fill="none">
+            <circle r="113" stroke="#293c39" stroke-width="13"/>
+            <circle r="101" stroke="#fffdf8" stroke-width="5"/>
+            <g stroke="#91aaa0" stroke-width="2">
+              <path d="M0-97V97M-97 0H97M-68.6-68.6 68.6 68.6M-68.6 68.6 68.6-68.6"/>
+              <path d="m-37-89 74 178m-126-52 178-74m-126 126 74-178m-126 52 178 74"/>
+            </g>
+            <circle r="10" fill="#f7faf4" stroke="#293c39" stroke-width="4"/>
+          </g>
+        </defs>
+
+        <!-- The landscape stays behind the bicycle and rider. -->
+        <circle cx="756" cy="137" r="55" fill="#f4ce68"/>
+        <g fill="#f9fcf7">
+          <path d="M154 211c-14-23 2-45 22-42 1-27 42-33 54-7 23-8 43 11 38 28h28c12 0 15 21 0 21Z"/>
+          <path d="M763 294c-2-17 13-27 27-21 8-25 43-26 52 0 18-4 31 8 28 21Z"/>
+        </g>
+        <path d="M109 580c122-84 226-18 338-25 143-8 213-81 396-17l67 43v69H109Z" fill="#d3e6d8"/>
+        <path d="M99 624c184-26 334-7 466-10 97-3 206-23 348 9" fill="none" stroke="#b5d1bc" stroke-width="2"/>
+        <ellipse cx="511" cy="653" rx="333" ry="13" fill="#bed6c6"/>
+        <g stroke="#658c76" stroke-width="3" stroke-linecap="round" fill="none">
+          <path d="m136 601-3-26m3 15-14-10m14 16 12-16M847 622l5-33m-3 18-12-12m14 3 12-11"/>
+          <path d="m163 635-7-12m10 12 4-17m653 22 5-13m-2 13-8-8"/>
+        </g>
+        <g fill="#f3c966">
+          <circle cx="852" cy="584" r="6"/>
+          <circle cx="865" cy="586" r="4"/>
+        </g>
+        <g stroke="#92b3a5" stroke-width="3" stroke-linecap="round">
+          <path d="M217 283h59m-74 22h31m-16 75h42"/>
+        </g>
+
+        <!-- Far leg and pedal are drawn before the frame. -->
+        <g stroke="#293c39" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m458 370 29 58 43 44" fill="none" stroke="#b77e42" stroke-width="11"/>
+          <path d="m528 462 10 4 22 15-5 6-35-8Z" fill="#eeb650"/>
+          <path d="m493 524 40-45" fill="none"/>
+          <path d="m518 482 32 5" fill="none" stroke-width="8"/>
+        </g>
+
+        <use href="#wheel" x="315" y="537"/>
+        <use href="#wheel" x="708" y="537"/>
+
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M210 488a121 121 0 0 1 209-12M614 462a121 121 0 0 1 194 23" stroke="#758f83" stroke-width="6"/>
+          <path d="m315 537 178-13-42-113-136 126 133-1m3-125h198L493 524m147-151 68 164" stroke="#293c39" stroke-width="15"/>
+          <path d="m315 537 178-13-42-113-136 126m136-126h198L493 524m147-151 68 164" stroke="#df7868" stroke-width="9"/>
+          <path d="m458 434 29 77m-4-100h134m30-23 45 112" stroke="#f5b4a1" stroke-width="2.5"/>
+          <path d="m451 411-9-30" stroke="#293c39" stroke-width="9"/>
+          <path d="m640 374-7-28 29-11c28-10 37 19 21 29l-13 6" stroke="#293c39" stroke-width="8"/>
+          <path d="m679 367-12 5" stroke="#d1a56e" stroke-width="12"/>
+          <path d="M310 551h182a27 27 0 0 0 0-54l-181 27a14 14 0 0 0-1 27Z" stroke="#597369" stroke-width="3"/>
+        </g>
+        <path d="M408 377c12-6 31-2 41-1l21-2c13-1 16 13 4 17l-54-1c-16 0-24-7-12-13Z" fill="#293c39"/>
+        <path d="M414 379h46" stroke="#6b8478" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="493" cy="524" r="23" fill="#e8eee4" stroke="#293c39" stroke-width="5"/>
+        <circle cx="493" cy="524" r="12" fill="#8da899"/>
+
+        <!-- Pelican silhouette: full body, curved neck, long bill and pouch. -->
+        <g stroke="#293c39" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M309 334 260 305l20 35-31 1 65 28" fill="#d5e0d7"/>
+          <path d="M310 335c-7-47 33-82 76-78 36 3 57 26 79 1 17-19 9-38 4-55-13-41 6-79 41-88 36-10 63 14 65 45 2 27-12 52-24 77-11 24-5 37-9 60-8 51-56 85-102 93-55 9-109-4-130-31l-29-17Z" fill="#fffdf5"/>
+          <path d="M320 353c40 25 94 28 140 10 38-14 64-40 78-70-6 48-55 87-98 95-52 10-99-4-120-22Z" fill="#dce5dc" stroke="none"/>
+          <path d="M488 186c-3 23 15 43 10 65" fill="none" stroke="#dce5dc" stroke-width="9"/>
+
+          <path d="M568 176 753 184c-35 39-94 73-139 61-26-7-44-37-46-69Z" fill="#efbc57"/>
+          <path d="M580 191c13 37 34 47 60 47" fill="none" stroke="#d59a40" stroke-width="3"/>
+          <path d="M570 158c49 4 138 13 205 26 8 2 8 7-1 8-71 1-145-1-205-11Z" fill="#f8d675"/>
+          <path d="m588 175 164 11" fill="none" stroke="#dda74b" stroke-width="2"/>
+
+          <path d="M474 133c-3-29 19-47 44-43 22 3 36 20 37 39Z" fill="#579a83"/>
+          <path d="M479 127c31-7 60-6 80 3l21 12c-37-7-72-7-103 0Z" fill="#397865"/>
+          <path d="M518 92c-13 7-18 18-17 31" fill="none" stroke="#a2c6a9" stroke-width="3"/>
+          <circle cx="519" cy="90" r="4" fill="#293c39" stroke="none"/>
+          <circle cx="548" cy="155" r="6.5" fill="#293c39" stroke="none"/>
+          <circle cx="550" cy="153" r="2" fill="#fffdf5" stroke="none"/>
+          <path d="m539 143 10-3" fill="none" stroke-width="3"/>
+          <path d="M548 177c-8 5-15 3-19-1" fill="none" stroke-width="2.5"/>
+
+          <path d="M491 249c-20-9-44-23-73-24l23 22-24 15c25 4 49 7 77 1Z" fill="#df7868"/>
+          <path d="M482 243c17 10 37 15 62 9l-5 18c-23 3-44-2-61-12Z" fill="#e58974"/>
+          <path d="m482 253-32-8" fill="none" stroke="#b95e51" stroke-width="2.5"/>
+
+          <path d="M390 290c34-14 67 8 93 26 43 27 73 22 116 27l43 3c12 0 17 9 7 17-11 8-31 7-46 3-32-8-57-4-87-12-31 1-49-2-76-11-31-10-49-23-50-37" fill="#f8faf2"/>
+          <path d="M418 308c24 17 50 29 79 30m-69-13c18 13 34 19 51 22m29-11 23 8" fill="none" stroke="#b5c9bd" stroke-width="3"/>
+          <path d="m625 353 21 2m-21 6 14 2" fill="none" stroke="#8ca799" stroke-width="2.5"/>
+        </g>
+
+        <g stroke="#293c39" stroke-linejoin="round" stroke-linecap="round">
+          <path d="m403 384 6 65 43 89" fill="none" stroke-width="13"/>
+          <path d="m403 384 6 65 43 89" fill="none" stroke="#efbd59" stroke-width="7"/>
+          <path d="m493 524-38 29" fill="none" stroke-width="7"/>
+          <path d="M446 534c9 0 15 7 23 9l20 7c4 2 5 7 0 9l-50-1 1-17Z" fill="#efbd59" stroke-width="4"/>
+          <path d="m461 547 15 7m-26-7 6 6" fill="none" stroke="#b88036" stroke-width="2"/>
+          <path d="M438 561h47" fill="none" stroke-width="8"/>
+          <circle cx="493" cy="524" r="5" fill="#293c39" stroke="none"/>
+        </g>
+        <g fill="#f9fcf7">
+          <circle cx="179" cy="469" r="3"/>
+          <circle cx="832" cy="384" r="3"/>
+        </g>
+      </svg>
+      <figcaption>
+        <h1>鹈鹕骑车</h1>
+        <span class="caption-rule" aria-hidden="true"></span>
+      </figcaption>
+    </figure>
+  </main>
+</body>
+</html>

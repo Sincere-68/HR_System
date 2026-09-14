@@ -135,6 +135,8 @@ CREATE TABLE "users" (
     "display_name" TEXT NOT NULL,
     "role_id" TEXT NOT NULL,
     "employee_id" TEXT,
+    "feishu_open_id" TEXT,
+    "feishu_open_id_synced_at" TIMESTAMP(3),
     "status" "RecordStatus" NOT NULL DEFAULT 'ACTIVE',
     "archived_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1294,6 +1296,9 @@ CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_employee_id_key" ON "users"("employee_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_feishu_open_id_key" ON "users"("feishu_open_id");
 
 -- CreateIndex
 CREATE INDEX "users_status_archived_at_idx" ON "users"("status", "archived_at");

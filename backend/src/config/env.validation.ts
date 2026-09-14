@@ -33,6 +33,18 @@ class EnvironmentVariables {
   @IsOptional()
   @IsUrl({ require_tld: false })
   FRONTEND_URL = 'http://localhost:5173';
+
+  @Transform(({ value }) => ['true', '1', 'yes', 'on'].includes(String(value).toLowerCase()), { toClassOnly: true })
+  @IsBoolean()
+  FEISHU_ENABLED = false;
+
+  @IsOptional()
+  @IsString()
+  FEISHU_APP_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  FEISHU_APP_SECRET?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
@@ -46,6 +58,9 @@ export function validateEnvironment(config: Record<string, unknown>) {
   if (!validated.DEMO_MODE) {
     if (!validated.DATABASE_URL) throw new Error('关闭演示模式后必须设置 DATABASE_URL');
     if (!validated.JWT_SECRET) throw new Error('关闭演示模式后必须设置 JWT_SECRET');
+  }
+  if (validated.FEISHU_ENABLED && (!validated.FEISHU_APP_ID || !validated.FEISHU_APP_SECRET)) {
+    throw new Error('启用飞书推送后必须设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET');
   }
   return validated;
 }

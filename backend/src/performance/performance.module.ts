@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { FeishuModule } from '../feishu/feishu.module';
 import { PerformanceController } from './performance.controller';
 import { MockPerformanceDataAdapter, PERFORMANCE_DATA_ADAPTER } from './performance-data.adapter';
 import { PerformanceRuleEngine } from './performance-rule-engine';
@@ -7,7 +8,7 @@ import { PerformanceService } from './performance.service';
 import { PerformanceTemplateParser } from './performance-template.parser';
 
 @Module({
-  imports: [AccessControlModule],
+  imports: [AccessControlModule, FeishuModule],
   controllers: [PerformanceController],
   providers: [
     PerformanceRuleEngine,

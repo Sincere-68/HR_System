@@ -5,13 +5,26 @@ import * as bcrypt from 'bcrypt';
 import { DemoDataService } from '../demo/demo-data.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-const authUserInclude = {
+// Select only authentication and authorization fields. Using `include` on User
+// implicitly selects every scalar field, which would make login depend on
+// unrelated optional integration columns being present in an older database.
+const authUserSelect = {
+  id: true,
+  username: true,
+  passwordHash: true,
+  displayName: true,
   role: {
-    include: {
-      permissions: { include: { permission: true } },
+    select: {
+      code: true,
+      name: true,
+      permissions: {
+        select: {
+          permission: { select: { code: true } },
+        },
+      },
     },
   },
-  dataScopes: true,
+  dataScopes: { select: { organizationId: true } },
 } as const;
 
 @Injectable()
@@ -32,7 +45,7 @@ export class AuthService {
       };
     }
 
-    const user = await this.prisma.user.findUnique({ where: { username }, include: authUserInclude });
+    const user = await this.prisma.user.findUnique({ where: { username }, select: authUserSelect });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('用户名或密码错误');
     }
@@ -51,7 +64,7 @@ export class AuthService {
       return authUser;
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: authUserInclude });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: authUserSelect });
     if (!user) throw new UnauthorizedException('账号不存在或已失效');
     return this.mapAuthUser(user);
   }

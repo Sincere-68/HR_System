@@ -17,6 +17,7 @@ import type {
 import { AccessControlService } from '../access-control/access-control.service';
 import { AuditService } from '../audit/audit.service';
 import { DemoDataService } from '../demo/demo-data.service';
+import { FeishuService } from '../feishu/feishu.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PERFORMANCE_DATA_ADAPTER, type PerformanceDataAdapter } from './performance-data.adapter';
 import { PerformanceRuleEngine } from './performance-rule-engine';
@@ -78,6 +79,7 @@ export class PerformanceService {
     private readonly parser: PerformanceTemplateParser,
     private readonly rules: PerformanceRuleEngine,
     @Inject(PERFORMANCE_DATA_ADAPTER) adapter: PerformanceDataAdapter,
+    private readonly feishu: FeishuService,
   ) {
     this.adapter = adapter;
   }
@@ -486,6 +488,7 @@ export class PerformanceService {
       await this.audit.create({ userId: user.id }, AuditAction.UPDATE, task.id, { resource: 'performance-task', action: 'submit', moduleScore }, tx, 'performance_task');
     });
     if (nextTask?.moduleType === PerformanceModuleType.METRIC) await this.advanceInstance(task.instanceId);
+    else if (nextTask) await this.notifyTaskOpened(nextTask.id);
     return this.getTask(user, task.id);
   }
 
@@ -533,6 +536,31 @@ export class PerformanceService {
       nextTask.status = TaskStatus.IN_PROGRESS;
       task = nextTask;
     }
+  }
+
+  private async notifyTaskOpened(taskId: string) {
+    if (!this.feishu.enabled) return;
+    const task = await this.prisma.performanceModuleTask.findUnique({
+      where: { id: taskId },
+      include: {
+        instance: { include: { cycle: true, employee: { select: { name: true } } } },
+        executorUser: { select: { id: true, feishuOpenId: true, employee: { select: { employeeNo: true } } } },
+      },
+    });
+    if (!task || task.moduleType === PerformanceModuleType.METRIC || !task.executorUser) return;
+    let openId = task.executorUser.feishuOpenId;
+    if (!openId && task.executorUser.employee?.employeeNo) {
+      openId = await this.feishu.resolveOpenIdByEmployeeId(task.executorUser.employee.employeeNo);
+      if (openId) await this.prisma.user.update({ where: { id: task.executorUser.id }, data: { feishuOpenId: openId, feishuOpenIdSyncedAt: new Date() } });
+    }
+    if (!openId) return;
+    const baseUrl = this.configuredFrontendUrl();
+    const taskUrl = `${baseUrl}/performance/my-tasks`;
+    await this.feishu.sendTextToOpenId(openId, `【绩效待办】${task.instance.cycle.name}\n被评员工：${task.instance.employee.name ?? '未命名员工'}\n当前模块：${task.moduleName}\n请在系统中处理：${taskUrl}`);
+  }
+
+  private configuredFrontendUrl() {
+    return process.env.FRONTEND_URL?.replace(/\/$/, '') || 'http://localhost:5173';
   }
 
   private async executeMetricTask(task: PerformanceTaskRecord, periodStart: Date, periodEnd: Date) {

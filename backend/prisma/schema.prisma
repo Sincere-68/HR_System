@@ -430,6 +430,8 @@ model User {
   displayName                           String                          @map("display_name")
   roleId                                String                          @map("role_id")
   employeeId                            String?                         @unique @map("employee_id")
+  feishuOpenId                          String?                         @unique @map("feishu_open_id")
+  feishuOpenIdSyncedAt                  DateTime?                       @map("feishu_open_id_synced_at")
   status                                RecordStatus                    @default(ACTIVE)
   archivedAt                            DateTime?                       @map("archived_at")
   role                                  Role                            @relation(fields: [roleId], references: [id])

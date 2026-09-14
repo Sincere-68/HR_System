@@ -16,6 +16,7 @@ import { EmployeesModule } from './employees/employees.module';
 import { EmployeeInfoApprovalModule } from './employee-info-approval/employee-info-approval.module';
 import { EmployeeSubsetsModule } from './employee-subsets/employee-subsets.module';
 import { EmploymentModule } from './employment/employment.module';
+import { FeishuModule } from './feishu/feishu.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -44,6 +45,7 @@ import { PerformanceModule } from './performance/performance.module';
     EmployeeInfoApprovalModule,
     EmployeeSubsetsModule,
     EmploymentModule,
+    FeishuModule,
     StaffingModule,
     OnboardingModule,
     PerformanceModule,
