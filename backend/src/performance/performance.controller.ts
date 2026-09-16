@@ -4,7 +4,7 @@ import { PERMISSIONS } from '@hr-demo/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
-import { CreateEmployeePerformanceAmountBaseDto, CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceTaskSubmissionDto, QueryEmployeePerformanceAmountBaseDto, QueryPerformanceDto } from './dto/performance.dto';
+import { ArchivePerformanceTemplateDto, CreateEmployeePerformanceAmountBaseDto, CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceTaskSubmissionDto, QueryEmployeePerformanceAmountBaseDto, QueryPerformanceDto } from './dto/performance.dto';
 import { PerformanceService } from './performance.service';
 
 @ApiTags('绩效管理')
@@ -37,6 +37,10 @@ export class PerformanceController {
   @RequirePermissions(PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE)
   copyTemplate(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.service.copyTemplate(user, id); }
 
+  @Post('templates/:id/archive')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE)
+  archiveTemplate(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: ArchivePerformanceTemplateDto) { return this.service.archiveTemplate(user, id, dto); }
+
   @Post('templates/:id/versions')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE)
   createTemplateVersion(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: CreatePerformanceTemplateDto) { return this.service.createTemplateVersion(user, id, dto); }
@@ -47,7 +51,7 @@ export class PerformanceController {
 
   @Get('options')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE)
-  getOptions() { return this.service.getOptions(); }
+  getOptions(@CurrentUser() user: AuthenticatedUser) { return this.service.getOptions(user); }
 
   @Get('cycles')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)

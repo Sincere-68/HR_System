@@ -1,14 +1,16 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EmployeeInfoApprovalPage } from './EmployeeInfoApprovalPage';
 
 const useEmployeeInfoApprovals = vi.fn();
 const useOrganizations = vi.fn();
+const useSendEmployeeInfoApprovalReminder = vi.fn();
 
 vi.mock('../../features/employees/api', () => ({
   useEmployeeInfoApprovals: (query: unknown) => useEmployeeInfoApprovals(query),
   useOrganizations: () => useOrganizations(),
+  useSendEmployeeInfoApprovalReminder: () => useSendEmployeeInfoApprovalReminder(),
 }));
 
 const approval = {
@@ -33,9 +35,12 @@ function renderPage(entry = '/personnel/approval') {
 }
 
 describe('EmployeeInfoApprovalPage', () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     useEmployeeInfoApprovals.mockReset();
     useOrganizations.mockReset();
+    useSendEmployeeInfoApprovalReminder.mockReset();
     useEmployeeInfoApprovals.mockReturnValue({
       data: { data: [approval], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } },
       isLoading: false,
@@ -45,12 +50,17 @@ describe('EmployeeInfoApprovalPage', () => {
     useOrganizations.mockReturnValue({
       data: [{ id: 'org-1', code: 'FAKE-PRODUCT', name: '虚构产品部', parentId: null }],
     });
+    useSendEmployeeInfoApprovalReminder.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      variables: undefined,
+    });
   });
 
   it('keeps the required column order and renders only API-backed values', () => {
     renderPage();
 
-    const table = screen.getByRole('table');
+    const table = screen.getAllByRole('table')[0]!;
     expect(within(table).getAllByRole('columnheader').map((heading) => heading.textContent?.trim()).filter(Boolean)).toEqual([
       '人员', '部门', '信息采集活动名称', '发起人', '发起时间', '信息采集状态', '当前审批人', '操作',
     ]);
@@ -60,7 +70,21 @@ describe('EmployeeInfoApprovalPage', () => {
     );
     expect(screen.getByText('虚构发起人')).toBeInTheDocument();
     expect(screen.getByText('虚构审批人')).toBeInTheDocument();
-    expect(within(table).getByText('--')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /提醒审批人/ })).toBeEnabled();
+    expect(screen.getByText('--')).toBeInTheDocument();
+  });
+
+  it('sends a reminder only for the selected approval record', () => {
+    const mutate = vi.fn();
+    useSendEmployeeInfoApprovalReminder.mockReturnValue({ mutate, isPending: false, variables: undefined });
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /提醒审批人/ }));
+
+    expect(mutate).toHaveBeenCalledWith('change-request-1', expect.objectContaining({
+      onSuccess: expect.any(Function),
+      onError: expect.any(Function),
+    }));
   });
 
   it('uses URL-backed pagination and exposes a real employee view action', () => {

@@ -3,6 +3,7 @@ import type {
   EmployeeImportResult,
   BlacklistListItem,
   BlacklistListQuery,
+  EmployeeInfoApprovalReminderResult,
   EmployeeInfoApprovalListItem,
   EmployeeInfoApprovalListQuery,
   CreateEmployeeInput,
@@ -165,6 +166,15 @@ export function useEmployeeInfoApprovals(query: EmployeeInfoApprovalListQuery) {
     queryKey: employeeKeys.infoApprovals(query),
     queryFn: () => apiRequest<Paginated<EmployeeInfoApprovalListItem>>(
       `/employee-info-approvals?${toSearchParams(query)}`,
+    ),
+  });
+}
+
+export function useSendEmployeeInfoApprovalReminder() {
+  return useMutation({
+    mutationFn: (id: string) => apiRequest<EmployeeInfoApprovalReminderResult>(
+      `/employee-info-approvals/${id}/reminders`,
+      { method: 'POST' },
     ),
   });
 }

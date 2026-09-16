@@ -8,10 +8,16 @@ interface TenantAccessTokenResponse {
   expire?: number;
 }
 
-interface FeishuUserResponse {
+interface FeishuUserIdResponse {
   code: number;
   msg: string;
-  data?: { user?: { open_id?: string } };
+  data?: {
+    user_list?: Array<{
+      email?: string;
+      mobile?: string;
+      user_id?: string;
+    }>;
+  };
 }
 
 interface FeishuMessageResponse {
@@ -31,22 +37,53 @@ export class FeishuService {
     return this.config.get<boolean>('FEISHU_ENABLED', false);
   }
 
-  async resolveOpenIdByEmployeeId(employeeId: string) {
+  /**
+   * Resolves a Feishu recipient from HR contact data. Employee numbers are
+   * deliberately not used here: Contact v3 no longer accepts employee_id as
+   * a lookup identifier.
+   */
+  async resolveOpenIdByContact(input: { workEmail?: string | null; mobile?: string | null }) {
     if (!this.enabled) return null;
+    const email = input.workEmail?.trim();
+    const mobile = input.mobile?.trim();
+    if (!email && !mobile) return null;
+
     const token = await this.getTenantAccessToken();
     if (!token) return null;
     try {
-      const response = await this.request<FeishuUserResponse>(
-        `https://open.feishu.cn/open-apis/contact/v3/users/${encodeURIComponent(employeeId)}?user_id_type=employee_id`,
-        { headers: { Authorization: `Bearer ${token}` } },
+      const response = await this.request<FeishuUserIdResponse>(
+        'https://open.feishu.cn/open-apis/contact/v3/users/batch_get_id?user_id_type=open_id',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: JSON.stringify({
+            ...(email ? { emails: [email] } : {}),
+            ...(mobile ? { mobiles: [mobile] } : {}),
+          }),
+        },
       );
-      if (response.code !== 0 || !response.data?.user?.open_id) {
-        this.logger.warn(`飞书员工身份同步未匹配: ${response.msg || 'unknown error'}`);
+      if (response.code !== 0) {
+        this.logger.warn(`飞书联系人查询失败: ${response.msg || 'unknown error'}`);
         return null;
       }
-      return response.data.user.open_id;
+
+      const openIds = new Set(
+        response.data?.user_list
+          ?.map((user) => user.user_id)
+          .filter((userId): userId is string => Boolean(userId)) ?? [],
+      );
+      if (openIds.size === 1) return [...openIds][0]!;
+      if (openIds.size > 1) {
+        this.logger.warn('飞书联系人查询返回多个账号，未自动绑定');
+        return null;
+      }
+      this.logger.warn('飞书联系人未匹配，可能不在应用通讯录权限范围内或资料不一致');
+      return null;
     } catch (error) {
-      this.logger.warn(`飞书员工身份同步请求失败: ${error instanceof Error ? error.message : 'unknown error'}`);
+      this.logger.warn(`飞书联系人查询请求失败: ${error instanceof Error ? error.message : 'unknown error'}`);
       return null;
     }
   }

@@ -5,6 +5,7 @@ import {
   FileTextOutlined,
   FundOutlined,
   SettingOutlined,
+  TeamOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
 
@@ -16,6 +17,7 @@ export interface PerformanceNavigationItem {
 
 export const performanceNavigationItems: PerformanceNavigationItem[] = [
   { key: '/performance', label: '绩效总览', icon: <FundOutlined /> },
+  { key: '/performance/activities', label: '员工绩效活动', icon: <TeamOutlined /> },
   { key: '/performance/templates', label: '绩效模板', icon: <FileTextOutlined /> },
   { key: '/performance/tasks', label: '绩效任务', icon: <UnorderedListOutlined /> },
   { key: '/performance/my-tasks', label: '我的待办', icon: <CheckSquareOutlined /> },

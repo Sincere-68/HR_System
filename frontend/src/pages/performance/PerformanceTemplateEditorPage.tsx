@@ -36,6 +36,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { performanceApi, useCreatePerformanceTemplate, useCreatePerformanceTemplateVersion, usePerformanceOptions, usePerformanceTemplate } from '../../features/performance/api';
+import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
+import { useEmployees, useOrganizations } from '../../features/employees/api';
 import {
   getFixedWeightTotal,
   parsedHrbpPerformanceTemplate,
@@ -63,11 +65,51 @@ function ModuleTypeTag({ type }: { type: PerformanceModuleKind }) {
   return <Tag className={`performance-module-kind is-${type}`}>{moduleTypeLabels[type]}</Tag>;
 }
 
+function organizationScopeIds(organizations: Array<{ id: string; parentId?: string | null }>, rootId: string | undefined) {
+  if (!rootId) return null;
+  const childrenByParent = new Map<string, string[]>();
+  organizations.forEach((organization) => {
+    if (!organization.parentId) return;
+    childrenByParent.set(organization.parentId, [...(childrenByParent.get(organization.parentId) ?? []), organization.id]);
+  });
+  const scope = new Set([rootId]);
+  const pending = [rootId];
+  while (pending.length > 0) {
+    const parentId = pending.shift();
+    if (!parentId) continue;
+    (childrenByParent.get(parentId) ?? []).forEach((childId) => {
+      if (scope.has(childId)) return;
+      scope.add(childId);
+      pending.push(childId);
+    });
+  }
+  return scope;
+}
+
+function serializeExecutor(executor: PerformanceTemplateModule['executor']) {
+  const executionMode = executor.executionMode ?? 'SINGLE';
+  if (executor.type === 'AUTO') return { type: 'AUTO' as const, executionMode: 'SINGLE' as const };
+  if (executor.type === 'DIRECTORY') {
+    return {
+      type: 'DIRECTORY' as const,
+      executionMode: 'SINGLE' as const,
+      directoryType: executor.directoryType,
+      directoryId: executor.directoryId,
+    };
+  }
+  return {
+    type: 'USER' as const,
+    executionMode,
+    employeeIds: [...new Set((executor.employeeIds ?? []).filter((id): id is string => Boolean(id)))] as string[],
+  };
+}
+
 export function PerformanceTemplateEditorPage() {
   const navigate = useNavigate();
   const { templateId } = useParams();
   const existingTemplate = usePerformanceTemplate(templateId && templateId !== 'new' ? templateId : '');
   const options = usePerformanceOptions(true);
+  const organizations = useOrganizations();
   const createTemplate = useCreatePerformanceTemplate();
   const createTemplateVersion = useCreatePerformanceTemplateVersion();
   const [messageApi, contextHolder] = message.useMessage();
@@ -83,6 +125,11 @@ export function PerformanceTemplateEditorPage() {
   const [initializedTemplateId, setInitializedTemplateId] = useState<string | null>(null);
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
+  const [executorFiltersByModuleId, setExecutorFiltersByModuleId] = useState<Record<string, {
+    organizationId?: string;
+    keyword: string;
+    selectedEmployees: import('@hr-demo/shared').EmployeeListItem[];
+  }>>({});
 
   useEffect(() => {
     const version = existingTemplate.data?.versions[0];
@@ -95,7 +142,7 @@ export function PerformanceTemplateEditorPage() {
       ...module,
       type: module.type.toLowerCase() as PerformanceModuleKind,
       responsibleRole: module.name,
-      executor: module.executor,
+      executor: { ...module.executor, executionMode: module.executor.executionMode ?? 'SINGLE', employeeIds: module.executor.employeeIds ?? [] },
       indicators: module.indicators.map((indicator) => ({ ...indicator, weightLabel: `${indicator.weight}%`, source: version.sourceName ?? '模板定义' })),
     })));
     setSelectedModuleId(version.definition.modules[0]?.id ?? '');
@@ -103,6 +150,33 @@ export function PerformanceTemplateEditorPage() {
   }, [existingTemplate.data, initializedTemplateId, templateId]);
 
   const selectedModule = modules.find((module) => module.id === selectedModuleId) ?? modules[0];
+  const selectedExecutorEmployeeIds = selectedModule?.executor.employeeIds ?? [];
+  const activeExecutorFilter = selectedModule
+    ? executorFiltersByModuleId[selectedModule.id] ?? { keyword: '', selectedEmployees: [] }
+    : { keyword: '', selectedEmployees: [] };
+  const updateExecutorFilter = (moduleId: string, change: Partial<typeof activeExecutorFilter>) => {
+    setExecutorFiltersByModuleId((current) => ({
+      ...current,
+      [moduleId]: { keyword: '', selectedEmployees: [], ...current[moduleId], ...change },
+    }));
+  };
+  const resetExecutorFilter = (moduleId: string) => {
+    setExecutorFiltersByModuleId((current) => {
+      const next = { ...current };
+      delete next[moduleId];
+      return next;
+    });
+  };
+  const executorEmployees = useEmployees({
+    keyword: activeExecutorFilter.keyword || undefined,
+    organizationId: activeExecutorFilter.organizationId,
+    page: 1,
+    pageSize: 100,
+  });
+  const visibleExecutorEmployees = useMemo(() => {
+    const visible = executorEmployees.data?.data ?? [];
+    return activeExecutorFilter.selectedEmployees.filter((employee) => !visible.some((item) => item.id === employee.id)).concat(visible);
+  }, [activeExecutorFilter.selectedEmployees, executorEmployees.data?.data]);
   const fixedWeightTotal = useMemo(() => getFixedWeightTotal(modules), [modules]);
   const isWeightValid = fixedWeightTotal === 100;
 
@@ -117,7 +191,7 @@ export function PerformanceTemplateEditorPage() {
       name: '新模块',
       type: 'evaluation',
       responsibleRole: '待指定执行人',
-      executor: { type: 'USER' },
+      executor: { type: 'USER', executionMode: 'SINGLE', employeeIds: [] },
       enabled: true,
       participatesInTotal: true,
       weight: 0,
@@ -128,6 +202,7 @@ export function PerformanceTemplateEditorPage() {
   };
 
   const removeModule = (moduleId: string) => {
+    resetExecutorFilter(moduleId);
     setModules((current) => {
       const next = current.filter((module) => module.id !== moduleId);
       setSelectedModuleId(next[0]?.id ?? '');
@@ -174,6 +249,7 @@ export function PerformanceTemplateEditorPage() {
         ...module,
         type: module.type.toLowerCase() as PerformanceModuleKind,
         responsibleRole: module.executor.type === 'AUTO' ? '系统自动计算' : '待指定执行人',
+        executor: { ...module.executor, executionMode: module.executor.executionMode ?? 'SINGLE', employeeIds: module.executor.employeeIds ?? [] },
         indicators: module.indicators.map((indicator) => ({ ...indicator, weightLabel: `${indicator.weight}%`, source: importedSourceName })),
       }));
       setModules(nextModules);
@@ -209,10 +285,27 @@ export function PerformanceTemplateEditorPage() {
       messageApi.error(`固定权重模块合计为 ${fixedWeightTotal}%，必须等于 100% 后才能保存模板`);
       return;
     }
+    if (modules.length === 0) {
+      setActiveStep(1);
+      messageApi.error('至少需要配置一个绩效模块');
+      return;
+    }
+    const invalidExecutor = modules.find((module) => {
+      if (module.type === 'metric') return false;
+      const executor = serializeExecutor(module.executor);
+      return executor.type === 'DIRECTORY'
+        ? !executor.directoryType || !executor.directoryId
+        : (executor.employeeIds?.length ?? 0) === 0 || (executor.executionMode === 'MULTIPLE' && (executor.employeeIds?.length ?? 0) < 2);
+    });
+    if (invalidExecutor) {
+      setActiveStep(1);
+      messageApi.error(`请为模块“${invalidExecutor.name}”配置有效的执行人`);
+      return;
+    }
     const definition = {
       schemaVersion: 1 as const,
       name: templateName.trim(),
-      description: '依据模板 Markdown 解析的绩效流程定义。',
+      description: sourceType === 'MARKDOWN' ? '依据模板 Markdown 解析的绩效流程定义。' : '手动配置的绩效流程定义。',
       modules: modules.map((module) => ({
         id: module.id,
         name: module.name,
@@ -221,7 +314,7 @@ export function PerformanceTemplateEditorPage() {
         participatesInTotal: module.participatesInTotal,
         weight: module.weight,
         description: module.description,
-        executor: module.executor,
+        executor: serializeExecutor(module.executor),
         indicators: module.indicators.map((indicator) => ({ ...indicator, weight: indicator.weight ?? (Number(indicator.weightLabel.replace('%', '')) || 0) })),
         adjustmentDirection: module.adjustmentDirection,
         adjustmentMin: module.adjustmentMin,
@@ -397,7 +490,7 @@ export function PerformanceTemplateEditorPage() {
                   type,
                   participatesInTotal: type === 'adjustment' ? false : selectedModule.participatesInTotal,
                   weight: type === 'adjustment' ? null : selectedModule.weight ?? 0,
-                  executor: type === 'metric' ? { type: 'AUTO' } : selectedModule.executor.type === 'AUTO' ? { type: 'USER' } : selectedModule.executor,
+                  executor: type === 'metric' ? { type: 'AUTO', executionMode: 'SINGLE' } : selectedModule.executor.type === 'AUTO' ? { type: 'USER', executionMode: 'SINGLE', employeeIds: [] } : selectedModule.executor,
                   ...(type === 'adjustment' ? { adjustmentDirection: selectedModule.adjustmentDirection ?? 'ADD', adjustmentMin: selectedModule.adjustmentMin ?? 0, adjustmentMax: selectedModule.adjustmentMax ?? 20 } : {}),
                 })} />
               </label>
@@ -407,21 +500,81 @@ export function PerformanceTemplateEditorPage() {
                   aria-label="执行人来源"
                   value={selectedModule.executor.type}
                   options={selectedModule.type === 'metric' ? [{ label: '系统自动计算', value: 'AUTO' }] : [{ label: '具体执行人', value: 'USER' }, { label: '特定岗位名称', value: 'DIRECTORY' }]}
-                  onChange={(type: 'AUTO' | 'USER' | 'DIRECTORY') => updateModule(selectedModule.id, { executor: { type } })}
+                  onChange={(type: 'AUTO' | 'USER' | 'DIRECTORY') => {
+                    resetExecutorFilter(selectedModule.id);
+                    updateModule(selectedModule.id, {
+                      executor: type === 'AUTO'
+                        ? { type: 'AUTO', executionMode: 'SINGLE' }
+                        : type === 'USER'
+                          ? { type: 'USER', executionMode: 'SINGLE', employeeIds: [] }
+                          : { type: 'DIRECTORY', executionMode: 'SINGLE' },
+                    });
+                  }}
                 />
               </label>
-              {selectedModule.type !== 'metric' && selectedModule.executor.type === 'USER' ? (
+              {selectedModule.type !== 'metric' ? (
                 <label>
-                  <span><i>*</i> 具体执行人</span>
+                  <span><i>*</i> 执行方式</span>
                   <Select
-                    aria-label="具体执行人"
-                    showSearch
-                    options={(options.data?.users ?? []).map((option) => ({ label: `${option.displayName}（${option.username}）`, value: option.id }))}
-                    value={selectedModule.executor.userId}
-                    onChange={(userId) => updateModule(selectedModule.id, { executor: { type: 'USER', userId } })}
+                    aria-label="执行方式"
+                    disabled={selectedModule.executor.type === 'DIRECTORY'}
+                    value={selectedModule.executor.executionMode ?? 'SINGLE'}
+                    options={[{ label: '单人执行', value: 'SINGLE' }, { label: '多人执行', value: 'MULTIPLE', disabled: selectedModule.executor.type !== 'USER' }]}
+                    onChange={(executionMode: 'SINGLE' | 'MULTIPLE') => updateModule(selectedModule.id, {
+                      executor: {
+                        type: 'USER',
+                        executionMode,
+                        employeeIds: executionMode === 'SINGLE' ? selectedExecutorEmployeeIds.slice(0, 1) : selectedExecutorEmployeeIds,
+                      },
+                    })}
                   />
                 </label>
               ) : null}
+              {selectedModule.type !== 'metric' && selectedModule.executor.type === 'USER' ? <>
+                <label>
+                  <span>筛选部门</span>
+                  <OrganizationTreeSelect
+                    aria-label="筛选执行人部门"
+                    allowClear
+                    organizations={organizations.data ?? []}
+                    placeholder="部门"
+                    value={activeExecutorFilter.organizationId}
+                    onChange={(organizationId) => updateExecutorFilter(selectedModule.id, { organizationId })}
+                  />
+                </label>
+                <label>
+                  <span>姓名或工号</span>
+                  <Input
+                    aria-label="搜索执行人"
+                    allowClear
+                    placeholder="输入姓名或工号筛选"
+                    value={activeExecutorFilter.keyword}
+                    onChange={(event) => updateExecutorFilter(selectedModule.id, { keyword: event.target.value })}
+                  />
+                </label>
+                <label>
+                  <span><i>*</i> 指定人员</span>
+                  <Select
+                    aria-label="具体执行人"
+                    mode={(selectedModule.executor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? 'multiple' : undefined}
+                    showSearch={false}
+                    maxTagCount="responsive"
+                    placeholder={(selectedModule.executor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? '请选择至少两名执行人' : '请选择一名执行人'}
+                    loading={executorEmployees.isFetching}
+                    notFoundContent={executorEmployees.isFetching ? '正在加载人员' : '没有匹配的在职人员'}
+                    options={visibleExecutorEmployees.map((employee) => ({
+                      label: `${employee.name}（${employee.employeeNo}｜${employee.organizationName}）`,
+                      value: employee.id,
+                    }))}
+                    value={(selectedModule.executor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? selectedExecutorEmployeeIds : selectedExecutorEmployeeIds[0]}
+                    onChange={(value: string | string[]) => {
+                      const employeeIds = Array.isArray(value) ? value : value ? [value] : [];
+                      updateExecutorFilter(selectedModule.id, { selectedEmployees: visibleExecutorEmployees.filter((employee) => employeeIds.includes(employee.id)) });
+                      updateModule(selectedModule.id, { executor: { type: 'USER', executionMode: selectedModule.executor.executionMode ?? 'SINGLE', employeeIds } });
+                    }}
+                  />
+                </label>
+              </> : null}
               {selectedModule.type !== 'metric' && selectedModule.executor.type === 'DIRECTORY' ? (
                 <label>
                   <span><i>*</i> 特定岗位名称</span>
@@ -433,7 +586,7 @@ export function PerformanceTemplateEditorPage() {
                       ...(options.data?.jobTitles ?? []).map((option) => ({ label: `职务：${option.code} - ${option.name}`, value: `JOB_TITLE:${option.id}` })),
                     ]}
                     value={selectedModule.executor.directoryId ? `${selectedModule.executor.directoryType}:${selectedModule.executor.directoryId}` : undefined}
-                    onChange={(value: string) => { const [directoryType, directoryId] = value.split(':'); updateModule(selectedModule.id, { executor: { type: 'DIRECTORY', directoryType: directoryType as 'POSITION' | 'JOB_TITLE', directoryId } }); }}
+                    onChange={(value: string) => { const [directoryType, directoryId] = value.split(':'); updateModule(selectedModule.id, { executor: { type: 'DIRECTORY', executionMode: 'SINGLE', directoryType: directoryType as 'POSITION' | 'JOB_TITLE', directoryId } }); }}
                   />
                 </label>
               ) : null}

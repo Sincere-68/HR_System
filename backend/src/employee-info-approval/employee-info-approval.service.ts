@@ -1,9 +1,12 @@
-import { Injectable } from '@nestjs/common';
-import { ApprovalDecision, AssignmentStatus, Prisma, ProcessStatus, RecordStatus } from '@prisma/client';
-import type { EmployeeInfoApprovalListItem, Paginated } from '@hr-demo/shared';
+import { ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { ApprovalDecision, AssignmentStatus, AuditAction, Prisma, ProcessStatus } from '@prisma/client';
+import type { EmployeeInfoApprovalReminderResult, EmployeeInfoApprovalListItem, Paginated } from '@hr-demo/shared';
 import { AccessControlService } from '../access-control/access-control.service';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit.service';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
 import { DemoDataService } from '../demo/demo-data.service';
+import { FeishuService } from '../feishu/feishu.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryEmployeeInfoApprovalDto } from './dto/query-employee-info-approval.dto';
 
@@ -19,6 +22,8 @@ export class EmployeeInfoApprovalService {
     private readonly prisma: PrismaService,
     private readonly access: AccessControlService,
     private readonly demo: DemoDataService,
+    private readonly audit: AuditService,
+    private readonly feishu: FeishuService,
   ) {}
 
   async findAll(
@@ -157,6 +162,112 @@ export class EmployeeInfoApprovalService {
         total,
         totalPages: Math.ceil(total / query.pageSize),
       },
+    };
+  }
+
+  async sendReminder(
+    user: AuthenticatedUser,
+    changeRequestId: string,
+    auditContext: AuditContext,
+  ): Promise<EmployeeInfoApprovalReminderResult> {
+    if (this.demo.enabled) throw new ConflictException('演示模式不支持发送飞书审批提醒');
+    if (!this.feishu.enabled) throw new ConflictException('飞书提醒未启用');
+
+    const employeeScope = this.access.hasAllEmployeeData(user)
+      ? {}
+      : await this.access.getEmployeeWhere(user);
+    const changeRequest = await this.prisma.employeeChangeRequest.findFirst({
+      where: {
+        id: changeRequestId,
+        archivedAt: null,
+        employee: { is: employeeScope },
+        approvalRequest: {
+          is: {
+            businessType: EMPLOYEE_INFO_BUSINESS_TYPE,
+            archivedAt: null,
+            status: { in: ACTIVE_APPROVAL_STATUSES },
+          },
+        },
+      },
+      select: {
+        id: true,
+        approvalRequest: {
+          select: {
+            id: true,
+            title: true,
+            currentStep: true,
+            steps: {
+              where: { decision: ApprovalDecision.PENDING },
+              select: {
+                id: true,
+                stepOrder: true,
+                approver: {
+                  select: {
+                    id: true,
+                    displayName: true,
+                    feishuOpenId: true,
+                    employee: { select: { workEmail: true, mobile: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const approvalRequest = changeRequest?.approvalRequest;
+    if (!changeRequest || !approvalRequest) {
+      throw new NotFoundException('待处理审批记录不存在或无权访问');
+    }
+
+    const currentStep = approvalRequest.steps.find((step) => step.stepOrder === approvalRequest.currentStep);
+    if (!currentStep) throw new ConflictException('当前审批步骤不存在或已处理，无法发送提醒');
+
+    let openId = currentStep.approver.feishuOpenId;
+    if (!openId && currentStep.approver.employee) {
+      openId = await this.feishu.resolveOpenIdByContact(currentStep.approver.employee);
+      if (openId) {
+        const boundUser = await this.prisma.user.findFirst({
+          where: { feishuOpenId: openId },
+          select: { id: true },
+        });
+        if (boundUser && boundUser.id !== currentStep.approver.id) {
+          throw new ConflictException('飞书账号已绑定其他系统账号，无法发送提醒');
+        }
+        await this.prisma.user.update({
+          where: { id: currentStep.approver.id },
+          data: { feishuOpenId: openId, feishuOpenIdSyncedAt: new Date() },
+        });
+      }
+    }
+    if (!openId) {
+      throw new UnprocessableEntityException('当前审批人未绑定飞书账号，且无法通过工作邮箱或手机号匹配');
+    }
+
+    const sent = await this.feishu.sendTextToOpenId(
+      openId,
+      `【员工信息审批提醒】${approvalRequest.title}\n请及时登录人员管理系统处理。`,
+    );
+    if (!sent) throw new ServiceUnavailableException('飞书消息发送失败，请检查飞书配置和权限');
+
+    const sentAt = new Date();
+    await this.audit.create(
+      auditContext,
+      AuditAction.UPDATE,
+      changeRequest.id,
+      {
+        resource: 'employee-info-approval',
+        action: 'send-feishu-reminder',
+        approvalRequestId: approvalRequest.id,
+        approvalStepId: currentStep.id,
+      },
+      undefined,
+      'employee_info_approval',
+    );
+    return {
+      status: 'SENT',
+      approverName: currentStep.approver.displayName,
+      sentAt: sentAt.toISOString(),
     };
   }
 

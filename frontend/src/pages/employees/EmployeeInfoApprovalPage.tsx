@@ -1,14 +1,14 @@
-import { EyeOutlined, SolutionOutlined } from '@ant-design/icons';
+import { BellOutlined, EyeOutlined, SolutionOutlined } from '@ant-design/icons';
 import type {
   EmployeeInfoApprovalListItem,
   EmployeeInfoApprovalListQuery,
   ProcessStatus,
 } from '@hr-demo/shared';
-import { Alert, Button, Empty, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Empty, message, Table, Tag, Typography } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useEmployeeInfoApprovals, useOrganizations } from '../../features/employees/api';
+import { useEmployeeInfoApprovals, useOrganizations, useSendEmployeeInfoApprovalReminder } from '../../features/employees/api';
 import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 
 const statusLabels: Record<ProcessStatus, string> = {
@@ -50,6 +50,7 @@ function StatusCell({ status }: { status: ProcessStatus | null }) {
 }
 
 export function EmployeeInfoApprovalPage() {
+  const [messageApi, messageContext] = message.useMessage();
   const [searchParams, setSearchParams] = useSearchParams();
   const approvalView = searchParams.get('view') === 'personal' ? 'personal' : 'employment';
   const query = useMemo<EmployeeInfoApprovalListQuery>(() => ({
@@ -60,6 +61,7 @@ export function EmployeeInfoApprovalPage() {
   }), [searchParams]);
   const approvals = useEmployeeInfoApprovals(query);
   const organizations = useOrganizations();
+  const reminder = useSendEmployeeInfoApprovalReminder();
 
   const patchSearch = (changes: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams);
@@ -93,13 +95,30 @@ export function EmployeeInfoApprovalPage() {
       title: '操作',
       key: 'actions',
       fixed: 'right',
-      width: 100,
-      render: (_, record) => record.employeeId && record.canViewEmployeeDetail ? (
-        <Link to={`/personnel/employees/${record.employeeId}`}>
-          <Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
-        </Link>
-      ) : (
-        <Button type="link" size="small" disabled title="该审批记录未关联员工主档案">暂无详情</Button>
+      width: 200,
+      render: (_, record) => (
+        <>
+          <Button
+            type="link"
+            size="small"
+            icon={<BellOutlined />}
+            disabled={!record.currentApproverName || !['PENDING', 'IN_PROGRESS'].includes(record.status ?? '')}
+            loading={reminder.isPending && reminder.variables === record.id}
+            onClick={() => reminder.mutate(record.id, {
+              onSuccess: () => messageApi.success('已向当前审批人发送飞书提醒'),
+              onError: (error) => messageApi.error(error instanceof Error ? error.message : '飞书提醒发送失败'),
+            })}
+          >
+            提醒审批人
+          </Button>
+          {record.employeeId && record.canViewEmployeeDetail ? (
+            <Link to={`/personnel/employees/${record.employeeId}`}>
+              <Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
+            </Link>
+          ) : (
+            <Button type="link" size="small" disabled title="该审批记录未关联员工主档案">暂无详情</Button>
+          )}
+        </>
       ),
     },
   ];
@@ -108,6 +127,7 @@ export function EmployeeInfoApprovalPage() {
 
   return (
     <section className="employee-list-page employee-info-approval-page" aria-labelledby="employee-info-approval-heading">
+      {messageContext}
       <header className="employee-page-heading">
         <div className="employee-title-group blacklist-title-group">
           <span className="employee-title-icon" aria-hidden="true"><SolutionOutlined /></span>
@@ -173,7 +193,7 @@ export function EmployeeInfoApprovalPage() {
           loading={approvals.isLoading}
           columns={columns}
           dataSource={approvals.data?.data ?? []}
-          scroll={{ x: 1_220 }}
+          scroll={{ x: 1_340 }}
           sticky={{ offsetHeader: 48, offsetScroll: 0 }}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的审批记录" /> }}
           pagination={{

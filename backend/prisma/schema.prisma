@@ -345,6 +345,11 @@ enum PerformanceExecutorType {
   DIRECTORY
 }
 
+enum PerformanceExecutionMode {
+  SINGLE
+  MULTIPLE
+}
+
 enum PerformanceDirectoryType {
   POSITION
   JOB_TITLE
@@ -359,6 +364,18 @@ enum PerformanceVersionStatus {
 enum PerformanceTemplateSourceType {
   MARKDOWN
   MANUAL
+}
+
+enum PerformanceCyclePeriodType {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+}
+
+enum PerformanceExceptionHandlerType {
+  SPECIFIED_USER
+  DIRECT_MANAGER
 }
 
 enum PerformanceAdjustmentDirection {
@@ -451,11 +468,13 @@ model User {
   archivedEmployees                     Employee[]                      @relation("EmployeeArchivedBy")
   evaluatedAppraisals                   EmployeeAppraisal[]             @relation("AppraisalEvaluator")
   performanceTemplates                  PerformanceTemplate[]
+  archivedPerformanceTemplates          PerformanceTemplate[]           @relation("PerformanceTemplateArchivedBy")
   performanceTemplateVersions           PerformanceTemplateVersion[]
   performanceCycles                     PerformanceCycle[]
   changedEmployeePerformanceAmountBases EmployeePerformanceAmountBase[] @relation("EmployeePerformanceAmountBaseChangedBy")
   performanceResultRevisions            PerformanceResultRevision[]
   performanceTasks                      PerformanceModuleTask[]         @relation("PerformanceTaskExecutor")
+  performanceTaskAssignees              PerformanceModuleTaskAssignee[] @relation("PerformanceTaskAssignee")
   createdBlacklistRecords               EmployeeBlacklistRecord[]       @relation("BlacklistCreator")
   ownedOnboardingCases                  OnboardingCase[]                @relation("OnboardingOwner")
   responsibleOnboardingTasks            OnboardingTask[]                @relation("OnboardingTaskResponsible")
@@ -497,6 +516,7 @@ model Organization {
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
   performanceInstances PerformanceInstance[]
+  performanceCycles    PerformanceCycle[]
 
   @@index([parentId])
   @@index([archivedById])
@@ -601,8 +621,10 @@ model Employee {
   acceptedOffers         Offer[]                         @relation("AcceptedOfferEmployee")
   offeredAsDirectManager Offer[]                         @relation("OfferDirectManager")
   convertedCandidates    Candidate[]                     @relation("ConvertedCandidate")
-  performanceInstances   PerformanceInstance[]
-  performanceAmountBases EmployeePerformanceAmountBase[]
+  performanceInstances             PerformanceInstance[]
+  exceptionHandlingPerformanceCycles PerformanceCycle[] @relation("PerformanceCycleExceptionHandler")
+  performanceTaskAssignees         PerformanceModuleTaskAssignee[] @relation("PerformanceTaskAssigneeEmployee")
+  performanceAmountBases           EmployeePerformanceAmountBase[]
   outgoingHandovers      HandoverCase[]                  @relation("HandoverSource")
   incomingHandovers      HandoverCase[]                  @relation("HandoverTarget")
   createdAt              DateTime                        @default(now()) @map("created_at")
@@ -1513,19 +1535,23 @@ model EmployeeAgreement {
 }
 
 model PerformanceTemplate {
-  id          String                       @id @default(cuid())
-  name        String
-  description String?                      @db.Text
-  status      RecordStatus                 @default(ACTIVE)
-  archivedAt  DateTime?                    @map("archived_at")
-  createdById String                       @map("created_by_id")
-  createdBy   User                         @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  versions    PerformanceTemplateVersion[]
+  id            String                       @id @default(cuid())
+  name          String
+  description   String?                      @db.Text
+  status        RecordStatus                 @default(ACTIVE)
+  archivedAt    DateTime?                    @map("archived_at")
+  archivedById  String?                      @map("archived_by_id")
+  archiveReason String?                      @map("archive_reason") @db.Text
+  createdById   String                       @map("created_by_id")
+  createdBy     User                         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  archivedBy    User?                        @relation("PerformanceTemplateArchivedBy", fields: [archivedById], references: [id], onDelete: Restrict)
+  versions      PerformanceTemplateVersion[]
   cycles      PerformanceCycle[]
   createdAt   DateTime                     @default(now()) @map("created_at")
   updatedAt   DateTime                     @updatedAt @map("updated_at")
 
   @@index([createdById, status])
+  @@index([archivedById])
   @@map("performance_templates")
 }
 
@@ -1551,25 +1577,37 @@ model PerformanceTemplateVersion {
 }
 
 model PerformanceCycle {
-  id                String                     @id @default(cuid())
-  name              String
-  periodStart       DateTime                   @map("period_start") @db.Date
-  periodEnd         DateTime                   @map("period_end") @db.Date
-  templateId        String                     @map("template_id")
-  templateVersionId String                     @map("template_version_id")
-  status            ProcessStatus              @default(DRAFT)
-  createdById       String                     @map("created_by_id")
-  startedAt         DateTime?                  @map("started_at")
-  completedAt       DateTime?                  @map("completed_at")
-  template          PerformanceTemplate        @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  templateVersion   PerformanceTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
-  createdBy         User                       @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  instances         PerformanceInstance[]
-  createdAt         DateTime                   @default(now()) @map("created_at")
-  updatedAt         DateTime                   @updatedAt @map("updated_at")
+  id                     String                           @id @default(cuid())
+  name                   String
+  organizationId         String?                          @map("organization_id")
+  isPublic               Boolean                          @default(false) @map("is_public")
+  linkedLevel            Boolean                          @default(true) @map("linked_level")
+  year                   Int?
+  periodType             PerformanceCyclePeriodType?      @map("period_type")
+  exceptionHandlerType       PerformanceExceptionHandlerType?  @map("exception_handler_type")
+  exceptionHandlerEmployeeId String?                          @map("exception_handler_employee_id")
+  lockRelation               Boolean                          @default(false) @map("lock_relation")
+  periodStart            DateTime                         @map("period_start") @db.Date
+  periodEnd              DateTime                         @map("period_end") @db.Date
+  templateId             String?                          @map("template_id")
+  templateVersionId      String?                          @map("template_version_id")
+  status                 ProcessStatus                    @default(DRAFT)
+  createdById            String                           @map("created_by_id")
+  startedAt              DateTime?                        @map("started_at")
+  completedAt            DateTime?                        @map("completed_at")
+  organization           Organization?                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  template               PerformanceTemplate?             @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  templateVersion        PerformanceTemplateVersion?      @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  createdBy                  User                             @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  exceptionHandlerEmployee   Employee?                        @relation("PerformanceCycleExceptionHandler", fields: [exceptionHandlerEmployeeId], references: [id], onDelete: Restrict)
+  instances              PerformanceInstance[]
+  createdAt              DateTime                         @default(now()) @map("created_at")
+  updatedAt              DateTime                         @updatedAt @map("updated_at")
 
+  @@index([organizationId, status])
   @@index([templateVersionId, status])
   @@index([periodStart, periodEnd, status])
+  @@index([exceptionHandlerEmployeeId])
   @@map("performance_cycles")
 }
 
@@ -1618,6 +1656,7 @@ model PerformanceModuleTask {
   moduleWeight            Decimal?                  @map("module_weight") @db.Decimal(10, 4)
   moduleSnapshot          Json                      @map("module_snapshot")
   executorType            PerformanceExecutorType   @map("executor_type")
+  executionMode           PerformanceExecutionMode  @default(SINGLE) @map("execution_mode")
   executorUserId          String?                   @map("executor_user_id")
   executorDirectoryType   PerformanceDirectoryType? @map("executor_directory_type")
   executorDirectoryId     String?                   @map("executor_directory_id")
@@ -1633,6 +1672,7 @@ model PerformanceModuleTask {
   instance                PerformanceInstance       @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   employee                Employee                  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   executorUser            User?                     @relation("PerformanceTaskExecutor", fields: [executorUserId], references: [id], onDelete: SetNull)
+  assignees               PerformanceModuleTaskAssignee[]
   createdAt               DateTime                  @default(now()) @map("created_at")
   updatedAt               DateTime                  @updatedAt @map("updated_at")
 
@@ -1640,6 +1680,31 @@ model PerformanceModuleTask {
   @@index([executorUserId, status])
   @@index([employeeId, status])
   @@map("performance_module_tasks")
+}
+
+model PerformanceModuleTaskAssignee {
+  id                      String                @id @default(cuid())
+  taskId                  String                @map("task_id")
+  employeeId              String?               @map("employee_id")
+  userId                  String?               @map("user_id")
+  displayNameSnapshot     String                @map("display_name_snapshot")
+  accountSnapshot         String?               @map("account_snapshot")
+  status                  TaskStatus            @default(PENDING)
+  submission              Json?
+  score                   Decimal?              @db.Decimal(10, 4)
+  completedAt             DateTime?             @map("completed_at")
+  task                    PerformanceModuleTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  employee                Employee?             @relation("PerformanceTaskAssigneeEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  user                    User?                 @relation("PerformanceTaskAssignee", fields: [userId], references: [id], onDelete: Restrict)
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+
+  @@unique([taskId, employeeId])
+  @@unique([taskId, userId])
+  @@index([employeeId, status])
+  @@index([userId, status])
+  @@index([taskId, status])
+  @@map("performance_module_task_assignees")
 }
 
 model EmployeePerformanceAmountBase {

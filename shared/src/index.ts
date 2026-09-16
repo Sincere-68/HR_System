@@ -291,12 +291,18 @@ export type PerformanceModuleType = (typeof PERFORMANCE_MODULE_TYPES)[number];
 export type PerformanceModuleKind = 'metric' | 'evaluation' | 'adjustment';
 export const PERFORMANCE_EXECUTOR_TYPES = ['AUTO', 'USER', 'DIRECTORY'] as const;
 export type PerformanceExecutorType = (typeof PERFORMANCE_EXECUTOR_TYPES)[number];
+export const PERFORMANCE_EXECUTION_MODES = ['SINGLE', 'MULTIPLE'] as const;
+export type PerformanceExecutionMode = (typeof PERFORMANCE_EXECUTION_MODES)[number];
 export const PERFORMANCE_DIRECTORY_TYPES = ['POSITION', 'JOB_TITLE'] as const;
 export type PerformanceDirectoryType = (typeof PERFORMANCE_DIRECTORY_TYPES)[number];
 export const PERFORMANCE_VERSION_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const;
 export type PerformanceVersionStatus = (typeof PERFORMANCE_VERSION_STATUSES)[number];
 export const PERFORMANCE_TEMPLATE_SOURCE_TYPES = ['MARKDOWN', 'MANUAL'] as const;
 export type PerformanceTemplateSourceType = (typeof PERFORMANCE_TEMPLATE_SOURCE_TYPES)[number];
+export const PERFORMANCE_CYCLE_PERIOD_TYPES = ['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL'] as const;
+export type PerformanceCyclePeriodType = (typeof PERFORMANCE_CYCLE_PERIOD_TYPES)[number];
+export const PERFORMANCE_EXCEPTION_HANDLER_TYPES = ['SPECIFIED_USER', 'DIRECT_MANAGER'] as const;
+export type PerformanceExceptionHandlerType = (typeof PERFORMANCE_EXCEPTION_HANDLER_TYPES)[number];
 export const PERFORMANCE_ADJUSTMENT_DIRECTIONS = ['ADD', 'DEDUCT'] as const;
 export type PerformanceAdjustmentDirection = (typeof PERFORMANCE_ADJUSTMENT_DIRECTIONS)[number];
 
@@ -763,6 +769,12 @@ export interface EmployeeInfoApprovalListQuery {
   status?: ProcessStatus;
   page?: number;
   pageSize?: number;
+}
+
+export interface EmployeeInfoApprovalReminderResult {
+  status: 'SENT';
+  approverName: string;
+  sentAt: string;
 }
 
 export interface OnboardingListQuery {
@@ -1634,6 +1646,13 @@ export interface UpdateEmployeeInput {
 
 export interface PerformanceExecutorDefinition {
   type: PerformanceExecutorType;
+  /** Defaults to SINGLE for definitions created before execution modes existed. */
+  executionMode?: PerformanceExecutionMode;
+  /** Selected personnel for a USER executor. MULTIPLE requires at least two distinct employees. */
+  employeeIds?: string[];
+  /** @deprecated Legacy system-account fields. Readers normalize them to employee IDs when possible. */
+  userIds?: string[];
+  /** @deprecated Legacy single-user field. */
   userId?: string;
   directoryType?: PerformanceDirectoryType;
   directoryId?: string;
@@ -1716,6 +1735,10 @@ export interface PerformanceTemplateCopyResult extends PerformanceTemplateDetail
   sourceTemplateId: string;
 }
 
+export interface PerformanceArchiveTemplateInput {
+  reason?: string;
+}
+
 export interface PerformanceParseError {
   path: string;
   message: string;
@@ -1748,7 +1771,10 @@ export interface PerformanceUserOption {
   id: string;
   username: string;
   displayName: string;
-  employeeId: string | null;
+  employeeId: string;
+  employeeNo: string;
+  organizationId: string;
+  organizationName: string;
 }
 
 export interface PerformanceOptions {
@@ -1760,14 +1786,39 @@ export interface PerformanceOptions {
 export interface PerformanceCycleListItem {
   id: string;
   name: string;
+  organizationId: string | null;
+  organizationName: string | null;
+  isPublic: boolean;
+  linkedLevel: boolean;
+  year: number | null;
+  periodType: PerformanceCyclePeriodType | null;
+  exceptionHandlerType: PerformanceExceptionHandlerType | null;
+  exceptionHandlerEmployeeId: string | null;
+  exceptionHandlerName: string | null;
+  exceptionHandlerEmployeeNo: string | null;
+  lockRelation: boolean;
   periodStart: string;
   periodEnd: string;
   templateName: string;
   templateVersionNo: number;
+  createdByName: string | null;
   status: ProcessStatus;
   instanceCount: number;
   completedInstanceCount: number;
   createdAt: string;
+}
+
+export interface PerformanceTaskAssignee {
+  id: string;
+  employeeId: string | null;
+  /** Null when the employee receives only a Feishu reminder. */
+  userId: string | null;
+  displayName: string;
+  username: string | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  score: number | null;
+  submission: { score?: number; adjustment?: number; comment?: string; attachmentIds?: string[] } | null;
+  completedAt: string | null;
 }
 
 export interface PerformanceTaskListItem {
@@ -1783,8 +1834,10 @@ export interface PerformanceTaskListItem {
   moduleType: PerformanceModuleType;
   moduleOrder: number;
   moduleWeight: number | null;
+  executionMode: PerformanceExecutionMode;
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   executorName: string | null;
+  assignees: PerformanceTaskAssignee[];
   isCurrent: boolean;
   canSubmit: boolean;
   completedAt: string | null;
@@ -1876,10 +1929,19 @@ export interface PerformanceCreateTemplateInput {
 
 export interface PerformanceCreateCycleInput {
   name: string;
+  organizationId: string;
+  isPublic: boolean;
+  linkedLevel: boolean;
+  templateVersionId?: string;
+  year: number;
+  periodType: PerformanceCyclePeriodType;
   periodStart: string;
   periodEnd: string;
-  templateVersionId: string;
-  employeeIds: string[];
+  exceptionHandlerType: PerformanceExceptionHandlerType;
+  exceptionHandlerEmployeeId?: string;
+  lockRelation: boolean;
+  /** @deprecated The server derives all participants from organizationId. */
+  employeeIds?: string[];
 }
 
 export interface PerformanceTaskSubmissionInput {

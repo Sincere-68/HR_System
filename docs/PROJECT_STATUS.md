@@ -67,7 +67,7 @@
 | 人员详情/新增/编辑 | `/personnel/employees/:id`、`/new`、`/:id/edit` | `GET /employees/:id`、`GET /employees/form-options`、`POST /employees`、`PATCH /employees/:id` | 已有核心业务链路。 |
 | 黑名单管理 | `/personnel/blacklist` | `GET /blacklist` | 已实现只读列表；符合条件时可查看关联人员。 |
 | 黑名单移除页 | `/personnel/blacklist/removal` | 无独立移除接口 | 有前端路由，不应视为已完成移除流程。 |
-| 员工信息审批 | `/personnel/approval` | `GET /employee-info-approval` | 已实现只读列表和两个页签。 |
+| 员工信息审批 | `/personnel/approval` | `GET /employee-info-approvals`、`POST /employee-info-approvals/:id/reminders` | 已实现审批列表和两个页签；可手动向当前审批人发送飞书提醒。 |
 | 合同协议 | `/contracts` | `GET /contracts` | 已实现当前有效合同只读列表；操作禁用。 |
 | 职责转交 | `/handover` | 无 | 独立前端静态页面；接收人选项和设置按钮尚未连接业务接口。 |
 
@@ -203,7 +203,7 @@
 
 ### 5.3 员工信息审批
 
-接口：`GET /employee-info-approval`，主记录为 `EmployeeChangeRequest`，关联 `ApprovalRequest` 和审批步骤。页面保留“在职信息采集/个人信息变更”页签。
+接口：`GET /employee-info-approvals`，主记录为 `EmployeeChangeRequest`，关联 `ApprovalRequest` 和审批步骤。页面保留“在职信息采集/个人信息变更”页签。
 
 | 页面列 | shared/API 字段 | 来源与行为 |
 |---|---|---|
@@ -214,7 +214,7 @@
 | 发起时间 | `submittedAt` | `ApprovalRequest.submittedAt`。 |
 | 信息采集状态 | `status` | 优先 `ApprovalRequest.status`，否则使用变更请求状态。 |
 | 当前审批人 | `currentApproverName` | 当前待处理 `ApprovalStep.approver.displayName`。 |
-| 操作 | — | 符合条件时查看人员详情。 |
+| 操作 | — | 符合条件时可查看人员详情；处于待审批/处理中时，可调用 `POST /employee-info-approvals/:id/reminders` 向当前审批人发送飞书提醒。服务端按审批人关联人员的工作邮箱、手机号精确查询飞书账号；不会接受前端传入的 `open_id`。 |
 
 ### 5.4 录用入职
 

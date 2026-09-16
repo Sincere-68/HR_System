@@ -38,8 +38,20 @@ function createDatabaseService(rows: unknown[] = []) {
     getAccessibleOrganizationIds: jest.fn().mockResolvedValue(['org-1', 'org-child']),
     getEmployeeWhere: jest.fn().mockResolvedValue(employeeWhere),
   };
+  const audit = { create: jest.fn().mockResolvedValue(undefined) };
+  const feishu = {
+    enabled: false,
+    resolveOpenIdByContact: jest.fn(),
+    sendTextToOpenId: jest.fn(),
+  };
   return {
-    service: new EmployeeInfoApprovalService(prisma as never, access as never, { enabled: false } as never),
+    service: new EmployeeInfoApprovalService(
+      prisma as never,
+      access as never,
+      { enabled: false } as never,
+      audit as never,
+      feishu as never,
+    ),
     findMany,
   };
 }
@@ -50,6 +62,8 @@ describe('EmployeeInfoApprovalService', () => {
       {} as never,
       {} as never,
       { enabled: true } as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(service.findAll(scopedUser, query)).resolves.toEqual({
@@ -161,5 +175,74 @@ describe('EmployeeInfoApprovalService', () => {
       currentApproverName: '当前审批人',
     }));
     expect(JSON.stringify(result.data[0])).not.toContain('范围外主部门');
+  });
+
+  it('sends a Feishu reminder only to the current approver and persists a verified contact match', async () => {
+    const currentApprover = {
+      id: 'approver-current',
+      displayName: '当前审批人',
+      feishuOpenId: null,
+      employee: { workEmail: 'approver@example.com', mobile: null },
+    };
+    const findFirst = jest.fn().mockResolvedValue({
+      id: 'change-1',
+      approvalRequest: {
+        id: 'approval-1',
+        title: '虚构员工资料变更',
+        currentStep: 2,
+        steps: [
+          {
+            id: 'step-1',
+            stepOrder: 1,
+            approver: { id: 'approver-previous', displayName: '上一审批人', feishuOpenId: 'ou_previous', employee: null },
+          },
+          { id: 'step-2', stepOrder: 2, approver: currentApprover },
+        ],
+      },
+    });
+    const update = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      employeeChangeRequest: { findFirst },
+      user: { findFirst: jest.fn().mockResolvedValue(null), update },
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn(() => false),
+      getEmployeeWhere: jest.fn().mockResolvedValue(employeeWhere),
+    };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const feishu = {
+      enabled: true,
+      resolveOpenIdByContact: jest.fn().mockResolvedValue('ou_current'),
+      sendTextToOpenId: jest.fn().mockResolvedValue(true),
+    };
+    const service = new EmployeeInfoApprovalService(
+      prisma as never,
+      access as never,
+      { enabled: false } as never,
+      audit as never,
+      feishu as never,
+    );
+
+    await expect(service.sendReminder(scopedUser, 'change-1', { userId: scopedUser.id })).resolves.toEqual({
+      status: 'SENT',
+      approverName: '当前审批人',
+      sentAt: expect.any(String),
+    });
+
+    expect(feishu.resolveOpenIdByContact).toHaveBeenCalledWith(currentApprover.employee);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'approver-current' },
+      data: expect.objectContaining({ feishuOpenId: 'ou_current', feishuOpenIdSyncedAt: expect.any(Date) }),
+    }));
+    expect(feishu.sendTextToOpenId).toHaveBeenCalledWith('ou_current', expect.stringContaining('虚构员工资料变更'));
+    expect(feishu.sendTextToOpenId).not.toHaveBeenCalledWith('ou_previous', expect.any(String));
+    expect(audit.create).toHaveBeenCalledWith(
+      { userId: scopedUser.id },
+      'UPDATE',
+      'change-1',
+      expect.objectContaining({ action: 'send-feishu-reminder', approvalStepId: 'step-2' }),
+      undefined,
+      'employee_info_approval',
+    );
   });
 });

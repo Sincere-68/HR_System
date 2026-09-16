@@ -20,6 +20,10 @@ export interface PerformanceTemplateModule {
   responsibleRole: string;
   executor: {
     type: 'AUTO' | 'USER' | 'DIRECTORY';
+    executionMode?: 'SINGLE' | 'MULTIPLE';
+    employeeIds?: string[];
+    /** @deprecated Legacy definitions may still provide user IDs. */
+    userIds?: string[];
     userId?: string;
     directoryType?: 'POSITION' | 'JOB_TITLE';
     directoryId?: string;
@@ -333,7 +337,7 @@ export function parseHrbpPerformanceMarkdown(markdown: string): ParsedPerformanc
         name: '业务达成',
         type: 'metric',
         responsibleRole: '系统自动计算',
-        executor: { type: 'AUTO' },
+        executor: { type: 'AUTO', executionMode: 'SINGLE' },
         enabled: true,
         participatesInTotal: true,
         weight: findFormulaWeight(markdown, '业务达成评分', 10),
@@ -357,7 +361,7 @@ export function parseHrbpPerformanceMarkdown(markdown: string): ParsedPerformanc
         name: '业务负责人评价',
         type: 'evaluation',
         responsibleRole: '业务负责人',
-        executor: { type: 'USER' },
+        executor: { type: 'USER', executionMode: 'SINGLE', employeeIds: [] },
         enabled: true,
         participatesInTotal: true,
         weight: findFormulaWeight(markdown, '业务负责人评价分', 40),
@@ -369,7 +373,7 @@ export function parseHrbpPerformanceMarkdown(markdown: string): ParsedPerformanc
         name: 'BP负责人评价',
         type: 'evaluation',
         responsibleRole: 'BP负责人',
-        executor: { type: 'USER' },
+        executor: { type: 'USER', executionMode: 'SINGLE', employeeIds: [] },
         enabled: true,
         participatesInTotal: true,
         weight: findFormulaWeight(markdown, 'BP负责人评价分', 50),
@@ -391,7 +395,7 @@ export function parseHrbpPerformanceMarkdown(markdown: string): ParsedPerformanc
         name: '工作失误扣减',
         type: 'adjustment',
         responsibleRole: 'BP负责人',
-        executor: { type: 'USER' },
+        executor: { type: 'USER', executionMode: 'SINGLE', employeeIds: [] },
         enabled: true,
         participatesInTotal: false,
         weight: null,
@@ -413,7 +417,7 @@ export function parseHrbpPerformanceMarkdown(markdown: string): ParsedPerformanc
         name: '奖励超额贡献',
         type: 'adjustment',
         responsibleRole: 'BP负责人',
-        executor: { type: 'USER' },
+        executor: { type: 'USER', executionMode: 'SINGLE', employeeIds: [] },
         enabled: true,
         participatesInTotal: false,
         weight: null,

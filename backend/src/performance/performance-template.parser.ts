@@ -12,6 +12,7 @@ import type {
 const JSON_BLOCK = /```(?:performance-template|json)\s*\n([\s\S]*?)```/i;
 const MODULE_TYPES = new Set(['METRIC', 'EVALUATION', 'ADJUSTMENT']);
 const EXECUTOR_TYPES = new Set(['AUTO', 'USER', 'DIRECTORY']);
+const EXECUTION_MODES = new Set(['SINGLE', 'MULTIPLE']);
 const DIRECTORY_TYPES = new Set(['POSITION', 'JOB_TITLE']);
 const RULE_OPERATORS = new Set(['constant', 'field', 'add', 'subtract', 'multiply', 'divide', 'min', 'max', 'if']);
 const CONDITION_OPERATORS = new Set(['<', '<=', '>', '>=', '=', '!=']);
@@ -135,17 +136,38 @@ export class PerformanceTemplateParser {
       return null;
     }
     const type = String(value.type) as 'AUTO' | 'USER' | 'DIRECTORY';
-    if (type === 'AUTO') return { type } as const;
+    const rawExecutionMode = this.stringValue(value.executionMode) ?? 'SINGLE';
+    if (!EXECUTION_MODES.has(rawExecutionMode)) {
+      errors.push({ path: `${path}.executionMode`, message: '执行方式必须为 SINGLE 或 MULTIPLE' });
+    }
+    const executionMode = rawExecutionMode as 'SINGLE' | 'MULTIPLE';
+    if (type === 'AUTO') {
+      if (executionMode !== 'SINGLE') errors.push({ path: `${path}.executionMode`, message: '系统自动计算只能单人执行' });
+      return { type, executionMode } as const;
+    }
     if (type === 'USER') {
-      if (requireDetails && !this.isNonEmptyString(value.userId)) errors.push({ path: `${path}.userId`, message: '具体执行人必须指定 userId' });
-      return { type, userId: this.stringValue(value.userId) ?? undefined };
+      const employeeIds = Array.isArray(value.employeeIds)
+        ? value.employeeIds.filter((item): item is string => this.isNonEmptyString(item)).map((item) => item.trim())
+        : [];
+      const legacyUserIds = Array.isArray(value.userIds)
+        ? value.userIds.filter((item): item is string => this.isNonEmptyString(item)).map((item) => item.trim())
+        : this.isNonEmptyString(value.userId) ? [value.userId.trim()] : [];
+      const selectedIds = employeeIds.length > 0 ? employeeIds : legacyUserIds;
+      const uniqueSelectedIds = [...new Set(selectedIds)];
+      if (selectedIds.length !== uniqueSelectedIds.length) errors.push({ path: `${path}.${employeeIds.length > 0 ? 'employeeIds' : 'userIds'}`, message: '具体执行人员不能重复选择' });
+      if (requireDetails && uniqueSelectedIds.length === 0) errors.push({ path: `${path}.employeeIds`, message: '具体执行人员必须至少指定一人' });
+      if (executionMode === 'SINGLE' && uniqueSelectedIds.length > 1) errors.push({ path: `${path}.employeeIds`, message: '单人执行只能指定一名具体执行人员' });
+      if (executionMode === 'MULTIPLE' && uniqueSelectedIds.length < 2) errors.push({ path: `${path}.employeeIds`, message: '多人执行必须指定至少两名具体执行人员' });
+      return employeeIds.length > 0 ? { type, executionMode, employeeIds: uniqueSelectedIds } : { type, executionMode, userIds: uniqueSelectedIds };
     }
     const directoryType = this.stringValue(value.directoryType);
+    if (executionMode !== 'SINGLE') errors.push({ path: `${path}.executionMode`, message: '岗位或职务执行人只能单人执行' });
     if (requireDetails && (!directoryType || !DIRECTORY_TYPES.has(directoryType) || !this.isNonEmptyString(value.directoryId))) {
       errors.push({ path, message: '岗位执行人必须指定 directoryType 和 directoryId' });
     }
     return {
       type,
+      executionMode,
       directoryType: directoryType as 'POSITION' | 'JOB_TITLE',
       directoryId: this.stringValue(value.directoryId) ?? undefined,
     };
@@ -178,7 +200,7 @@ export class PerformanceTemplateParser {
           participatesInTotal: true,
           weight: 0,
           description: '',
-          executor: { type: 'USER' as const },
+          executor: { type: 'USER' as const, executionMode: 'SINGLE' as const, userIds: [] },
           indicators: [],
         };
         module.weight = (module.weight ?? 0) + weight;
@@ -240,7 +262,9 @@ export class PerformanceTemplateParser {
           participatesInTotal: type !== 'ADJUSTMENT',
           weight: type === 'ADJUSTMENT' ? null : weight,
           description: '',
-          executor: { type: type === 'METRIC' ? 'AUTO' : 'USER' },
+          executor: type === 'METRIC'
+            ? { type: 'AUTO' as const, executionMode: 'SINGLE' as const }
+            : { type: 'USER' as const, executionMode: 'SINGLE' as const, userIds: [] },
           indicators: [],
           ...(type === 'ADJUSTMENT' ? { adjustmentDirection: /扣减/.test(name) ? 'DEDUCT' as const : 'ADD' as const, adjustmentMin: 0, adjustmentMax: 100 } : {}),
         };

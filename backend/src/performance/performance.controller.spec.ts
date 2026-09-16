@@ -10,6 +10,7 @@ describe('PerformanceController permissions', () => {
     ['parseTemplate', PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE],
     ['createTemplate', PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE],
     ['copyTemplate', PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE],
+    ['archiveTemplate', PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE],
     ['createTemplateVersion', PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE],
     ['publishTemplateVersion', PERMISSIONS.PERFORMANCE_TEMPLATE_MANAGE],
     ['createCycle', PERMISSIONS.PERFORMANCE_CYCLE_MANAGE],

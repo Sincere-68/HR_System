@@ -8,6 +8,7 @@ import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { SystemSelectionPage } from '../pages/SystemSelectionPage';
 import { PerformanceAmountBasePage } from '../pages/performance/PerformanceAmountBasePage';
+import { PerformanceActivitiesPage } from '../pages/performance/PerformanceActivitiesPage';
 import { PerformanceDashboardPage } from '../pages/performance/PerformanceDashboardPage';
 import { PerformanceMyTasksPage } from '../pages/performance/PerformanceMyTasksPage';
 import { PerformanceResultsPage } from '../pages/performance/PerformanceResultsPage';
@@ -61,6 +62,7 @@ export function AppRouter() {
         <Route index element={<SystemSelectionPage />} />
         <Route path="performance" element={<PerformanceLayout />}>
           <Route index element={<PerformanceDashboardPage />} />
+          <Route path="activities" element={<PerformanceActivitiesPage />} />
           <Route path="templates" element={<PerformanceTemplatesPage />} />
           <Route path="templates/new" element={<PerformanceTemplateEditorPage />} />
           <Route path="templates/:templateId" element={<PerformanceTemplateEditorPage />} />

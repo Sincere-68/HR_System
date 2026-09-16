@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsDateString, IsDefined, IsEnum, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
-import { PerformanceTemplateSourceType, ProcessStatus } from '@prisma/client';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsEnum, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { PerformanceCyclePeriodType, PerformanceExceptionHandlerType, PerformanceTemplateSourceType, ProcessStatus } from '@prisma/client';
 
 export class ParsePerformanceTemplateDto {
   @ApiProperty({ description: '原始 Markdown' })
@@ -75,6 +75,29 @@ export class CreatePerformanceCycleDto {
   @MaxLength(191)
   name!: string;
 
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  organizationId!: string;
+
+  @ApiProperty()
+  @IsBoolean()
+  isPublic!: boolean;
+
+  @ApiProperty()
+  @IsBoolean()
+  linkedLevel!: boolean;
+
+  @ApiProperty({ minimum: 2000, maximum: 9999 })
+  @IsInt()
+  @Min(2000)
+  @Max(9999)
+  year!: number;
+
+  @ApiProperty({ enum: PerformanceCyclePeriodType })
+  @IsEnum(PerformanceCyclePeriodType)
+  periodType!: PerformanceCyclePeriodType;
+
   @ApiProperty({ description: '周期开始日期 YYYY-MM-DD' })
   @IsDateString({ strict: true })
   periodStart!: string;
@@ -83,16 +106,38 @@ export class CreatePerformanceCycleDto {
   @IsDateString({ strict: true })
   periodEnd!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  templateVersionId!: string;
+  templateVersionId?: string;
 
-  @ApiProperty({ isArray: true })
+  @ApiProperty({ enum: PerformanceExceptionHandlerType })
+  @IsEnum(PerformanceExceptionHandlerType)
+  exceptionHandlerType!: PerformanceExceptionHandlerType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  exceptionHandlerEmployeeId?: string;
+
+  @ApiProperty()
+  @IsBoolean()
+  lockRelation!: boolean;
+
+  /** @deprecated Participants are derived from organizationId by the server. */
+  @ApiPropertyOptional({ isArray: true })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @IsString({ each: true })
-  employeeIds!: string[];
+  employeeIds?: string[];
+}
+
+export class ArchivePerformanceTemplateDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(10_000)
+  reason?: string;
 }
 
 export class PerformanceTaskSubmissionDto {
