@@ -87,10 +87,29 @@ describe('EmployeesService in demo mode', () => {
     expect(result.assignmentId).toBeNull();
     expect(result.documentType).toBe('NATIONAL_ID');
     expect(result.workEmail).toBeNull();
+    expect(result.currentPerformanceActivity).toBeNull();
   });
 });
 
 describe('EmployeesService personnel population filters', () => {
+  it('expands a selected organization to its current and descendant employees', async () => {
+    const findMany = jest.fn().mockReturnValue({ query: 'employees' });
+    const count = jest.fn().mockReturnValue({ query: 'count' });
+    const prisma = { employee: { findMany, count }, $transaction: jest.fn().mockResolvedValue([[], 0]) };
+    const access = {
+      hasAllEmployeeData: jest.fn().mockReturnValue(true),
+      getAccessibleOrganizationIds: jest.fn(),
+      getOrganizationSubtreeIds: jest.fn().mockResolvedValue(['org-parent', 'org-child']),
+    };
+    const service = new EmployeesService(prisma as never, access as never, { create: jest.fn() } as never, { enabled: false } as never);
+    const user = { id: 'admin', username: 'admin', displayName: '管理员', role: 'ADMIN' as const, roleName: '管理员', permissions: [PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_DATA_ALL], organizationIds: [] };
+
+    await service.findAll(user, { organizationId: 'org-parent', page: 1, pageSize: 10 } as never);
+
+    expect(access.getOrganizationSubtreeIds).toHaveBeenCalledWith('org-parent', undefined);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ AND: expect.arrayContaining([expect.objectContaining({ OR: expect.arrayContaining([expect.objectContaining({ assignments: { some: expect.objectContaining({ organizationId: { in: ['org-parent', 'org-child'] } }) } })]) })]) }) }));
+  });
+
   it('filters the full employee population by name and current employment relationship', async () => {
     const findMany = jest.fn().mockReturnValue({ query: 'employees' });
     const count = jest.fn().mockReturnValue({ query: 'count' });

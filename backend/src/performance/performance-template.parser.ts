@@ -7,6 +7,7 @@ import type {
   PerformanceRuleNode,
   PerformanceTemplateDefinition,
   PerformanceTemplateParseResult,
+  PerformanceWorkflowManualStepDefinition,
 } from '@hr-demo/shared';
 
 const JSON_BLOCK = /```(?:performance-template|json)\s*\n([\s\S]*?)```/i;
@@ -16,6 +17,9 @@ const EXECUTION_MODES = new Set(['SINGLE', 'MULTIPLE']);
 const DIRECTORY_TYPES = new Set(['POSITION', 'JOB_TITLE']);
 const RULE_OPERATORS = new Set(['constant', 'field', 'add', 'subtract', 'multiply', 'divide', 'min', 'max', 'if']);
 const CONDITION_OPERATORS = new Set(['<', '<=', '>', '>=', '=', '!=']);
+const RULE_FIELD_NAME = /^[A-Za-z][A-Za-z0-9_.]{0,127}$/;
+const WORKFLOW_STEP_TYPES = new Set(['REVIEW', 'CONFIRMATION', 'APPROVAL', 'HR_ARCHIVE']);
+const WORKFLOW_REJECTION_STRATEGIES = new Set(['END', 'RETURN_PREVIOUS', 'RETURN_TO_STEP']);
 
 @Injectable()
 export class PerformanceTemplateParser {
@@ -83,13 +87,16 @@ export class PerformanceTemplateParser {
       if (!participatesInTotal && weight !== null) errors.push({ path: `${path}.weight`, message: '不计入总分的模块权重必须为 null' });
       const executor = this.validateExecutor(module.executor, `${path}.executor`, errors, requireExecutorDetails);
       const indicators = this.validateIndicators(module.indicators, `${path}.indicators`, errors);
+      if (type !== 'METRIC' && indicators.some((indicator) => indicator.rule)) errors.push({ path: `${path}.indicators`, message: '声明式评分规则只能配置在业务指标模块' });
       if (type === 'METRIC' && executor?.type !== 'AUTO') errors.push({ path: `${path}.executor`, message: '业务指标模块只能使用 AUTO 执行人' });
       if ((type === 'EVALUATION' || type === 'ADJUSTMENT') && executor?.type === 'AUTO') errors.push({ path: `${path}.executor`, message: '人工评估和调整模块不能使用 AUTO 执行人' });
-      if (type === 'METRIC' && indicators.length > 0) {
+      if (type === 'METRIC') {
+        if (indicators.length === 0) errors.push({ path: `${path}.indicators`, message: '业务指标模块至少需要一个指标' });
         const total = indicators.reduce((sum, indicator) => sum + indicator.weight, 0);
         if (Math.abs(total - 100) > 0.0001) errors.push({ path: `${path}.indicators`, message: `业务指标权重合计必须为 100%，当前为 ${total}%` });
       }
       if (type === 'ADJUSTMENT') {
+        if (participatesInTotal || weight !== null) errors.push({ path, message: '调整模块只能作为固定权重得分后的额外加减分，不能参与固定权重' });
         const direction = this.stringValue(module.adjustmentDirection);
         if (direction !== 'ADD' && direction !== 'DEDUCT') errors.push({ path: `${path}.adjustmentDirection`, message: '调整方向必须为 ADD 或 DEDUCT' });
         const min = this.numberValue(module.adjustmentMin);
@@ -118,8 +125,15 @@ export class PerformanceTemplateParser {
 
     const fixedWeight = modules.filter((module) => module.enabled && module.participatesInTotal).reduce((sum, module) => sum + (module.weight ?? 0), 0);
     if (Math.abs(fixedWeight - 100) > 0.0001) errors.push({ path: 'modules', message: `启用的固定权重模块合计必须为 100%，当前为 ${fixedWeight}%` });
+    const manualSteps = this.validateWorkflow(value.workflow, 'workflow', errors, requireExecutorDetails);
     return errors.length === 0
-      ? { schemaVersion: 1, name: value.name as string, description: this.stringValue(value.description) ?? undefined, modules }
+      ? {
+          schemaVersion: 1,
+          name: value.name as string,
+          description: this.stringValue(value.description) ?? undefined,
+          modules,
+          workflow: { manualSteps },
+        }
       : null;
   }
 
@@ -128,6 +142,86 @@ export class PerformanceTemplateParser {
     const definition = this.validateDefinition(value, errors, requireExecutorDetails);
     if (!definition) throw new BadRequestException(errors.map((error) => `${error.path}: ${error.message}`));
     return definition;
+  }
+
+  private validateWorkflow(
+    value: unknown,
+    path: string,
+    errors: PerformanceParseError[],
+    requireExecutorDetails: boolean,
+  ): PerformanceWorkflowManualStepDefinition[] {
+    if (value === undefined || value === null) return [];
+    if (!this.isRecord(value)) {
+      errors.push({ path, message: '流程定义必须是对象' });
+      return [];
+    }
+    if (!Array.isArray(value.manualSteps)) {
+      errors.push({ path: `${path}.manualSteps`, message: '手动流程步骤必须是数组' });
+      return [];
+    }
+
+    const steps: PerformanceWorkflowManualStepDefinition[] = [];
+    const ids = new Set<string>();
+    for (const [index, rawStep] of value.manualSteps.entries()) {
+      const stepPath = `${path}.manualSteps[${index}]`;
+      if (!this.isRecord(rawStep)) {
+        errors.push({ path: stepPath, message: '手动流程步骤必须是对象' });
+        continue;
+      }
+      const id = this.stringValue(rawStep.id);
+      const name = this.stringValue(rawStep.name);
+      const type = this.stringValue(rawStep.type);
+      if (!id) errors.push({ path: `${stepPath}.id`, message: '流程步骤 ID 不能为空' });
+      else if (ids.has(id)) errors.push({ path: `${stepPath}.id`, message: '流程步骤 ID 不能重复' });
+      else ids.add(id);
+      if (!name) errors.push({ path: `${stepPath}.name`, message: '流程步骤名称不能为空' });
+      if (!type || !WORKFLOW_STEP_TYPES.has(type)) {
+        errors.push({ path: `${stepPath}.type`, message: '流程只能新增审核、本人确认、审批或 HR 归档步骤' });
+        continue;
+      }
+      const executor = this.validateExecutor(rawStep.executor, `${stepPath}.executor`, errors, requireExecutorDetails);
+      if (executor?.type === 'AUTO') errors.push({ path: `${stepPath}.executor`, message: '手动流程步骤不能使用 AUTO 执行人' });
+
+      const rawStrategy = this.stringValue(rawStep.rejectionStrategy);
+      const hasRejection = type === 'REVIEW' || type === 'APPROVAL';
+      const rejectionStrategy = rawStrategy ?? (hasRejection ? 'END' : undefined);
+      if (rawStrategy && !WORKFLOW_REJECTION_STRATEGIES.has(rawStrategy)) {
+        errors.push({ path: `${stepPath}.rejectionStrategy`, message: '驳回策略无效' });
+      }
+      if (!hasRejection && (rawStep.rejectionStrategy !== undefined || rawStep.rejectionTargetStepId !== undefined)) {
+        errors.push({ path: stepPath, message: '只有审核和审批步骤可以配置驳回策略' });
+      }
+      if (rejectionStrategy === 'RETURN_TO_STEP' && !this.isNonEmptyString(rawStep.rejectionTargetStepId)) {
+        errors.push({ path: `${stepPath}.rejectionTargetStepId`, message: '退回指定步骤时必须选择前序手动步骤' });
+      }
+      if (rejectionStrategy !== 'RETURN_TO_STEP' && rawStep.rejectionTargetStepId !== undefined) {
+        errors.push({ path: `${stepPath}.rejectionTargetStepId`, message: '只有退回指定步骤时可以配置退回目标' });
+      }
+      if (id && name && type && WORKFLOW_STEP_TYPES.has(type) && executor) {
+        steps.push({
+          id,
+          name,
+          type: type as PerformanceWorkflowManualStepDefinition['type'],
+          executor,
+          ...(hasRejection ? { rejectionStrategy: rejectionStrategy as PerformanceWorkflowManualStepDefinition['rejectionStrategy'] } : {}),
+          ...(rejectionStrategy === 'RETURN_TO_STEP' ? { rejectionTargetStepId: this.stringValue(rawStep.rejectionTargetStepId) ?? undefined } : {}),
+        });
+      }
+    }
+
+    const stepIds = new Set(steps.map((step) => step.id));
+    steps.forEach((step, index) => {
+      if (step.rejectionStrategy === 'RETURN_PREVIOUS' && index === 0) {
+        errors.push({ path: `${path}.manualSteps[${index}].rejectionStrategy`, message: '第一个手动流程步骤不能退回上一步' });
+      }
+      if (step.rejectionStrategy === 'RETURN_TO_STEP') {
+        const targetIndex = steps.findIndex((candidate) => candidate.id === step.rejectionTargetStepId);
+        if (!step.rejectionTargetStepId || !stepIds.has(step.rejectionTargetStepId) || targetIndex < 0 || targetIndex >= index) {
+          errors.push({ path: `${path}.manualSteps[${index}].rejectionTargetStepId`, message: '只能退回到当前步骤之前的手动流程步骤' });
+        }
+      }
+    });
+    return steps;
   }
 
   private validateExecutor(value: unknown, path: string, errors: PerformanceParseError[], requireDetails: boolean) {
@@ -149,6 +243,23 @@ export class PerformanceTemplateParser {
       const employeeIds = Array.isArray(value.employeeIds)
         ? value.employeeIds.filter((item): item is string => this.isNonEmptyString(item)).map((item) => item.trim())
         : [];
+      const rawEmployeeSnapshots = Array.isArray(value.employeeSnapshots) ? value.employeeSnapshots : [];
+      const seenSnapshotEmployeeIds = new Set<string>();
+      const employeeSnapshots = rawEmployeeSnapshots.flatMap((snapshot) => {
+        if (!this.isRecord(snapshot)) return [];
+        const employeeId = this.stringValue(snapshot.employeeId);
+        if (!employeeId || !employeeIds.includes(employeeId) || seenSnapshotEmployeeIds.has(employeeId)) return [];
+        seenSnapshotEmployeeIds.add(employeeId);
+        return [{
+          employeeId,
+          name: this.stringValue(snapshot.name) ?? '--',
+          employeeNo: this.stringValue(snapshot.employeeNo) ?? '--',
+          organizationId: this.stringValue(snapshot.organizationId) ?? null,
+          organizationName: this.stringValue(snapshot.organizationName) ?? null,
+        }];
+      });
+      const snapshotsByEmployeeId = new Map(employeeSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+      const normalizedSnapshots = [...new Set(employeeIds)].flatMap((employeeId) => snapshotsByEmployeeId.get(employeeId) ? [snapshotsByEmployeeId.get(employeeId)!] : []);
       const legacyUserIds = Array.isArray(value.userIds)
         ? value.userIds.filter((item): item is string => this.isNonEmptyString(item)).map((item) => item.trim())
         : this.isNonEmptyString(value.userId) ? [value.userId.trim()] : [];
@@ -158,7 +269,9 @@ export class PerformanceTemplateParser {
       if (requireDetails && uniqueSelectedIds.length === 0) errors.push({ path: `${path}.employeeIds`, message: '具体执行人员必须至少指定一人' });
       if (executionMode === 'SINGLE' && uniqueSelectedIds.length > 1) errors.push({ path: `${path}.employeeIds`, message: '单人执行只能指定一名具体执行人员' });
       if (executionMode === 'MULTIPLE' && uniqueSelectedIds.length < 2) errors.push({ path: `${path}.employeeIds`, message: '多人执行必须指定至少两名具体执行人员' });
-      return employeeIds.length > 0 ? { type, executionMode, employeeIds: uniqueSelectedIds } : { type, executionMode, userIds: uniqueSelectedIds };
+      return employeeIds.length > 0
+        ? { type, executionMode, employeeIds: uniqueSelectedIds, ...(normalizedSnapshots.length ? { employeeSnapshots: normalizedSnapshots.filter((snapshot) => uniqueSelectedIds.includes(snapshot.employeeId)) } : {}) }
+        : { type, executionMode, userIds: uniqueSelectedIds };
     }
     const directoryType = this.stringValue(value.directoryType);
     if (executionMode !== 'SINGLE') errors.push({ path: `${path}.executionMode`, message: '岗位或职务执行人只能单人执行' });
@@ -176,6 +289,7 @@ export class PerformanceTemplateParser {
   private parseMarkdownDocument(markdown: string, warnings: PerformanceParseWarning[]): PerformanceTemplateDefinition | null {
     const lines = markdown.split(/\r?\n/);
     const lineOf = (needle: string) => Math.max(1, lines.findIndex((line) => line.includes(needle)) + 1);
+    if (/<\/?[A-Za-z][^>]*>/.test(markdown)) return null;
     const overviewRows = lines
       .filter((line) => line.trim().startsWith('|'))
       .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
@@ -210,19 +324,7 @@ export class PerformanceTemplateParser {
       }
       const modules = [...overviewModules.values()];
       for (const module of modules) this.enrichMarkdownModule(module, lines, warnings);
-      if (modules.length > 0) {
-        const otherWork = modules.find((module) => /其他工作/.test(module.name));
-        if (otherWork) {
-          otherWork.participatesInTotal = false;
-          otherWork.weight = null;
-          otherWork.type = 'ADJUSTMENT';
-          otherWork.adjustmentDirection = 'ADD';
-          otherWork.adjustmentMin = 0;
-          otherWork.adjustmentMax = 20;
-          warnings.push({ path: `modules.${otherWork.id}`, message: `“${otherWork.name}”不参与固定权重，已按确认口径设为最终得分后的额外加分项，最高 20 分。` });
-        }
-        return this.finalizeMarkdownDefinition(markdown, modules, warnings);
-      }
+      if (modules.length > 0) return this.finalizeMarkdownDefinition(markdown, modules, warnings);
     }
     const modules: PerformanceModuleDefinition[] = [];
     let currentModule: PerformanceModuleDefinition | null = null;
@@ -246,28 +348,48 @@ export class PerformanceTemplateParser {
       .trim();
 
     for (const line of lines) {
-      const levelTwo = line.match(/^##\s+(.+?)\s*$/);
-      if (levelTwo) {
-        const rawName = levelTwo[1] ?? '';
-        if (/使用说明|考核指标总览|绩效设计核心逻辑|HRBP 分工总览|HRBP 分工及绩效/.test(rawName)) continue;
+      const levelOne = line.match(/^#\s+(.+?)\s*$/);
+      if (levelOne) {
+        const rawName = levelOne[1] ?? '';
+        const weight = percent(rawName);
         flushModule();
         const name = cleanHeading(rawName);
-        const weight = percent(rawName);
-        const type = /调整|扣减|奖励/.test(name) ? 'ADJUSTMENT' : /运营|业务达成|业务指标|指标/.test(name) ? 'METRIC' : 'EVALUATION';
         currentModule = {
           id: `legacy-${modules.length + 1}`,
           name,
-          type,
+          type: 'EVALUATION',
           enabled: true,
-          participatesInTotal: type !== 'ADJUSTMENT',
-          weight: type === 'ADJUSTMENT' ? null : weight,
+          participatesInTotal: true,
+          weight,
           description: '',
-          executor: type === 'METRIC'
-            ? { type: 'AUTO' as const, executionMode: 'SINGLE' as const }
-            : { type: 'USER' as const, executionMode: 'SINGLE' as const, userIds: [] },
+          executor: { type: 'USER', executionMode: 'SINGLE', userIds: [] },
           indicators: [],
-          ...(type === 'ADJUSTMENT' ? { adjustmentDirection: /扣减/.test(name) ? 'DEDUCT' as const : 'ADD' as const, adjustmentMin: 0, adjustmentMax: 100 } : {}),
         };
+        warnings.push({ path: `modules.${currentModule.id}.type`, sourceLine: lineOf(rawName), message: `“${name}”的模块类型需要在编辑器中确认；未根据标题自动推断模块类型或调整方向。` });
+        continue;
+      }
+
+      const levelTwo = line.match(/^##\s+(.+?)\s*$/);
+      if (levelTwo) {
+        const rawName = levelTwo[1] ?? '';
+        if (/使用说明|考核指标总览/.test(rawName)) continue;
+        flushModule();
+        const name = cleanHeading(rawName);
+        const weight = percent(rawName);
+        currentModule = {
+          id: `legacy-${modules.length + 1}`,
+          name,
+          // Headings are source material only. HR must explicitly choose module
+          // type, executor and adjustment behavior in the structured editor.
+          type: 'EVALUATION' as const,
+          enabled: true,
+          participatesInTotal: true,
+          weight,
+          description: '',
+          executor: { type: 'USER' as const, executionMode: 'SINGLE' as const, userIds: [] },
+          indicators: [],
+        };
+        warnings.push({ path: `modules.${currentModule.id}.type`, sourceLine: lineOf(rawName), message: `“${name}”的模块类型需要在编辑器中确认；未根据标题自动推断模块类型或调整方向。` });
         continue;
       }
 
@@ -302,11 +424,6 @@ export class PerformanceTemplateParser {
     }
     flushModule();
     if (modules.length === 0) return null;
-    for (const module of modules) {
-      if (module.type === 'METRIC' && module.indicators.length === 0) {
-        module.indicators.push({ id: `legacy-indicator-${module.id}-1`, name: module.name, description: '', standards: [], weight: 100 });
-      }
-    }
     return this.finalizeMarkdownDefinition(markdown, modules, warnings);
   }
 
@@ -376,9 +493,11 @@ export class PerformanceTemplateParser {
       if (weight === null || weight < 0 || weight > 100) errors.push({ path: `${itemPath}.weight`, message: '指标权重必须为 0-100 的数字' });
       const standards = Array.isArray(rawIndicator.standards) && rawIndicator.standards.every((entry) => typeof entry === 'string')
         ? rawIndicator.standards as string[] : [];
+      const dataField = this.stringValue(rawIndicator.dataField);
+      if (dataField && !RULE_FIELD_NAME.test(dataField)) errors.push({ path: `${itemPath}.dataField`, message: '业务数据字段名只能使用字母、数字、点和下划线，且必须以字母开头' });
       const rule = rawIndicator.rule;
       if (rule !== undefined && !this.validateRule(rule, `${itemPath}.rule`, errors)) return [];
-      return id && name && weight !== null ? [{ id, name, description: this.stringValue(rawIndicator.description) ?? '', standards, weight, dataField: this.stringValue(rawIndicator.dataField) ?? undefined, rule: rule as PerformanceRuleNode | undefined }] : [];
+      return id && name && weight !== null ? [{ id, name, description: this.stringValue(rawIndicator.description) ?? '', standards, weight, dataField: dataField ?? undefined, rule: rule as PerformanceRuleNode | undefined }] : [];
     });
   }
 
@@ -397,11 +516,11 @@ export class PerformanceTemplateParser {
       return true;
     }
     if (op === 'field') {
-      if (!this.isNonEmptyString(value.field)) errors.push({ path: `${path}.field`, message: 'field 不能为空' });
+      if (!this.isNonEmptyString(value.field) || !RULE_FIELD_NAME.test(value.field)) errors.push({ path: `${path}.field`, message: 'field 必须是以字母开头的安全业务字段名' });
       return true;
     }
     if (op === 'if') {
-      if (!this.isRecord(value.condition) || !this.isNonEmptyString(value.condition.field) || !CONDITION_OPERATORS.has(String(value.condition.operator)) || typeof value.condition.value !== 'number') {
+      if (!this.isRecord(value.condition) || !this.isNonEmptyString(value.condition.field) || !RULE_FIELD_NAME.test(value.condition.field) || !CONDITION_OPERATORS.has(String(value.condition.operator)) || typeof value.condition.value !== 'number' || !Number.isFinite(value.condition.value)) {
         errors.push({ path: `${path}.condition`, message: 'if 条件无效' });
       }
       if (!this.validateRule(value.then, `${path}.then`, errors, depth + 1)) return false;

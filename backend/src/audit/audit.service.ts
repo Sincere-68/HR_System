@@ -4,7 +4,8 @@ import { DemoDataService } from '../demo/demo-data.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AuditContext {
-  userId: string;
+  /** Web actions have a User; verified Feishu card callbacks intentionally do not. */
+  userId?: string;
   ipAddress?: string;
   userAgent?: string;
 }

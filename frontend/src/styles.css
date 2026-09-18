@@ -102,6 +102,57 @@ a { text-decoration: none; }
 .performance-activity-filters .ant-btn-text { color: #10969b; }
 .performance-activity-table-surface { border: 0; border-radius: 0; }
 .performance-activity-name { color: #087f87; cursor: pointer; }
+.performance-activity-name:hover { color: #05aaaf; text-decoration: underline; }
+.performance-activity-detail-page { width: min(1600px, 100%); }
+.performance-activity-detail-heading { min-height: 86px; }
+.performance-activity-back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 3px; color: #71838a; font-size: 12px; line-height: 18px; }
+.performance-activity-back-link:hover { color: #087f87; }
+.performance-activity-participant-count { color: #73848b; font-size: 13px; }
+.performance-activity-detail-surface { overflow: hidden; }
+.performance-participant-table-heading { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 22px; border-bottom: 1px solid #edf1f2; }
+.performance-participant-table-heading h2 { margin: 0; color: #203847; font-size: 16px; font-weight: 700; line-height: 24px; }
+.performance-participant-table-heading span { color: #7a8a91; font-size: 13px; }
+.performance-participant-table-actions { display: flex; align-items: center; gap: 14px; }
+.performance-participant-table-actions .ant-btn { min-width: 114px; color: #fff; }
+.performance-participant-table-actions .ant-btn:hover,
+.performance-participant-table-actions .ant-btn:focus { color: #fff !important; }
+.performance-activity-detail-table-surface { border: 0; border-radius: 0; overflow: visible; }
+.performance-participant-table .ant-table-tbody > tr > td { vertical-align: middle; }
+.performance-participant-pagination { min-height: 52px; display: flex; align-items: center; justify-content: flex-end; margin: 0; padding: 0 20px; border-top: 1px solid #edf1f2; }
+.performance-current-executor-link { height: auto; padding: 0; color: #087f87; font-size: 13px; text-align: left; white-space: normal; }
+.performance-current-executor-link:hover { color: #05aaaf; }
+.performance-flow-drawer .ant-drawer-header { border-bottom-color: #edf1f2; }
+.performance-flow-drawer .ant-drawer-body { padding: 20px; }
+.performance-flow-summary { margin-bottom: 18px; }
+.performance-flow-summary .ant-descriptions-item-label { width: 96px; color: #71838a; }
+.performance-flow-timeline { margin: 18px 0 0; }
+.performance-flow-step-button { width: 100%; display: grid; gap: 3px; padding: 9px 11px; border: 1px solid transparent; border-radius: 6px; color: #3d535d; background: transparent; text-align: left; cursor: pointer; }
+.performance-flow-step-button:hover, .performance-flow-step-button.is-selected { border-color: #b9e4e3; background: #f0fbfa; }
+.performance-flow-step-button strong { color: #2a414b; font-size: 14px; line-height: 20px; }
+.performance-flow-step-button span, .performance-flow-step-detail header span { color: #788a91; font-size: 12px; line-height: 18px; }
+.performance-flow-step-detail { display: grid; gap: 12px; margin-top: 12px; padding-top: 16px; border-top: 1px solid #edf1f2; }
+.performance-flow-step-detail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.performance-flow-step-detail > header > div { display: grid; gap: 2px; }
+.performance-flow-assignee-detail .ant-descriptions-title { margin-bottom: 8px; color: #28424d; font-size: 14px; }
+.performance-flow-assignee-detail .ant-descriptions-item-label { width: 96px; color: #71838a; font-size: 12px; }
+.performance-flow-assignee-detail .ant-descriptions-item-content { color: #3d535d; font-size: 12px; word-break: break-word; }
+.performance-assessment-detail-content { display: grid; gap: 18px; }
+.performance-assessment-detail-table .ant-table-tbody > tr > td { vertical-align: top; }
+.performance-assessment-standards { margin: 0; padding-left: 16px; color: #425963; font-size: 12px; line-height: 20px; }
+.performance-assessment-summary { margin-top: 2px; }
+.performance-assessment-summary .ant-descriptions-title { color: #2a414b; font-size: 15px; }
+.performance-assessment-summary .ant-descriptions-item-label { width: 112px; color: #71838a; }
+.performance-participant-employee { display: grid; gap: 2px; min-width: 0; }
+.performance-participant-employee > span { color: #087f87; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.performance-participant-employee > small { color: #8a9aa1; font-size: 12px; line-height: 17px; }
+.performance-participant-picker-fields { display: grid; gap: 16px; padding-bottom: 6px; }
+.performance-participant-picker-fields > label { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 12px; color: #5d6e75; font-size: 13px; }
+.performance-participant-picker-fields > label > span > i { margin-right: 3px; color: #e34d59; font-style: normal; }
+.performance-participant-picker-fields .ant-select,
+.performance-participant-picker-fields .ant-input,
+.performance-participant-picker-fields .organization-tree-select { width: 100%; }
+.performance-participant-picker-fields .ant-select-selector,
+.performance-participant-picker-fields .ant-input { min-height: 34px !important; border-color: #dce7e9 !important; border-radius: 6px !important; }
 .performance-activity-modal .ant-modal-content { overflow: hidden; border-radius: 8px; }
 .performance-activity-modal .ant-modal-header { margin-bottom: 0; padding: 18px 24px 15px; border-bottom: 1px solid #edf1f2; }
 .performance-activity-modal .ant-modal-title { color: #273b44; font-size: 18px; font-weight: 700; }
@@ -165,6 +216,16 @@ a { text-decoration: none; }
 .performance-template-source-card strong { display: block; color: #2c4149; font-size: 14px; line-height: 20px; }
 .performance-template-source-card p { margin: 2px 0 0; overflow: hidden; color: #74858c; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .performance-template-workspace { min-height: 472px; display: grid; grid-template-columns: 292px minmax(0, 1fr); border: 1px solid #dce7e9; border-radius: 8px; overflow: hidden; background: #fff; }
+.performance-workflow-settings { display: grid; gap: 16px; }
+.performance-workflow-projection { overflow: hidden; border: 1px solid #dce7e9; border-radius: 8px; background: #f8fbfb; }
+.performance-workflow-section-title { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 18px; border-bottom: 1px solid #e2ecee; color: #30434b; }
+.performance-workflow-section-title span { color: #75858c; font-size: 12px; }
+.performance-workflow-projection-row { display: flex; align-items: center; gap: 11px; min-height: 44px; padding: 0 18px; border-bottom: 1px solid #edf2f3; color: #53666e; font-size: 13px; }
+.performance-workflow-projection-row:last-child { border-bottom: 0; }
+.performance-workflow-projection-row b { width: 21px; height: 21px; display: grid; place-items: center; border-radius: 50%; color: #087f87; background: #dff6f5; font-size: 12px; }
+.performance-workflow-projection-row > span { flex: 1; }
+.performance-workflow-projection-row .ant-tag { margin: 0; color: #687a82; border-color: #d8e3e5; background: #fff; }
+.performance-workflow-workspace { min-height: 360px; }
 .performance-template-module-list { min-width: 0; border-right: 1px solid #e1ebed; background: #f8fbfb; }
 .performance-flow-list-heading { min-height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid #e2ecee; }
 .performance-flow-list-heading strong { color: #30434b; font-size: 15px; line-height: 22px; }
@@ -174,6 +235,8 @@ a { text-decoration: none; }
 .performance-template-module-card:hover { border-color: #9fd9d8; background: #fcffff; }
 .performance-template-module-card.is-selected { border-color: #29bfbd; background: #f0fbfb; box-shadow: inset 0 0 0 1px rgba(41,191,189,.07); }
 .performance-template-module-card.is-disabled { opacity: .54; }
+.performance-template-module-card.is-readonly { color: #62767e; background: #f7fafb; cursor: pointer; }
+.performance-template-module-card.is-readonly:hover { border-color: #dce7e9; background: #f2f7f8; }
 .performance-template-module-card[draggable="true"] { cursor: grab; }
 .performance-template-module-card.is-dragging { cursor: grabbing; opacity: .46; }
 .performance-template-module-card.is-drop-target { border-color: #00a9ac; box-shadow: inset 0 3px 0 #00a9ac; }

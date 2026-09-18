@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccessControlModule } from '../access-control/access-control.module';
 import { FeishuModule } from '../feishu/feishu.module';
+import { FeishuLongConnectionService } from '../feishu/feishu-long-connection.service';
 import { PerformanceController } from './performance.controller';
 import { MockPerformanceDataAdapter, PERFORMANCE_DATA_ADAPTER } from './performance-data.adapter';
 import { PerformanceRuleEngine } from './performance-rule-engine';

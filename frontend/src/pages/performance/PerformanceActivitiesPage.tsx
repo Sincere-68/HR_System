@@ -24,10 +24,12 @@ import {
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { EmployeeListItem, PerformanceCycleListItem, PerformanceCreateCycleInput, PerformanceCyclePeriodType, PerformanceExceptionHandlerType } from '@hr-demo/shared';
 import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 import { useEmployees, useOrganizations } from '../../features/employees/api';
 import {
+  useArchivePerformanceCycle,
   useCreatePerformanceCycle,
   usePerformanceCycles,
   usePerformanceTemplates,
@@ -89,6 +91,7 @@ export function PerformanceActivitiesPage() {
   const [exceptionOrganizationId, setExceptionOrganizationId] = useState<string>();
   const [exceptionKeyword, setExceptionKeyword] = useState('');
   const [selectedExceptionEmployee, setSelectedExceptionEmployee] = useState<EmployeeListItem | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<PerformanceCycleListItem | null>(null);
   const watchedExceptionType = Form.useWatch('exceptionType', form);
 
   const cycles = usePerformanceCycles({ page: 1, pageSize: 100 });
@@ -102,6 +105,7 @@ export function PerformanceActivitiesPage() {
   });
   const createCycle = useCreatePerformanceCycle();
   const startCycle = useStartPerformanceCycle();
+  const archiveCycle = useArchivePerformanceCycle();
 
   const publishedTemplates = useMemo(
     () => (templates.data ?? []).filter((template) => template.latestVersion?.status === 'PUBLISHED' && template.latestVersion.id),
@@ -140,7 +144,7 @@ export function PerformanceActivitiesPage() {
   };
 
   const submit = async (values: ActivityFormValues) => {
-    const templateVersionId = values.templateVersionId || publishedTemplates[0]?.latestVersion?.id;
+    const templateVersionId = values.templateVersionId;
     if (values.exceptionType === '指定人' && !values.exceptionEmployeeId) {
       messageApi.error('请选择异常处理人');
       return;
@@ -181,15 +185,26 @@ export function PerformanceActivitiesPage() {
     }
   };
 
+  const handleArchive = async () => {
+    if (!archiveTarget) return;
+    try {
+      await archiveCycle.mutateAsync({ id: archiveTarget.id, input: { reason: '用户从绩效活动列表归档' } });
+      messageApi.success('绩效活动已归档');
+      setArchiveTarget(null);
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : '归档绩效活动失败');
+    }
+  };
+
   const columns: TableColumnsType<PerformanceCycleListItem> = [
-    { title: '活动名称', dataIndex: 'name', key: 'name', width: 240, render: (value: string) => <span className="performance-activity-name">{value}</span> },
+    { title: '活动名称', dataIndex: 'name', key: 'name', width: 240, render: (value: string, row) => <Link className="performance-activity-name" to={`/performance/activities/${row.id}`}>{value}</Link> },
     { title: '组织', dataIndex: 'organizationName', key: 'organization', width: 170, render: (value: string | null) => value ?? '--' },
     { title: '是否公开', dataIndex: 'isPublic', key: 'isPublic', width: 110, render: (value: boolean) => value ? '是' : '否' },
     { title: '参与人数', key: 'participants', width: 110, render: (_, row) => row.instanceCount },
     { title: '创建人', dataIndex: 'createdByName', key: 'creator', width: 130, render: (value: string | null) => value ?? '--' },
     { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (value: string) => formatDate(value) },
     { title: '状态', dataIndex: 'status', key: 'status', width: 110, render: (value: PerformanceCycleListItem['status']) => <Tag color={value === 'IN_PROGRESS' ? 'processing' : value === 'COMPLETED' ? 'success' : 'default'}>{statusLabels[value]}</Tag> },
-    { title: '操作', key: 'actions', width: 150, render: (_, row) => row.status === 'DRAFT' ? <Button type="link" loading={startCycle.isPending && startCycle.variables === row.id} onClick={() => void handleStart(row.id)}>启动</Button> : <Button type="link">查看</Button> },
+    { title: '操作', key: 'actions', width: 220, render: (_, row) => <Space size={0}>{row.status === 'DRAFT' ? <Button type="link" loading={startCycle.isPending && startCycle.variables === row.id} onClick={() => void handleStart(row.id)}>启动</Button> : <Link to={`/performance/activities/${row.id}`}>查看</Link>}<Button danger type="link" loading={archiveCycle.isPending && archiveCycle.variables?.id === row.id} onClick={() => setArchiveTarget(row)}>删除</Button></Space> },
   ];
 
   return (
@@ -224,6 +239,19 @@ export function PerformanceActivitiesPage() {
       </div>
 
       <Modal
+        title="删除绩效活动"
+        open={Boolean(archiveTarget)}
+        onCancel={() => setArchiveTarget(null)}
+        destroyOnHidden
+        okText="归档删除"
+        cancelText="取消"
+        okButtonProps={{ danger: true, loading: archiveCycle.isPending }}
+        onOk={() => void handleArchive()}
+      >
+        <p>“{archiveTarget?.name}”将被归档；活动实例、任务、结果和审计记录会保留。</p>
+      </Modal>
+
+      <Modal
         className="performance-activity-modal"
         title="新增"
         open={modalOpen}
@@ -237,7 +265,7 @@ export function PerformanceActivitiesPage() {
           <Form.Item label="所属组织" name="organizationId" rules={[{ required: true, message: '请选择所属组织' }]} extra={activityOrganizationName ? `已选择：${activityOrganizationName}。将自动纳入所选组织及下级组织在活动开始日的全部有效员工。` : '将自动纳入所选组织及下级组织在活动开始日的全部有效员工。'}><OrganizationTreeSelect aria-label="活动所属组织" organizations={organizations.data ?? []} placeholder="请选择" value={activityOrganizationId} onChange={(organizationId) => { form.setFieldValue('organizationId', organizationId); form.setFields([{ name: 'organizationId', errors: [] }]); setActivityOrganizationId(organizationId); }} /></Form.Item>
           <Form.Item label="向下公开" name="isPublic"><Radio.Group><Radio value="yes">是</Radio><Radio value="no">否</Radio></Radio.Group></Form.Item>
           <Form.Item label="是否关联等级" name="linkedLevel"><Radio.Group><Radio value="yes">是</Radio><Radio value="no">否</Radio></Radio.Group></Form.Item>
-          <Form.Item label="绩效等级" name="templateVersionId"><Select allowClear showSearch optionFilterProp="label" placeholder="可暂不选择，启动前需配置已发布模板" options={publishedTemplates.map((template) => ({ label: template.name, value: template.latestVersion?.id }))} /></Form.Item>
+          <Form.Item label="绩效模板" name="templateVersionId"><Select allowClear showSearch optionFilterProp="label" placeholder="可暂不选择，添加被考核人时指定模板" notFoundContent={templates.isLoading ? '正在加载模板' : '暂无已发布的绩效模板'} options={publishedTemplates.map((template) => ({ label: `${template.name}（V${template.latestVersion?.versionNo}）`, value: template.latestVersion?.id }))} /></Form.Item>
           <div className="performance-activity-form-grid">
             <Form.Item label="年度" name="year" rules={[{ required: true, message: '请选择年度' }]}><Select options={['2026', '2025', '2024'].map((year) => ({ label: year, value: year }))} /></Form.Item>
             <Form.Item label="周期" name="period" rules={[{ required: true, message: '请选择周期' }]}><Select options={['月度', '季度', '半年度', '年度'].map((period) => ({ label: period, value: period }))} /></Form.Item>

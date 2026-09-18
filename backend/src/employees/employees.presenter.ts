@@ -232,6 +232,7 @@ export function presentDemoEmployeeDetail(
 ): EmployeeDetail {
   return {
     ...presentDemoEmployeeListItem(employee, visibleOrganizationIds),
+    currentPerformanceActivity: null,
     assignmentId: null,
     positionId: null,
     agreementEmployingCompanyId: null,
@@ -423,6 +424,7 @@ export function presentEmployeeDetail(
 
   return {
     ...item,
+    currentPerformanceActivity: null,
     assignmentId: assignment?.id ?? null,
     positionId: assignment?.position?.id ?? null,
     agreementEmployingCompanyId: currentAgreement?.employingCompany?.id ?? null,

@@ -383,6 +383,43 @@ enum PerformanceAdjustmentDirection {
   DEDUCT
 }
 
+enum PerformanceWorkflowStepType {
+  REVIEW
+  CONFIRMATION
+  APPROVAL
+  HR_ARCHIVE
+}
+
+enum PerformanceWorkflowRejectionStrategy {
+  END
+  RETURN_PREVIOUS
+  RETURN_TO_STEP
+}
+
+enum PerformanceWorkflowAction {
+  APPROVE
+  REJECT
+  CONFIRM
+  ARCHIVE
+}
+
+enum PerformanceWorkflowActionSource {
+  WEB
+  FEISHU
+}
+
+/// Delivery outcome is independent from task completion and audit history.
+enum PerformanceNotificationDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  SKIPPED
+}
+
+enum PerformanceNotificationChannel {
+  FEISHU_CARD
+}
+
 enum ApprovalDecision {
   PENDING
   APPROVED
@@ -471,10 +508,13 @@ model User {
   archivedPerformanceTemplates          PerformanceTemplate[]           @relation("PerformanceTemplateArchivedBy")
   performanceTemplateVersions           PerformanceTemplateVersion[]
   performanceCycles                     PerformanceCycle[]
+  archivedPerformanceCycles             PerformanceCycle[]               @relation("PerformanceCycleArchivedBy")
   changedEmployeePerformanceAmountBases EmployeePerformanceAmountBase[] @relation("EmployeePerformanceAmountBaseChangedBy")
   performanceResultRevisions            PerformanceResultRevision[]
   performanceTasks                      PerformanceModuleTask[]         @relation("PerformanceTaskExecutor")
   performanceTaskAssignees              PerformanceModuleTaskAssignee[] @relation("PerformanceTaskAssignee")
+  performanceWorkflowTaskAssignees      PerformanceWorkflowTaskAssignee[] @relation("PerformanceWorkflowTaskAssignee")
+  performanceWorkflowActions            PerformanceWorkflowTaskAction[] @relation("PerformanceWorkflowActionActor")
   createdBlacklistRecords               EmployeeBlacklistRecord[]       @relation("BlacklistCreator")
   ownedOnboardingCases                  OnboardingCase[]                @relation("OnboardingOwner")
   responsibleOnboardingTasks            OnboardingTask[]                @relation("OnboardingTaskResponsible")
@@ -624,6 +664,7 @@ model Employee {
   performanceInstances             PerformanceInstance[]
   exceptionHandlingPerformanceCycles PerformanceCycle[] @relation("PerformanceCycleExceptionHandler")
   performanceTaskAssignees         PerformanceModuleTaskAssignee[] @relation("PerformanceTaskAssigneeEmployee")
+  performanceWorkflowTaskAssignees PerformanceWorkflowTaskAssignee[] @relation("PerformanceWorkflowTaskAssigneeEmployee")
   performanceAmountBases           EmployeePerformanceAmountBase[]
   outgoingHandovers      HandoverCase[]                  @relation("HandoverSource")
   incomingHandovers      HandoverCase[]                  @relation("HandoverTarget")
@@ -1592,6 +1633,9 @@ model PerformanceCycle {
   templateId             String?                          @map("template_id")
   templateVersionId      String?                          @map("template_version_id")
   status                 ProcessStatus                    @default(DRAFT)
+  archivedAt             DateTime?                        @map("archived_at")
+  archivedById           String?                          @map("archived_by_id")
+  archiveReason          String?                          @map("archive_reason") @db.Text
   createdById            String                           @map("created_by_id")
   startedAt              DateTime?                        @map("started_at")
   completedAt            DateTime?                        @map("completed_at")
@@ -1599,6 +1643,7 @@ model PerformanceCycle {
   template               PerformanceTemplate?             @relation(fields: [templateId], references: [id], onDelete: Restrict)
   templateVersion        PerformanceTemplateVersion?      @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
   createdBy                  User                             @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  archivedBy                 User?                            @relation("PerformanceCycleArchivedBy", fields: [archivedById], references: [id], onDelete: Restrict)
   exceptionHandlerEmployee   Employee?                        @relation("PerformanceCycleExceptionHandler", fields: [exceptionHandlerEmployeeId], references: [id], onDelete: Restrict)
   instances              PerformanceInstance[]
   createdAt              DateTime                         @default(now()) @map("created_at")
@@ -1608,6 +1653,7 @@ model PerformanceCycle {
   @@index([templateVersionId, status])
   @@index([periodStart, periodEnd, status])
   @@index([exceptionHandlerEmployeeId])
+  @@index([archivedById])
   @@map("performance_cycles")
 }
 
@@ -1628,12 +1674,18 @@ model PerformanceInstance {
   employeeAmountBaseVersionNo Int?                           @map("employee_amount_base_version_no")
   calculationFormula          String?                        @map("calculation_formula") @db.Text
   actualAmount                Decimal?                       @map("actual_amount") @db.Decimal(12, 2)
+  /** Assessment lifecycle is independent from post-assessment workflow status. */
+  assessmentStatus            ProcessStatus                  @default(DRAFT) @map("assessment_status")
+  assessmentCompletedAt       DateTime?                      @map("assessment_completed_at")
+  currentWorkflowOrder        Int?                           @map("current_workflow_order")
+  workflowCompletedAt         DateTime?                      @map("workflow_completed_at")
   status                      ProcessStatus                  @default(DRAFT)
   employee                    Employee                       @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   organization                Organization?                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   cycle                       PerformanceCycle               @relation(fields: [cycleId], references: [id], onDelete: Restrict)
   employeeAmountBase          EmployeePerformanceAmountBase? @relation(fields: [employeeAmountBaseId], references: [id], onDelete: Restrict)
   tasks                       PerformanceModuleTask[]
+  workflowTasks               PerformanceWorkflowTask[]
   revisions                   PerformanceResultRevision[]
   createdAt                   DateTime                       @default(now()) @map("created_at")
   updatedAt                   DateTime                       @updatedAt @map("updated_at")
@@ -1642,6 +1694,8 @@ model PerformanceInstance {
   @@index([employeeId, status])
   @@index([organizationId, status])
   @@index([cycleId, status])
+  @@index([assessmentStatus])
+  @@index([currentWorkflowOrder])
   @@map("performance_instances")
 }
 
@@ -1692,10 +1746,14 @@ model PerformanceModuleTaskAssignee {
   status                  TaskStatus            @default(PENDING)
   submission              Json?
   score                   Decimal?              @db.Decimal(10, 4)
+  cardTokenHash           String?               @unique @map("card_token_hash")
+  cardIssuedAt            DateTime?             @map("card_issued_at")
+  cardConsumedAt          DateTime?             @map("card_consumed_at")
   completedAt             DateTime?             @map("completed_at")
   task                    PerformanceModuleTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   employee                Employee?             @relation("PerformanceTaskAssigneeEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
   user                    User?                 @relation("PerformanceTaskAssignee", fields: [userId], references: [id], onDelete: Restrict)
+  notificationDeliveries  PerformanceAssessmentNotificationDelivery[]
   createdAt               DateTime              @default(now()) @map("created_at")
   updatedAt               DateTime              @updatedAt @map("updated_at")
 
@@ -1705,6 +1763,119 @@ model PerformanceModuleTaskAssignee {
   @@index([userId, status])
   @@index([taskId, status])
   @@map("performance_module_task_assignees")
+}
+
+/**
+ * A post-assessment workflow step. It never stores scores, weights, metrics or
+ * calculation rules; those remain exclusively in PerformanceModuleTask.
+ */
+model PerformanceWorkflowTask {
+  id                       String                               @id @default(cuid())
+  instanceId               String                               @map("instance_id")
+  stepId                   String                               @map("step_id")
+  stepOrder                Int                                  @map("step_order")
+  attemptNo                Int                                  @default(1) @map("attempt_no")
+  stepName                 String                               @map("step_name")
+  stepType                 PerformanceWorkflowStepType          @map("step_type")
+  stepSnapshot             Json                                 @map("step_snapshot")
+  rejectionStrategy        PerformanceWorkflowRejectionStrategy? @map("rejection_strategy")
+  rejectionTargetStepId    String?                              @map("rejection_target_step_id")
+  status                   TaskStatus                           @default(PENDING)
+  executorNameSnapshot     String?                              @map("executor_name_snapshot")
+  executorResolvedAt       DateTime?                            @map("executor_resolved_at")
+  completedAt              DateTime?                            @map("completed_at")
+  instance                 PerformanceInstance                  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  assignees                PerformanceWorkflowTaskAssignee[]
+  actions                  PerformanceWorkflowTaskAction[]
+  createdAt                DateTime                             @default(now()) @map("created_at")
+  updatedAt                DateTime                             @updatedAt @map("updated_at")
+
+  @@unique([instanceId, stepOrder, attemptNo])
+  @@index([instanceId, status])
+  @@index([status, stepType])
+  @@map("performance_workflow_tasks")
+}
+
+model PerformanceWorkflowTaskAssignee {
+  id                      String                   @id @default(cuid())
+  taskId                  String                   @map("task_id")
+  employeeId              String                   @map("employee_id")
+  userId                  String?                  @map("user_id")
+  displayNameSnapshot     String                   @map("display_name_snapshot")
+  accountSnapshot         String?                  @map("account_snapshot")
+  status                  TaskStatus               @default(PENDING)
+  cardTokenHash           String?                  @unique @map("card_token_hash")
+  cardIssuedAt            DateTime?                @map("card_issued_at")
+  cardConsumedAt          DateTime?                @map("card_consumed_at")
+  completedAt             DateTime?                @map("completed_at")
+  task                    PerformanceWorkflowTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actions                 PerformanceWorkflowTaskAction[]
+  employee                Employee                 @relation("PerformanceWorkflowTaskAssigneeEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  user                    User?                    @relation("PerformanceWorkflowTaskAssignee", fields: [userId], references: [id], onDelete: Restrict)
+  notificationDeliveries  PerformanceWorkflowNotificationDelivery[]
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+
+  @@unique([taskId, employeeId])
+  @@index([employeeId, status])
+  @@index([userId, status])
+  @@index([taskId, status])
+  @@map("performance_workflow_task_assignees")
+}
+
+/// Every delivery attempt for a scored assessment-task assignee is retained.
+/// `deliveredAt` is null unless the authorized provider confirmed acceptance.
+model PerformanceAssessmentNotificationDelivery {
+  id                   String                                @id @default(cuid())
+  assessmentAssigneeId String                                @map("assessment_assignee_id")
+  channel              PerformanceNotificationChannel
+  status               PerformanceNotificationDeliveryStatus @default(PENDING)
+  deliveredAt          DateTime?                             @map("delivered_at")
+  failureReason        String?                               @map("failure_reason") @db.Text
+  assessmentAssignee   PerformanceModuleTaskAssignee         @relation(fields: [assessmentAssigneeId], references: [id], onDelete: Cascade)
+  createdAt            DateTime                              @default(now()) @map("created_at")
+  updatedAt            DateTime                              @updatedAt @map("updated_at")
+
+  @@index([assessmentAssigneeId, createdAt])
+  @@index([status, createdAt])
+  @@map("performance_assessment_notification_deliveries")
+}
+
+/// Every delivery attempt for a post-assessment workflow-task assignee is retained.
+/// This remains separate from workflow actions and audit logs.
+model PerformanceWorkflowNotificationDelivery {
+  id                 String                                @id @default(cuid())
+  workflowAssigneeId String                                @map("workflow_assignee_id")
+  channel            PerformanceNotificationChannel
+  status             PerformanceNotificationDeliveryStatus @default(PENDING)
+  deliveredAt        DateTime?                             @map("delivered_at")
+  failureReason      String?                               @map("failure_reason") @db.Text
+  workflowAssignee   PerformanceWorkflowTaskAssignee       @relation(fields: [workflowAssigneeId], references: [id], onDelete: Cascade)
+  createdAt          DateTime                              @default(now()) @map("created_at")
+  updatedAt          DateTime                              @updatedAt @map("updated_at")
+
+  @@index([workflowAssigneeId, createdAt])
+  @@index([status, createdAt])
+  @@map("performance_workflow_notification_deliveries")
+}
+
+model PerformanceWorkflowTaskAction {
+  id               String                          @id @default(cuid())
+  taskId           String                          @map("task_id")
+  assigneeId       String                          @map("assignee_id")
+  action           PerformanceWorkflowAction       @map("action")
+  source           PerformanceWorkflowActionSource @map("source")
+  comment          String?                         @db.Text
+  actorUserId      String?                         @map("actor_user_id")
+  callbackEventId  String?                         @unique @map("callback_event_id")
+  task             PerformanceWorkflowTask         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee         PerformanceWorkflowTaskAssignee @relation(fields: [assigneeId], references: [id], onDelete: Restrict)
+  actorUser        User?                           @relation("PerformanceWorkflowActionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime                        @default(now()) @map("created_at")
+
+  @@index([taskId, createdAt])
+  @@index([assigneeId, createdAt])
+  @@map("performance_workflow_task_actions")
 }
 
 model EmployeePerformanceAmountBase {

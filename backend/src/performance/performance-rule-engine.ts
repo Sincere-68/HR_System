@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { PerformanceRuleNode } from '@hr-demo/shared';
 
+const RULE_FIELD_NAME = /^[A-Za-z][A-Za-z0-9_.]{0,127}$/;
+
 export type RuleContext = Record<string, number>;
 
 @Injectable()
@@ -16,14 +18,17 @@ export class PerformanceRuleEngine {
       case 'constant':
         return this.requireNumber(node.value);
       case 'field': {
-        const value = context[node.field ?? ''];
-        if (!Number.isFinite(value)) throw new BadRequestException(`绩效规则字段不存在或不是数字：${node.field ?? ''}`);
+        const field = this.requireFieldName(node.field);
+        const value = context[field];
+        if (!Number.isFinite(value)) throw new BadRequestException(`绩效规则字段不存在或不是数字：${field}`);
         return value;
       }
       case 'if': {
         const condition = node.condition;
         if (!condition) throw new BadRequestException('绩效条件缺少 condition');
-        const left = context[condition.field];
+        const field = this.requireFieldName(condition.field);
+        if (!Number.isFinite(condition.value)) throw new BadRequestException('绩效条件值必须是有限数字');
+        const left = context[field];
         if (!Number.isFinite(left)) throw new BadRequestException(`绩效条件字段不存在：${condition.field}`);
         const matched = condition.operator === '<' ? left < condition.value
           : condition.operator === '<=' ? left <= condition.value
@@ -47,6 +52,11 @@ export class PerformanceRuleEngine {
         throw new BadRequestException(`不支持的绩效规则操作：${node.op}`);
       }
     }
+  }
+
+  private requireFieldName(value: string | undefined) {
+    if (!value || !RULE_FIELD_NAME.test(value)) throw new BadRequestException('绩效规则字段名无效');
+    return value;
   }
 
   private requireNumber(value: number | undefined) {

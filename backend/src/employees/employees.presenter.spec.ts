@@ -156,6 +156,7 @@ describe('presentEmployeeListItem', () => {
       jobLevel: 'S1',
       workplaceName: '虚构园区',
       agreementEmployingCompanyId: 'company-1',
+      currentPerformanceActivity: null,
     });
   });
 });

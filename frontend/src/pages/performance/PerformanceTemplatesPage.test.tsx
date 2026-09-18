@@ -8,13 +8,21 @@ import { PerformanceTemplatesPage } from './PerformanceTemplatesPage';
 const copyTemplate = vi.fn();
 const archiveTemplate = vi.fn();
 vi.mock('../../features/performance/api', () => ({
-  usePerformanceTemplates: () => ({ data: [{ id: 'template-1', name: '原模板', description: null, status: 'ACTIVE', moduleCount: 2, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', latestVersion: { id: 'version-1', versionNo: 1, status: 'PUBLISHED', sourceName: 'source.md', createdAt: '2026-09-01T00:00:00.000Z', publishedAt: '2026-09-01T00:00:00.000Z' } }], isLoading: false, isError: false }),
+  usePerformanceTemplates: () => ({ data: [{ id: 'template-1', name: '原模板', description: null, status: 'ACTIVE', configurationStatus: 'PUBLISHED', moduleCount: 2, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', latestVersion: { id: 'version-1', versionNo: 1, status: 'PUBLISHED', sourceName: 'source.md', createdAt: '2026-09-01T00:00:00.000Z', publishedAt: '2026-09-01T00:00:00.000Z' } }], isLoading: false, isError: false }),
   useCopyPerformanceTemplate: () => ({ isPending: false, mutateAsync: copyTemplate }),
   useArchivePerformanceTemplate: () => ({ isPending: false, mutateAsync: archiveTemplate }),
 }));
 
 describe('PerformanceTemplatesPage', () => {
   afterEach(() => cleanup());
+
+  it('shows a saved published template as available instead of pending configuration', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter><PerformanceTemplatesPage /></MemoryRouter></QueryClientProvider>);
+
+    expect(screen.getByText('已发布')).toBeInTheDocument();
+    expect(screen.queryByText('待配置')).not.toBeInTheDocument();
+  });
 
   it('copies a template and opens its new draft editor', async () => {
     copyTemplate.mockResolvedValue({ id: 'template-copy', name: '原模板 副本' });

@@ -39,9 +39,9 @@ export function PerformanceTemplatesPage() {
     { title: '模板名称', dataIndex: 'name', key: 'name', width: 260 },
     { title: '绩效模块', dataIndex: 'moduleCount', key: 'moduleCount', width: 120 },
     { title: '解析来源', key: 'source', width: 220, render: (_, record) => <span className="performance-template-source-cell"><FileMarkdownOutlined /> {record.latestVersion?.sourceName ?? '--'}</span> },
-    { title: '模板状态', key: 'status', width: 120, render: (_, record) => <Tag color={record.latestVersion?.status === 'PUBLISHED' ? 'green' : 'gold'}>{record.latestVersion?.status === 'PUBLISHED' ? '已发布' : '待配置'}</Tag> },
+    { title: '模板状态', key: 'status', width: 128, render: (_, record) => record.configurationStatus === 'PUBLISHED' ? <Tag color="green">已发布</Tag> : record.configurationStatus === 'DRAFT' ? <Tag color="gold">草稿未发布</Tag> : <Tag>未配置</Tag> },
     { title: '更新时间', key: 'updatedAt', width: 180, render: (_, record) => formatDate(record.updatedAt) },
-    { title: '操作', key: 'actions', width: 280, render: (_, record) => <><Button type="link" onClick={() => navigate(`/performance/templates/${record.id}`)}>配置模板</Button><Button type="link" icon={<CopyOutlined />} loading={copyTemplate.isPending && copyTemplate.variables === record.id} onClick={() => void copy(record)}>复制</Button><Button danger type="link" icon={<DeleteOutlined />} loading={archiveTemplate.isPending && archiveTemplate.variables?.id === record.id} onClick={() => setArchiveTarget(record)}>删除</Button></> },
+    { title: '操作', key: 'actions', width: 280, render: (_, record) => <><Button type="link" onClick={() => navigate(`/performance/templates/${record.id}`)}>{record.configurationStatus === 'PUBLISHED' ? '查看模板' : '配置模板'}</Button><Button type="link" icon={<CopyOutlined />} loading={copyTemplate.isPending && copyTemplate.variables === record.id} onClick={() => void copy(record)}>复制</Button><Button danger type="link" icon={<DeleteOutlined />} loading={archiveTemplate.isPending && archiveTemplate.variables?.id === record.id} onClick={() => setArchiveTarget(record)}>删除</Button></> },
   ];
 
   return (

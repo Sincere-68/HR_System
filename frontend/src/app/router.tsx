@@ -7,8 +7,8 @@ import { LoginPage } from '../pages/LoginPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { SystemSelectionPage } from '../pages/SystemSelectionPage';
-import { PerformanceAmountBasePage } from '../pages/performance/PerformanceAmountBasePage';
 import { PerformanceActivitiesPage } from '../pages/performance/PerformanceActivitiesPage';
+import { PerformanceActivityDetailPage } from '../pages/performance/PerformanceActivityDetailPage';
 import { PerformanceDashboardPage } from '../pages/performance/PerformanceDashboardPage';
 import { PerformanceMyTasksPage } from '../pages/performance/PerformanceMyTasksPage';
 import { PerformanceResultsPage } from '../pages/performance/PerformanceResultsPage';
@@ -63,13 +63,13 @@ export function AppRouter() {
         <Route path="performance" element={<PerformanceLayout />}>
           <Route index element={<PerformanceDashboardPage />} />
           <Route path="activities" element={<PerformanceActivitiesPage />} />
+          <Route path="activities/:activityId" element={<PerformanceActivityDetailPage />} />
           <Route path="templates" element={<PerformanceTemplatesPage />} />
           <Route path="templates/new" element={<PerformanceTemplateEditorPage />} />
           <Route path="templates/:templateId" element={<PerformanceTemplateEditorPage />} />
           <Route path="tasks" element={<PerformanceTasksPage />} />
           <Route path="my-tasks" element={<PerformanceMyTasksPage />} />
           <Route path="results" element={<PerformanceResultsPage />} />
-          <Route path="settings/amount-base" element={<PerformanceAmountBasePage />} />
         </Route>
         <Route element={<AppLayout />}>
           <Route path="personnel/employees" element={<EmployeeListPage />} />

@@ -23,6 +23,14 @@ interface FeishuUserIdResponse {
 interface FeishuMessageResponse {
   code: number;
   msg: string;
+  data?: { message_id?: string };
+}
+
+export interface FeishuCard {
+  schema: '2.0';
+  config?: { enable_forward?: boolean };
+  header: { title: { tag: 'plain_text'; content: string }; template?: 'blue' | 'green' | 'orange' | 'red' };
+  body: { elements: Array<Record<string, unknown>> };
 }
 
 @Injectable()
@@ -89,6 +97,15 @@ export class FeishuService {
   }
 
   async sendTextToOpenId(openId: string, text: string) {
+    return this.sendText(openId, text, 'open_id');
+  }
+
+  async sendTextToEmail(email: string, text: string) {
+    return this.sendText(email.trim(), text, 'email');
+  }
+
+  /** Sends a personal interactive card. Cards never target chat_id or groups. */
+  async sendCardToOpenId(openId: string, card: FeishuCard) {
     if (!this.enabled || !openId) return false;
     const token = await this.getTenantAccessToken();
     if (!token) return false;
@@ -98,16 +115,65 @@ export class FeishuService {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
-          body: JSON.stringify({ receive_id: openId, msg_type: 'text', content: JSON.stringify({ text }) }),
+          body: JSON.stringify({ receive_id: openId, msg_type: 'interactive', content: JSON.stringify(card) }),
         },
       );
       if (response.code !== 0) {
-        this.logger.warn(`飞书个人消息发送失败: ${response.msg || 'unknown error'}`);
+        this.logger.warn(`飞书交互卡片发送失败: ${response.msg || 'unknown error'}`);
         return false;
       }
       return true;
     } catch (error) {
-      this.logger.warn(`飞书个人消息请求失败: ${error instanceof Error ? error.message : 'unknown error'}`);
+      this.logger.warn(`飞书交互卡片请求失败: ${error instanceof Error ? error.message : 'unknown error'}`);
+      return false;
+    }
+  }
+
+  /** Updates an existing personal interactive card after a successful submission. */
+  async updateCard(messageId: string, card: FeishuCard) {
+    if (!this.enabled || !messageId) return false;
+    const token = await this.getTenantAccessToken();
+    if (!token) return false;
+    try {
+      const response = await this.request<FeishuMessageResponse>(
+        `https://open.feishu.cn/open-apis/im/v1/messages/${encodeURIComponent(messageId)}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ msg_type: 'interactive', content: JSON.stringify(card) }),
+        },
+      );
+      if (response.code !== 0) {
+        this.logger.warn(`飞书卡片更新失败: ${response.msg || 'unknown error'}`);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      this.logger.warn(`飞书卡片更新请求失败: ${error instanceof Error ? error.message : 'unknown error'}`);
+      return false;
+    }
+  }
+
+  private async sendText(receiveId: string, text: string, receiveIdType: 'email' | 'open_id') {
+    if (!this.enabled || !receiveId) return false;
+    const token = await this.getTenantAccessToken();
+    if (!token) return false;
+    try {
+      const response = await this.request<FeishuMessageResponse>(
+        `https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ receive_id: receiveId, msg_type: 'text', content: JSON.stringify({ text }) }),
+        },
+      );
+      if (response.code !== 0) {
+        this.logger.warn(`飞书消息发送失败 (${receiveIdType}): ${response.msg || 'unknown error'}`);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      this.logger.warn(`飞书消息请求失败 (${receiveIdType}): ${error instanceof Error ? error.message : 'unknown error'}`);
       return false;
     }
   }
@@ -145,7 +211,12 @@ export class FeishuService {
 
   private async request<T>(url: string, init: RequestInit) {
     const response = await fetch(url, init);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { code?: unknown; msg?: unknown } | null;
+      const code = typeof body?.code === 'number' ? ` code=${body.code}` : '';
+      const message = typeof body?.msg === 'string' && body.msg.trim() ? ` msg=${body.msg.trim().slice(0, 240)}` : '';
+      throw new Error(`HTTP ${response.status}${code}${message}`);
+    }
     return response.json() as Promise<T>;
   }
 }

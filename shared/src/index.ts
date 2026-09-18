@@ -305,6 +305,18 @@ export const PERFORMANCE_EXCEPTION_HANDLER_TYPES = ['SPECIFIED_USER', 'DIRECT_MA
 export type PerformanceExceptionHandlerType = (typeof PERFORMANCE_EXCEPTION_HANDLER_TYPES)[number];
 export const PERFORMANCE_ADJUSTMENT_DIRECTIONS = ['ADD', 'DEDUCT'] as const;
 export type PerformanceAdjustmentDirection = (typeof PERFORMANCE_ADJUSTMENT_DIRECTIONS)[number];
+export const PERFORMANCE_WORKFLOW_STEP_TYPES = ['REVIEW', 'CONFIRMATION', 'APPROVAL', 'HR_ARCHIVE'] as const;
+export type PerformanceWorkflowStepType = (typeof PERFORMANCE_WORKFLOW_STEP_TYPES)[number];
+export const PERFORMANCE_WORKFLOW_REJECTION_STRATEGIES = ['END', 'RETURN_PREVIOUS', 'RETURN_TO_STEP'] as const;
+export type PerformanceWorkflowRejectionStrategy = (typeof PERFORMANCE_WORKFLOW_REJECTION_STRATEGIES)[number];
+export const PERFORMANCE_WORKFLOW_ACTIONS = ['APPROVE', 'REJECT', 'CONFIRM', 'ARCHIVE'] as const;
+export type PerformanceWorkflowAction = (typeof PERFORMANCE_WORKFLOW_ACTIONS)[number];
+export const PERFORMANCE_WORKFLOW_ACTION_SOURCES = ['WEB', 'FEISHU'] as const;
+export type PerformanceWorkflowActionSource = (typeof PERFORMANCE_WORKFLOW_ACTION_SOURCES)[number];
+export const PERFORMANCE_NOTIFICATION_DELIVERY_STATUSES = ['PENDING', 'DELIVERED', 'FAILED', 'SKIPPED'] as const;
+export type PerformanceNotificationDeliveryStatus = (typeof PERFORMANCE_NOTIFICATION_DELIVERY_STATUSES)[number];
+export const PERFORMANCE_NOTIFICATION_CHANNELS = ['FEISHU_CARD'] as const;
+export type PerformanceNotificationChannel = (typeof PERFORMANCE_NOTIFICATION_CHANNELS)[number];
 
 export interface AuthUser {
   id: string;
@@ -393,7 +405,17 @@ export interface EmployeeListItem extends Employee {
   major: string | null;
 }
 
+export interface EmployeeCurrentPerformanceActivity {
+  cycleId: string;
+  cycleName: string;
+  currentStepName: string | null;
+  currentStepKind: 'ASSESSMENT' | 'WORKFLOW' | null;
+  currentExecutorName: string | null;
+  status: ProcessStatus;
+}
+
 export interface EmployeeDetail extends EmployeeListItem {
+  currentPerformanceActivity?: EmployeeCurrentPerformanceActivity | null;
   assignmentId: string | null;
   positionId: string | null;
   /** Current effective EmployeeAgreement.employingCompany ID, never an assignment field. */
@@ -1644,12 +1666,22 @@ export interface UpdateEmployeeInput {
   agreementEmployingCompanyId?: string;
 }
 
+export interface PerformanceExecutorEmployeeSnapshot {
+  employeeId: string;
+  name: string;
+  employeeNo: string;
+  organizationId: string | null;
+  organizationName: string | null;
+}
+
 export interface PerformanceExecutorDefinition {
   type: PerformanceExecutorType;
   /** Defaults to SINGLE for definitions created before execution modes existed. */
   executionMode?: PerformanceExecutionMode;
   /** Selected personnel for a USER executor. MULTIPLE requires at least two distinct employees. */
   employeeIds?: string[];
+  /** Display-only snapshots paired with employeeIds; never used for authorization. */
+  employeeSnapshots?: PerformanceExecutorEmployeeSnapshot[];
   /** @deprecated Legacy system-account fields. Readers normalize them to employee IDs when possible. */
   userIds?: string[];
   /** @deprecated Legacy single-user field. */
@@ -1695,11 +1727,39 @@ export interface PerformanceModuleDefinition {
   requireAttachment?: boolean;
 }
 
+export interface PerformanceWorkflowManualStepDefinition {
+  id: string;
+  name: string;
+  type: PerformanceWorkflowStepType;
+  /** Every manual workflow type is configured with an explicit executor. */
+  executor: PerformanceExecutorDefinition;
+  rejectionStrategy?: PerformanceWorkflowRejectionStrategy;
+  rejectionTargetStepId?: string;
+}
+
+/**
+ * Manual steps are strictly post-assessment workflow actions. Assessment
+ * modules remain the only source of scores, weights, rules and calculations.
+ */
+export interface PerformanceWorkflowDefinition {
+  manualSteps: PerformanceWorkflowManualStepDefinition[];
+}
+
+export interface PerformanceWorkflowProjectionStep {
+  id: string;
+  name: string;
+  type: 'ASSESSMENT_EVALUATION' | 'ASSESSMENT_ADJUSTMENT' | PerformanceWorkflowStepType;
+  source: 'ASSESSMENT' | 'MANUAL';
+  assessmentModuleId?: string;
+}
+
 export interface PerformanceTemplateDefinition {
   schemaVersion: 1;
   name: string;
   description?: string;
   modules: PerformanceModuleDefinition[];
+  /** Missing on pre-workflow template versions and treated as an empty list. */
+  workflow?: PerformanceWorkflowDefinition;
 }
 
 export interface PerformanceTemplateVersionSummary {
@@ -1712,12 +1772,16 @@ export interface PerformanceTemplateVersionSummary {
   publishedAt: string | null;
 }
 
+/** The active template version is usable in a performance activity. */
+export type PerformanceTemplateConfigurationStatus = 'PUBLISHED' | 'DRAFT' | 'NOT_CONFIGURED';
+
 export interface PerformanceTemplateListItem {
   id: string;
   name: string;
   description: string | null;
   status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'CANCELLED';
   latestVersion: PerformanceTemplateVersionSummary | null;
+  configurationStatus: PerformanceTemplateConfigurationStatus;
   moduleCount: number;
   createdAt: string;
   updatedAt: string;
@@ -1808,6 +1872,179 @@ export interface PerformanceCycleListItem {
   createdAt: string;
 }
 
+/** A person included in a performance activity. */
+export interface PerformanceCycleParticipant {
+  id: string;
+  employeeAmountBaseConfigured?: boolean;
+  employeeAmountBaseAmount?: number | null;
+  employeeId: string;
+  employeeName: string;
+  employeeNo: string;
+  organizationName: string | null;
+  templateName: string;
+  indicatorTemplateName: string | null;
+  currentStepName: string | null;
+  currentStepKind: 'ASSESSMENT' | 'WORKFLOW' | null;
+  currentExecutorName: string | null;
+  assessmentGroupName: string | null;
+  assessmentStatus: ProcessStatus;
+  assessmentCompletedAt: string | null;
+  workflowCompletedAt: string | null;
+  status: ProcessStatus;
+  finalScore: number | null;
+  finalGrade: string | null;
+  employmentStatus: EmploymentStatus | null;
+  finalCoefficient: number | null;
+  actualAmount?: number | null;
+}
+
+export interface PerformanceCycleDetail extends PerformanceCycleListItem {
+  instances: PerformanceCycleParticipant[];
+}
+
+export interface PerformanceNotificationDelivery {
+  id: string;
+  channel: PerformanceNotificationChannel;
+  status: PerformanceNotificationDeliveryStatus;
+  deliveredAt: string | null;
+  failureReason: string | null;
+  createdAt: string;
+}
+
+export interface PerformanceFlowStepAssignee {
+  id: string;
+  employeeId: string | null;
+  displayName: string;
+  role: string | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  deliveredAt: string | null;
+  deliveryStatus: PerformanceNotificationDeliveryStatus | null;
+  deliveryFailureReason: string | null;
+  submittedAt: string | null;
+  isQualified: boolean | null;
+  deliveries: PerformanceNotificationDelivery[];
+}
+
+export interface PerformanceParticipantFlowStep {
+  id: string;
+  source: 'ASSESSMENT' | 'WORKFLOW';
+  name: string;
+  type: PerformanceModuleType | PerformanceWorkflowStepType;
+  stepOrder: number;
+  attemptNo: number;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  role: string | null;
+  completedAt: string | null;
+  isQualified: boolean | null;
+  assignees: PerformanceFlowStepAssignee[];
+}
+
+export interface PerformanceParticipantWorkflowDetail {
+  cycleId: string;
+  cycleName: string;
+  instanceId: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNo: string;
+  templateName: string;
+  templateVersionNo: number | null;
+  steps: PerformanceParticipantFlowStep[];
+}
+
+export interface PerformanceAssessmentDetailIndicator {
+  id: string;
+  name: string;
+  description: string;
+  standards: string[];
+  moduleName: string;
+  moduleType: PerformanceModuleType;
+  scorerNames: string[];
+  rawScore: number | null;
+  indicatorWeight: number | null;
+  weightedScore: number | null;
+  scoreStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  scoreSource: 'METRIC' | 'MODULE_TOTAL' | 'UNAVAILABLE';
+}
+
+export interface PerformanceAssessmentDetailModule {
+  id: string;
+  name: string;
+  type: PerformanceModuleType;
+  weight: number | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  scorerNames: string[];
+  moduleScore: number | null;
+  weightedScore: number | null;
+  adjustmentDirection: PerformanceAdjustmentDirection | null;
+  indicators: PerformanceAssessmentDetailIndicator[];
+}
+
+export interface PerformanceParticipantAssessmentDetail {
+  cycleId: string;
+  cycleName: string;
+  instanceId: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNo: string;
+  templateName: string;
+  templateVersionNo: number | null;
+  activityStatus: ProcessStatus;
+  instanceStatus: ProcessStatus;
+  archived: boolean;
+  modules: PerformanceAssessmentDetailModule[];
+  fixedWeightedScore: number | null;
+  adjustmentScore: number | null;
+  finalScore: number | null;
+  finalCoefficient: number | null;
+  employeeAmountBaseId: string | null;
+  employeeAmountBaseVersionNo: number | null;
+  employeeAmountBaseSnapshot: number | null;
+  calculationFormula: string | null;
+  actualAmount: number | null;
+  calculationStatus: 'NOT_READY' | 'NO_AMOUNT_BASE' | 'CALCULATED' | 'ARCHIVED_SNAPSHOT';
+  emptyReason: string | null;
+}
+
+export interface PerformanceWorkflowTaskAssignee {
+  id: string;
+  employeeId: string;
+  userId: string | null;
+  displayName: string;
+  username: string | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  completedAt: string | null;
+}
+
+export interface PerformanceWorkflowTaskActionRecord {
+  id: string;
+  action: PerformanceWorkflowAction;
+  comment: string | null;
+  source: PerformanceWorkflowActionSource;
+  actorName: string;
+  createdAt: string;
+}
+
+export interface PerformanceWorkflowTaskListItem {
+  id: string;
+  cycleId: string;
+  cycleName: string;
+  instanceId: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNo: string;
+  stepId: string;
+  stepName: string;
+  stepType: PerformanceWorkflowStepType;
+  stepOrder: number;
+  attemptNo: number;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  executorName: string | null;
+  assignees: PerformanceWorkflowTaskAssignee[];
+  isCurrent: boolean;
+  canSubmit: boolean;
+  completedAt: string | null;
+}
+
 export interface PerformanceTaskAssignee {
   id: string;
   employeeId: string | null;
@@ -1875,6 +2112,7 @@ export interface PerformanceResultListItem {
   finalScore: number | null;
   employeeAmountBaseSnapshot: number | null;
   employeeAmountBaseVersionNo: number | null;
+  employeeAmountBaseConfigured?: boolean;
   actualAmount: number | null;
   status: ProcessStatus;
   revisionCount: number;
@@ -1927,11 +2165,32 @@ export interface PerformanceCreateTemplateInput {
   definition: PerformanceTemplateDefinition;
 }
 
+export interface PerformanceArchiveCycleInput {
+  reason?: string;
+}
+
+export interface PerformanceAddCycleParticipantsInput {
+  /** A participant and their template are bound one-to-one per request. */
+  employeeId: string;
+  templateVersionId: string;
+}
+
+export interface PerformanceCreateEmployeePerformanceAmountBaseInput {
+  amount: number;
+  effectiveAt: string;
+  reason: string;
+}
+
+export interface PerformanceUpdateCycleParticipantTemplateInput {
+  templateVersionId: string;
+}
+
 export interface PerformanceCreateCycleInput {
   name: string;
   organizationId: string;
   isPublic: boolean;
   linkedLevel: boolean;
+  /** Optional at activity creation; selected with each participant. */
   templateVersionId?: string;
   year: number;
   periodType: PerformanceCyclePeriodType;
@@ -1949,6 +2208,11 @@ export interface PerformanceTaskSubmissionInput {
   adjustment?: number;
   comment?: string;
   attachmentIds?: string[];
+}
+
+export interface PerformanceWorkflowTaskSubmissionInput {
+  action: PerformanceWorkflowAction;
+  comment?: string;
 }
 
 export interface PerformanceResultModificationInput {

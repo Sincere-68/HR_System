@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit.service';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
 import { DemoDataService } from '../demo/demo-data.service';
+import type { FeishuCard } from '../feishu/feishu.service';
 import { FeishuService } from '../feishu/feishu.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryEmployeeInfoApprovalDto } from './dto/query-employee-info-approval.dto';
@@ -191,6 +192,8 @@ export class EmployeeInfoApprovalService {
       },
       select: {
         id: true,
+        employee: { select: { name: true } },
+        changedFields: true,
         approvalRequest: {
           select: {
             id: true,
@@ -205,8 +208,7 @@ export class EmployeeInfoApprovalService {
                   select: {
                     id: true,
                     displayName: true,
-                    feishuOpenId: true,
-                    employee: { select: { workEmail: true, mobile: true } },
+                    employee: { select: { workEmail: true } },
                   },
                 },
               },
@@ -223,32 +225,20 @@ export class EmployeeInfoApprovalService {
     const currentStep = approvalRequest.steps.find((step) => step.stepOrder === approvalRequest.currentStep);
     if (!currentStep) throw new ConflictException('当前审批步骤不存在或已处理，无法发送提醒');
 
-    let openId = currentStep.approver.feishuOpenId;
-    if (!openId && currentStep.approver.employee) {
-      openId = await this.feishu.resolveOpenIdByContact(currentStep.approver.employee);
-      if (openId) {
-        const boundUser = await this.prisma.user.findFirst({
-          where: { feishuOpenId: openId },
-          select: { id: true },
-        });
-        if (boundUser && boundUser.id !== currentStep.approver.id) {
-          throw new ConflictException('飞书账号已绑定其他系统账号，无法发送提醒');
-        }
-        await this.prisma.user.update({
-          where: { id: currentStep.approver.id },
-          data: { feishuOpenId: openId, feishuOpenIdSyncedAt: new Date() },
-        });
-      }
-    }
-    if (!openId) {
-      throw new UnprocessableEntityException('当前审批人未绑定飞书账号，且无法通过工作邮箱或手机号匹配');
+    const workEmail = currentStep.approver.employee?.workEmail?.trim();
+    if (!workEmail) {
+      throw new UnprocessableEntityException('当前审批人未配置企业邮箱，无法发送飞书提醒');
     }
 
-    const sent = await this.feishu.sendTextToOpenId(
-      openId,
-      `【员工信息审批提醒】${approvalRequest.title}\n请及时登录人员管理系统处理。`,
-    );
-    if (!sent) throw new ServiceUnavailableException('飞书消息发送失败，请检查飞书配置和权限');
+    const openId = await this.feishu.resolveOpenIdByContact({ workEmail });
+    if (!openId) throw new ServiceUnavailableException('审批人企业邮箱无法匹配唯一飞书身份，请检查企业邮箱和飞书通讯录权限');
+    const sent = await this.feishu.sendCardToOpenId(openId, this.approvalCard({
+      title: approvalRequest.title,
+      employeeName: changeRequest.employee.name ?? '未命名员工',
+      changedFields: changeRequest.changedFields,
+      approvalStepId: currentStep.id,
+    }));
+    if (!sent) throw new ServiceUnavailableException('飞书审批卡片发送失败，请检查飞书配置和权限');
 
     const sentAt = new Date();
     await this.audit.create(
@@ -269,6 +259,32 @@ export class EmployeeInfoApprovalService {
       approverName: currentStep.approver.displayName,
       sentAt: sentAt.toISOString(),
     };
+  }
+
+  private approvalCard(input: { title: string; employeeName: string; changedFields: unknown; approvalStepId: string }): FeishuCard {
+    const detailUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || 'http://localhost:5173'}/personnel/approval`;
+    return {
+      schema: '2.0',
+      config: { enable_forward: false },
+      header: { title: { tag: 'plain_text', content: '员工信息审批' }, template: 'blue' },
+      body: {
+        elements: [
+          { tag: 'markdown', content: `**审批事项**：${input.title}\n**员工**：${input.employeeName}\n**事项摘要**：${this.changedFieldSummary(input.changedFields)}` },
+          { tag: 'form', name: 'employee_info_approval_action', elements: [
+            { tag: 'input', name: 'comment', input_type: 'multiline_text', placeholder: { tag: 'plain_text', content: '审批意见（可选；驳回时按既有流程规则处理）' } },
+            { tag: 'button', name: 'submit_approve', text: { tag: 'plain_text', content: '通过' }, type: 'primary', form_action_type: 'submit', value: { kind: 'employee-info-approval', approvalStepId: input.approvalStepId, action: 'APPROVE' } },
+            { tag: 'button', name: 'submit_reject', text: { tag: 'plain_text', content: '驳回' }, type: 'danger', form_action_type: 'submit', value: { kind: 'employee-info-approval', approvalStepId: input.approvalStepId, action: 'REJECT' } },
+            { tag: 'button', text: { tag: 'plain_text', content: '查看 HR 系统详情' }, type: 'default', multi_url: { url: detailUrl } },
+          ] },
+        ],
+      },
+    };
+  }
+
+  private changedFieldSummary(value: unknown) {
+    if (!Array.isArray(value)) return '员工信息变更';
+    const fields = value.filter((field): field is string => typeof field === 'string' && Boolean(field.trim())).slice(0, 8);
+    return fields.length > 0 ? fields.join('、') : '员工信息变更';
   }
 
   private async getOrganizationSubtreeIds(rootId: string, allowedIds?: string[]) {

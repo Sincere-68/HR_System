@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsEnum, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
-import { PerformanceCyclePeriodType, PerformanceExceptionHandlerType, PerformanceTemplateSourceType, ProcessStatus } from '@prisma/client';
+import { PerformanceCyclePeriodType, PerformanceExceptionHandlerType, PerformanceTemplateSourceType, PerformanceWorkflowAction, ProcessStatus } from '@prisma/client';
 
 export class ParsePerformanceTemplateDto {
   @ApiProperty({ description: '原始 Markdown' })
@@ -106,7 +106,7 @@ export class CreatePerformanceCycleDto {
   @IsDateString({ strict: true })
   periodEnd!: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: '可选已发布绩效模板版本 ID；也可在添加被考核人时指定模板' })
   @IsOptional()
   @IsString()
   templateVersionId?: string;
@@ -132,7 +132,42 @@ export class CreatePerformanceCycleDto {
   employeeIds?: string[];
 }
 
+export class PerformanceCycleParticipantsActionDto {
+  @ApiProperty({ type: [String], description: '当前绩效活动中选中的被考核人 ID' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  employeeIds!: string[];
+}
+
+export class AddPerformanceCycleParticipantsDto {
+  @ApiProperty({ description: '要加入活动的员工 ID；每次添加仅绑定一名人员与一份模板' })
+  @IsString()
+  @IsNotEmpty()
+  employeeId!: string;
+
+  @ApiProperty({ description: '该被考核人的已发布绩效模板版本 ID' })
+  @IsString()
+  @IsNotEmpty()
+  templateVersionId!: string;
+}
+
+export class UpdatePerformanceCycleParticipantTemplateDto {
+  @ApiProperty({ description: '已发布绩效模板版本 ID' })
+  @IsString()
+  @IsNotEmpty()
+  templateVersionId!: string;
+}
+
 export class ArchivePerformanceTemplateDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(10_000)
+  reason?: string;
+}
+
+export class ArchivePerformanceCycleDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -167,6 +202,18 @@ export class PerformanceTaskSubmissionDto {
   attachmentIds?: string[];
 }
 
+export class PerformanceWorkflowTaskSubmissionDto {
+  @ApiProperty({ enum: PerformanceWorkflowAction })
+  @IsEnum(PerformanceWorkflowAction)
+  action!: PerformanceWorkflowAction;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(10_000)
+  comment?: string;
+}
+
 export class ModifyPerformanceResultDto {
   @ApiProperty({ minimum: 0 })
   @IsNumber({ maxDecimalPlaces: 4 })
@@ -186,6 +233,23 @@ export class CreateEmployeePerformanceAmountBaseDto {
   @IsNotEmpty()
   employeeId!: string;
 
+  @ApiProperty({ minimum: 0 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  amount!: number;
+
+  @ApiProperty()
+  @IsDateString()
+  effectiveAt!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(10_000)
+  reason!: string;
+}
+
+export class CreateCycleParticipantAmountBaseDto {
   @ApiProperty({ minimum: 0 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)

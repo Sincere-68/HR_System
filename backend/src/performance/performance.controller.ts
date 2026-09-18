@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '@hr-demo/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import type { Request } from 'express';
+import { Public } from '../common/decorators/public.decorator';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
-import { ArchivePerformanceTemplateDto, CreateEmployeePerformanceAmountBaseDto, CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceTaskSubmissionDto, QueryEmployeePerformanceAmountBaseDto, QueryPerformanceDto } from './dto/performance.dto';
+import { AddPerformanceCycleParticipantsDto, ArchivePerformanceCycleDto, ArchivePerformanceTemplateDto, PerformanceCycleParticipantsActionDto, CreateEmployeePerformanceAmountBaseDto, CreateCycleParticipantAmountBaseDto, CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceTaskSubmissionDto, PerformanceWorkflowTaskSubmissionDto, QueryEmployeePerformanceAmountBaseDto, QueryPerformanceDto, UpdatePerformanceCycleParticipantTemplateDto } from './dto/performance.dto';
 import { PerformanceService } from './performance.service';
 
 @ApiTags('绩效管理')
@@ -61,6 +63,22 @@ export class PerformanceController {
   @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
   getCycle(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.service.getCycle(id, user); }
 
+  @Get('cycles/:cycleId/participants/:instanceId/workflow')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
+  getParticipantWorkflow(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('cycleId') cycleId: string,
+    @Param('instanceId') instanceId: string,
+  ) { return this.service.getParticipantWorkflow(user, cycleId, instanceId); }
+
+  @Get('cycles/:cycleId/participants/:instanceId/assessment-detail')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
+  getParticipantAssessmentDetail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('cycleId') cycleId: string,
+    @Param('instanceId') instanceId: string,
+  ) { return this.service.getParticipantAssessmentDetail(user, cycleId, instanceId); }
+
   @Post('cycles')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
   createCycle(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreatePerformanceCycleDto) { return this.service.createCycle(user, dto); }
@@ -68,6 +86,36 @@ export class PerformanceController {
   @Post('cycles/:id/start')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
   startCycle(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) { return this.service.startCycle(user, id); }
+
+  @Post('cycles/:id/restart')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
+  restartCycle(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: PerformanceCycleParticipantsActionDto) { return this.service.restartCycle(user, id, dto); }
+
+  @Post('cycles/:id/close-participants')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
+  closeCycleParticipants(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: PerformanceCycleParticipantsActionDto) { return this.service.closeCycleParticipants(user, id, dto); }
+
+  @Post('cycles/:id/archive')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
+  archiveCycle(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: ArchivePerformanceCycleDto) { return this.service.archiveCycle(user, id, dto); }
+
+  @Post('cycles/:id/participants')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
+  addCycleParticipants(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: AddPerformanceCycleParticipantsDto) {
+    return this.service.addCycleParticipants(user, id, dto);
+  }
+
+  @Patch('cycles/:cycleId/participants/:employeeId/template')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
+  updateCycleParticipantTemplate(@CurrentUser() user: AuthenticatedUser, @Param('cycleId') cycleId: string, @Param('employeeId') employeeId: string, @Body() dto: UpdatePerformanceCycleParticipantTemplateDto) {
+    return this.service.updateCycleParticipantTemplate(user, cycleId, employeeId, dto);
+  }
+
+  @Post('cycles/:cycleId/participants/:employeeId/amount-base')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
+  createCycleParticipantAmountBase(@CurrentUser() user: AuthenticatedUser, @Param('cycleId') cycleId: string, @Param('employeeId') employeeId: string, @Body() dto: CreateCycleParticipantAmountBaseDto) {
+    return this.service.createCycleParticipantAmountBase(user, cycleId, employeeId, dto);
+  }
 
   @Get('tasks')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
@@ -84,6 +132,28 @@ export class PerformanceController {
   @Post('tasks/:id/submit')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_TASK_HANDLE)
   submitTask(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: PerformanceTaskSubmissionDto) { return this.service.submitTask(user, id, dto); }
+
+  @Get('workflow-tasks')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
+  listWorkflowTasks(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryPerformanceDto) { return this.service.listWorkflowTasks(user, query); }
+
+  @Get('my-workflow-tasks')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_TASK_HANDLE)
+  listMyWorkflowTasks(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryPerformanceDto) { return this.service.listWorkflowTasks(user, query, true); }
+
+  @Post('workflow-tasks/:id/submit')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_TASK_HANDLE)
+  submitWorkflowTask(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: PerformanceWorkflowTaskSubmissionDto) { return this.service.submitWorkflowTask(user, id, dto); }
+
+  @Post('feishu/card-actions')
+  @Public()
+  handleFeishuCardAction(
+    @Body() body: Record<string, unknown>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Req() request: Request,
+  ) {
+    return this.service.handleFeishuCardAction(body, headers, (request as Request & { rawBody?: Buffer }).rawBody ?? Buffer.from(JSON.stringify(body)));
+  }
 
   @Get('results')
   @RequirePermissions(PERMISSIONS.PERFORMANCE_READ)
