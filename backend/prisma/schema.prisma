@@ -420,6 +420,13 @@ enum PerformanceNotificationChannel {
   FEISHU_CARD
 }
 
+enum PerformanceFeishuTaskSessionStatus {
+  ACTIVE
+  CONSUMED
+  REVOKED
+  EXPIRED
+}
+
 enum ApprovalDecision {
   PENDING
   APPROVED
@@ -665,6 +672,8 @@ model Employee {
   exceptionHandlingPerformanceCycles PerformanceCycle[] @relation("PerformanceCycleExceptionHandler")
   performanceTaskAssignees         PerformanceModuleTaskAssignee[] @relation("PerformanceTaskAssigneeEmployee")
   performanceWorkflowTaskAssignees PerformanceWorkflowTaskAssignee[] @relation("PerformanceWorkflowTaskAssigneeEmployee")
+  performanceFeishuTaskSessions    PerformanceFeishuTaskSession[]
+  performanceFeishuInboxDeliveries PerformanceFeishuTaskInboxDelivery[]
   performanceAmountBases           EmployeePerformanceAmountBase[]
   outgoingHandovers      HandoverCase[]                  @relation("HandoverSource")
   incomingHandovers      HandoverCase[]                  @relation("HandoverTarget")
@@ -1646,6 +1655,8 @@ model PerformanceCycle {
   archivedBy                 User?                            @relation("PerformanceCycleArchivedBy", fields: [archivedById], references: [id], onDelete: Restrict)
   exceptionHandlerEmployee   Employee?                        @relation("PerformanceCycleExceptionHandler", fields: [exceptionHandlerEmployeeId], references: [id], onDelete: Restrict)
   instances              PerformanceInstance[]
+  feishuTaskSessions     PerformanceFeishuTaskSession[]
+  feishuInboxDeliveries  PerformanceFeishuTaskInboxDelivery[]
   createdAt              DateTime                         @default(now()) @map("created_at")
   updatedAt              DateTime                         @updatedAt @map("updated_at")
 
@@ -1876,6 +1887,46 @@ model PerformanceWorkflowTaskAction {
   @@index([taskId, createdAt])
   @@index([assigneeId, createdAt])
   @@map("performance_workflow_task_actions")
+}
+
+model PerformanceFeishuTaskSession {
+  id             String                          @id @default(cuid())
+  employeeId     String                          @map("employee_id")
+  cycleId        String                          @map("cycle_id")
+  stateHash      String                          @unique @map("state_hash")
+  status         PerformanceFeishuTaskSessionStatus @default(ACTIVE)
+  expiresAt      DateTime                        @map("expires_at")
+  consumedAt     DateTime?                       @map("consumed_at")
+  createdAt      DateTime                        @default(now()) @map("created_at")
+  updatedAt      DateTime                        @updatedAt @map("updated_at")
+  employee       Employee                        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  cycle          PerformanceCycle                @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  inboxDeliveries PerformanceFeishuTaskInboxDelivery[]
+
+  @@index([employeeId, status, expiresAt])
+  @@index([cycleId, employeeId, status])
+  @@map("performance_feishu_task_sessions")
+}
+
+model PerformanceFeishuTaskInboxDelivery {
+  id          String                          @id @default(cuid())
+  employeeId  String                          @map("employee_id")
+  cycleId     String                          @map("cycle_id")
+  sessionId   String?                         @map("session_id")
+  messageId   String?                         @map("message_id")
+  status      PerformanceNotificationDeliveryStatus @default(PENDING)
+  deliveredAt DateTime?                       @map("delivered_at")
+  failureReason String?                       @map("failure_reason") @db.Text
+  createdAt   DateTime                        @default(now()) @map("created_at")
+  updatedAt   DateTime                        @updatedAt @map("updated_at")
+  employee    Employee                        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  cycle       PerformanceCycle                @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  session     PerformanceFeishuTaskSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, cycleId, createdAt])
+  @@index([status, createdAt])
+  @@unique([employeeId, cycleId])
+  @@map("performance_feishu_task_inbox_deliveries")
 }
 
 model EmployeePerformanceAmountBase {

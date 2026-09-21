@@ -31,18 +31,23 @@ describe('EmployeesService in demo mode', () => {
     const resigned = await employees.findAll(departmentAdmin, query({ status: EmploymentStatus.RESIGNED }));
     const byKeyword = await employees.findAll(departmentAdmin, query({ keyword: 'DEMO-2001' }));
 
-    expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 3, totalPages: 2 });
+    expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 4, totalPages: 2 });
     expect(firstPage.data[0]?.mobile).toBe('13800001001');
     expect(resigned.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
     expect(byKeyword.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
   });
 
-  it('does not expose departments or employees outside the user scope', async () => {
+  it('limits an ordinary employee to their own demo employee record', async () => {
     const { demo, access, employees } = createServices();
     const viewer = demo.getUser('demo-user-viewer')!;
 
+    const own = await employees.findAll(viewer, query());
     const result = await employees.findAll(viewer, query({ organizationId: 'demo-org-ceo_second_tmall_supermarket' }));
+    expect(own.data.map((employee) => employee.id)).toEqual(['demo-employee-3001']);
     expect(result.data).toEqual([]);
+    await expect(
+      employees.findOne(viewer, 'demo-employee-3001', auditContext),
+    ).resolves.toMatchObject({ id: 'demo-employee-3001' });
     await expect(
       employees.findOne(viewer, 'demo-employee-1001', auditContext),
     ).rejects.toBeInstanceOf(NotFoundException);

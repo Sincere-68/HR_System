@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '@hr-demo/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -6,7 +6,10 @@ import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import type { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
-import { AddPerformanceCycleParticipantsDto, ArchivePerformanceCycleDto, ArchivePerformanceTemplateDto, PerformanceCycleParticipantsActionDto, CreateEmployeePerformanceAmountBaseDto, CreateCycleParticipantAmountBaseDto, CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceTaskSubmissionDto, PerformanceWorkflowTaskSubmissionDto, QueryEmployeePerformanceAmountBaseDto, QueryPerformanceDto, UpdatePerformanceCycleParticipantTemplateDto } from './dto/performance.dto';
+import { AddPerformanceCycleParticipantsDto, ArchivePerformanceCycleDto, ArchivePerformanceTemplateDto, PerformanceCycleParticipantsActionDto, CreateEmployeePerformanceAmountBaseDto, CreateCycleParticipantAmountBaseDto, CreatePerformanceCycleDto, CreatePerformanceTemplateDto, ModifyPerformanceResultDto, ParsePerformanceTemplateDto, PerformanceFeishuTaskSessionExchangeDto, PerformanceTaskSubmissionDto, PerformanceWorkflowTaskSubmissionDto, QueryEmployeePerformanceAmountBaseDto, QueryPerformanceDto, UpdatePerformanceCycleParticipantTemplateDto } from './dto/performance.dto';
+import { FeishuTask } from './feishu-task.decorator';
+import { FeishuTaskAuthGuard } from './feishu-task-auth.guard';
+import type { FeishuTaskPrincipal } from './feishu-task-session.service';
 import { PerformanceService } from './performance.service';
 
 @ApiTags('绩效管理')
@@ -115,6 +118,33 @@ export class PerformanceController {
   @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
   createCycleParticipantAmountBase(@CurrentUser() user: AuthenticatedUser, @Param('cycleId') cycleId: string, @Param('employeeId') employeeId: string, @Body() dto: CreateCycleParticipantAmountBaseDto) {
     return this.service.createCycleParticipantAmountBase(user, cycleId, employeeId, dto);
+  }
+
+  @Post('feishu-task-inbox/session')
+  @Public()
+  exchangeFeishuTaskSession(@Body() dto: PerformanceFeishuTaskSessionExchangeDto) {
+    return this.service.exchangeFeishuTaskSession(dto.state, dto.code);
+  }
+
+  @Get('feishu-task-inbox')
+  @Public()
+  @UseGuards(FeishuTaskAuthGuard)
+  getFeishuTaskInbox(@FeishuTask() principal: FeishuTaskPrincipal) {
+    return this.service.getFeishuTaskInbox(principal.employeeId, principal.cycleId);
+  }
+
+  @Post('feishu-task-inbox/assessment-tasks/:id/submit')
+  @Public()
+  @UseGuards(FeishuTaskAuthGuard)
+  submitFeishuAssessmentTask(@FeishuTask() principal: FeishuTaskPrincipal, @Param('id') id: string, @Body() dto: PerformanceTaskSubmissionDto) {
+    return this.service.submitFeishuAssessmentTask(principal, id, dto);
+  }
+
+  @Post('feishu-task-inbox/workflow-tasks/:id/submit')
+  @Public()
+  @UseGuards(FeishuTaskAuthGuard)
+  submitFeishuWorkflowTask(@FeishuTask() principal: FeishuTaskPrincipal, @Param('id') id: string, @Body() dto: PerformanceWorkflowTaskSubmissionDto) {
+    return this.service.submitFeishuWorkflowTask(principal, id, dto);
   }
 
   @Get('tasks')

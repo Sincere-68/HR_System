@@ -3000,11 +3000,14 @@ export class EmployeesService {
     user: AuthenticatedUser,
     query: QueryEmployeesDto,
   ): Paginated<EmployeeListItem> {
-    let employees = this.demo.getEmployees().filter(
-      (employee) => this.access.canAccessOrganization(user, employee.organizationId),
-    );
+    const selfScoped = this.access.hasSelfEmployeeDataScope(user);
+    let employees = this.demo.getEmployees().filter((employee) => (
+      selfScoped
+        ? employee.id === user.employeeId
+        : this.access.canAccessOrganization(user, employee.organizationId)
+    ));
     if (query.organizationId) {
-      employees = this.access.canAccessOrganization(user, query.organizationId)
+      employees = !selfScoped && this.access.canAccessOrganization(user, query.organizationId)
         ? employees.filter((employee) => employee.organizationId === query.organizationId)
         : [];
     }
@@ -3041,7 +3044,10 @@ export class EmployeesService {
 
   private findAccessibleDemoEmployee(user: AuthenticatedUser, id: string) {
     const employee = this.demo.getEmployee(id);
-    if (!employee || !this.access.canAccessOrganization(user, employee.organizationId)) {
+    const isAccessible = employee && (this.access.hasSelfEmployeeDataScope(user)
+      ? employee.id === user.employeeId
+      : this.access.canAccessOrganization(user, employee.organizationId));
+    if (!isAccessible) {
       throw new NotFoundException('员工不存在或不在当前数据范围内');
     }
     return employee;

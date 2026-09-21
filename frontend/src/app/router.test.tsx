@@ -28,6 +28,10 @@ vi.mock('../pages/performance/PerformanceDashboardPage', () => ({
   PerformanceDashboardPage: () => <h1>绩效系统</h1>,
 }));
 
+vi.mock('../pages/performance/PerformanceFeishuTaskInboxPage', () => ({
+  PerformanceFeishuTaskInboxPage: () => <h1>飞书绩效待办</h1>,
+}));
+
 vi.mock('../pages/PlaceholderPage', () => ({
   PlaceholderPage: ({
     title,
@@ -235,6 +239,12 @@ describe('AppRouter system entry', () => {
     renderRoute('/performance');
 
     expect(screen.getByRole('heading', { name: '绩效系统' })).toBeInTheDocument();
+  });
+
+  it('keeps the Feishu task inbox outside the ordinary protected layout', () => {
+    renderRoute('/performance/feishu-task-inbox?state=opaque');
+
+    expect(screen.getByRole('heading', { name: '飞书绩效待办' })).toBeInTheDocument();
   });
 });
 

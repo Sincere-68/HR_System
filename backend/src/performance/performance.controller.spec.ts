@@ -27,8 +27,10 @@ describe('PerformanceController permissions', () => {
     expect(Reflect.getMetadata(PERMISSIONS_KEY, controller[method as keyof PerformanceController])).toEqual([permission]);
   });
 
-  it('keeps Feishu card actions public while leaving task submission permission-protected', () => {
+  it('keeps Feishu callbacks and the guarded inbox public while leaving ordinary task submission permission-protected', () => {
     expect(Reflect.getMetadata(IS_PUBLIC_KEY, controller.handleFeishuCardAction)).toBe(true);
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, controller.exchangeFeishuTaskSession)).toBe(true);
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, controller.getFeishuTaskInbox)).toBe(true);
     expect(Reflect.getMetadata(PERMISSIONS_KEY, controller.submitWorkflowTask)).toEqual([PERMISSIONS.PERFORMANCE_TASK_HANDLE]);
   });
 });

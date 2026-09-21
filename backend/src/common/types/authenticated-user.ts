@@ -8,4 +8,5 @@ export interface AuthenticatedUser {
   roleName: string;
   permissions: PermissionCode[];
   organizationIds: string[];
+  employeeId?: string | null;
 }

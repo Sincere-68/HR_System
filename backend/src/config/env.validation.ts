@@ -59,6 +59,22 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   FEISHU_ENCRYPT_KEY?: string;
+
+  /** OAuth callback URL registered for the Feishu web login entry. */
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  FEISHU_OAUTH_REDIRECT_URI?: string;
+
+  /** Public frontend URL used by the Feishu task inbox callback page. */
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  FEISHU_TASK_INBOX_URL?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(60)
+  @Max(86_400)
+  FEISHU_TASK_SESSION_TTL_SECONDS = 600;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
@@ -78,6 +94,9 @@ export function validateEnvironment(config: Record<string, unknown>) {
   }
   if (validated.FEISHU_ENCRYPT_KEY && !validated.FEISHU_VERIFICATION_TOKEN) {
     throw new Error('配置 FEISHU_ENCRYPT_KEY 时必须同时设置 FEISHU_VERIFICATION_TOKEN');
+  }
+  if (validated.FEISHU_TASK_INBOX_URL && !validated.FEISHU_OAUTH_REDIRECT_URI) {
+    throw new Error('配置 FEISHU_TASK_INBOX_URL 时必须同时设置 FEISHU_OAUTH_REDIRECT_URI');
   }
   return validated;
 }

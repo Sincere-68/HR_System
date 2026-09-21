@@ -338,6 +338,14 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 每个步骤及执行人返回：执行人、配置角色、步骤状态、通知投递状态、送达时间、提交时间、是否达标及投递失败原因。送达时间只在飞书个人卡片发送成功后写入；未启用渠道、无可用唯一飞书身份或发送失败时为 `null`，并保留“未送达”或失败原因。提交时间仅取执行人真实完成任务的 `completedAt`；未提交为 `null`。当前没有已确认的统一“是否达标”阈值，因此该字段返回 `null`/`--`，不得根据分数猜测。
 
+### 飞书绩效汇总待办与无账号执行人
+
+- 飞书网页授权回调地址配置为前端 `/performance/feishu-task-inbox`；前端收到 `state/code` 后立即调用 `POST /performance/feishu-task-inbox/session`，随后从地址栏清除参数。服务端只接受一次性 state 和飞书授权 code，验证返回的真实 `open_id` 与当前任务执行人由企业邮箱/手机号解析出的唯一身份一致后，签发短期、仅限该员工和该活动的待办 token。不会创建内部 User，也不会把 open_id、授权 code 或 user access token 写入数据库。
+- `GET /performance/feishu-task-inbox`：使用专用飞书待办 token，返回该员工在该活动内当前待提交评价和待审核流程事项。活动与员工范围由服务端会话固定，不能通过查询参数扩大。
+- `POST /performance/feishu-task-inbox/assessment-tasks/:id/submit`：使用专用飞书待办 token 提交自己的评价/调整分和评语；后端复用既有评分、聚合、权重和金额流程。
+- `POST /performance/feishu-task-inbox/workflow-tasks/:id/submit`：使用专用飞书待办 token 提交自己的通过、驳回、确认或归档动作；驳回原因仍由后端强制要求。
+- 绩效活动提醒按“活动 + 执行人”聚合为一张飞书个人卡片，卡片显示活动名称及待处理数量，只提供“查看详情”入口。没有内部账号但有 Employee 企业邮箱/手机号且能唯一匹配飞书账号的执行人，同样可以通过网页授权进入并处理任务。
+
 ### 飞书交互审批与长连接
 
 - 绩效模板中配置为 `EVALUATION` 的人工评价模块，飞书个人卡片包含事项/周期摘要、必填 0–100 分数、选填评语和提交按钮；后端只按卡片 token 关联的当前 `PerformanceModuleTaskAssignee` 读取分数范围、执行人和状态，提交后复用既有模块聚合及权重计算。卡片 value 里的处理人、模块类型和范围不作为可信来源。

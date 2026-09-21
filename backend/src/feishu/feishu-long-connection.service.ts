@@ -41,25 +41,6 @@ export class FeishuLongConnectionService implements OnModuleInit, OnModuleDestro
       }).register({
         'card.action.trigger': async (data: Record<string, unknown>) => {
           const action = this.actionSummary(data);
-          const sanitize = (value: unknown, key = ''): unknown => {
-            if (Array.isArray(value)) return value.map((item) => sanitize(item));
-            if (value && typeof value === 'object') {
-              return Object.fromEntries(
-                Object.entries(value).map(([childKey, childValue]) => [
-                  childKey,
-                  sanitize(childValue, childKey),
-                ]),
-              );
-            }
-
-            if (/token|secret|open_id|user_id|union_id|message_id|app_id|tenant_key|comment/i.test(key)) {
-              return '<masked>';
-            }
-
-            return value;
-          };
-
-          this.logger.log(`[FeishuCardDebug] ${JSON.stringify(sanitize(data))}`);
           this.logger.log(`收到飞书卡片回传: event=${this.eventId(data) ?? 'none'} action=${action} shape=${this.payloadShape(data)}`);
           try {
             const result = await this.handler!({ payload: data, eventId: this.eventId(data) });

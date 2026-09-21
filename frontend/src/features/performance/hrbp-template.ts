@@ -124,14 +124,47 @@ export function getIndicatorWeightTotal(module: PerformanceTemplateModule) {
   ), 0);
 }
 
+export function normalizeMarkdownPerformanceModules(modules: PerformanceTemplateModule[]) {
+  return modules.map((module) => {
+    if (module.type !== 'metric' || module.name.trim() !== '业务达成') return module;
+    return {
+      ...module,
+      type: 'evaluation' as const,
+      responsibleRole: '待指定执行人',
+      executor: {
+        type: 'USER' as const,
+        executionMode: 'SINGLE' as const,
+        employeeIds: [],
+        employeeSnapshots: [],
+      },
+      indicators: module.indicators.map((indicator) => {
+        const next = { ...indicator };
+        delete next.dataField;
+        delete next.rule;
+        return next;
+      }),
+    };
+  });
+}
+
+export function isPerformanceWorkflowModule(module: Pick<PerformanceTemplateModule, 'enabled' | 'participatesInTotal' | 'type'>) {
+  return module.enabled
+    && module.type !== 'metric'
+    && (module.participatesInTotal || module.type === 'adjustment');
+}
+
 export function getAssessmentWorkflowProjection(modules: PerformanceTemplateModule[]): PerformanceWorkflowProjectionStep[] {
   return modules.flatMap((module) => {
-    if (!module.enabled || module.type === 'metric') return [];
+    // Quantitative modules are calculated directly and never become workflow
+    // work. Adjustments have no fixed percentage but still require processing.
+    if (!isPerformanceWorkflowModule(module)) return [];
     return [{
       id: `assessment:${module.id}`,
       name: module.name,
       source: 'ASSESSMENT' as const,
-      type: module.type === 'adjustment' ? 'ASSESSMENT_ADJUSTMENT' as const : 'ASSESSMENT_EVALUATION' as const,
+      type: module.type === 'adjustment'
+        ? 'ASSESSMENT_ADJUSTMENT' as const
+        : 'ASSESSMENT_EVALUATION' as const,
     }];
   });
 }

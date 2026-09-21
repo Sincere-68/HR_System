@@ -214,6 +214,18 @@ export class PerformanceWorkflowTaskSubmissionDto {
   comment?: string;
 }
 
+export class PerformanceFeishuTaskSessionExchangeDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  state!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+}
+
 export class ModifyPerformanceResultDto {
   @ApiProperty({ minimum: 0 })
   @IsNumber({ maxDecimalPlaces: 4 })

@@ -19,6 +19,7 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:sync-access-policy": "tsx prisma/sync-access-policy.ts",
     "prisma:replace-position-catalog": "tsx prisma/replace-position-catalog.ts",
     "prisma:upsert-position-catalog": "tsx prisma/upsert-position-catalog.ts",
     "prisma:upsert-employing-company-catalog": "tsx prisma/upsert-employing-company-catalog.ts",

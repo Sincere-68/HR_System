@@ -13,6 +13,11 @@ describe('FeishuService', () => {
       header: { title: { tag: 'plain_text', content: '测试卡片' } },
       body: { elements: [] },
     })).toBe(false);
+    expect(await service.sendCardMessageToOpenId('ou_xxx', {
+      schema: '2.0',
+      header: { title: { tag: 'plain_text', content: '测试卡片' } },
+      body: { elements: [] },
+    })).toBeNull();
     expect(await service.updateCard('message_xxx', {
       schema: '2.0',
       header: { title: { tag: 'plain_text', content: '已提交' } },

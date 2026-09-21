@@ -144,6 +144,38 @@ describe('AccessControlService', () => {
     await expect(service.canAccessOrganizationInScope(admin, 'any-org')).resolves.toBe(true);
   });
 
+  it('limits a bound ordinary employee to their own employee record', async () => {
+    const { service, prisma } = createService();
+    const employee = {
+      ...scopedUser,
+      role: 'VIEWER' as const,
+      roleName: '普通员工',
+      permissions: [PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_DATA_ALL],
+      organizationIds: ['org-a'],
+      employeeId: 'employee-1',
+    };
+
+    await expect(service.getAccessibleOrganizationIds(employee)).resolves.toEqual([]);
+    await expect(service.getEmployeeWhere(employee)).resolves.toEqual({ id: 'employee-1' });
+    await expect(service.canAccessOrganizationInScope(employee, 'org-a')).resolves.toBe(false);
+    expect(service.hasAllEmployeeData(employee)).toBe(false);
+    expect(prisma.organization.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns no employee data for an unbound ordinary account', async () => {
+    const { service } = createService();
+    const employee = {
+      ...scopedUser,
+      role: 'VIEWER' as const,
+      roleName: '普通员工',
+      permissions: [PERMISSIONS.EMPLOYEE_READ],
+      organizationIds: [],
+      employeeId: null,
+    };
+
+    await expect(service.getEmployeeWhere(employee)).resolves.toEqual({ id: { in: [] } });
+  });
+
   it('rejects an organization outside the expanded scope', async () => {
     const { service } = createService();
 

@@ -16,12 +16,22 @@ export class AccessControlService {
     return user.permissions.includes(permission as never);
   }
 
+  /**
+   * VIEWER 是员工自助角色。认证服务会始终传入 employeeId（可为 null）；
+   * undefined 仅用于兼容旧内部调用，不能出现在 HTTP 鉴权上下文中。
+   */
+  hasSelfEmployeeDataScope(user: AuthenticatedUser) {
+    return user.role === 'VIEWER' && user.employeeId !== undefined;
+  }
+
   hasAllEmployeeData(user: AuthenticatedUser) {
-    return this.hasPermission(user, PERMISSIONS.EMPLOYEE_DATA_ALL);
+    return !this.hasSelfEmployeeDataScope(user)
+      && this.hasPermission(user, PERMISSIONS.EMPLOYEE_DATA_ALL);
   }
 
   async getAccessibleOrganizationIds(user: AuthenticatedUser): Promise<string[] | null> {
     if (this.hasAllEmployeeData(user)) return null;
+    if (this.hasSelfEmployeeDataScope(user)) return [];
 
     const organizations = this.demo.enabled
       ? this.demo.getOrganizations().map(({ id, parentId }) => ({ id, parentId }))
@@ -55,6 +65,7 @@ export class AccessControlService {
    */
   canAccessOrganization(user: AuthenticatedUser, organizationId: string) {
     if (this.hasAllEmployeeData(user)) return true;
+    if (this.hasSelfEmployeeDataScope(user)) return false;
     if (!this.demo.enabled) return user.organizationIds.includes(organizationId);
 
     const organizations = this.demo.getOrganizations();
@@ -97,6 +108,11 @@ export class AccessControlService {
     now = new Date(),
   ): Promise<Prisma.EmployeeWhereInput> {
     if (this.hasAllEmployeeData(user)) return {};
+    if (this.hasSelfEmployeeDataScope(user)) {
+      return user.employeeId
+        ? { id: user.employeeId }
+        : { id: { in: [] } };
+    }
 
     const organizationIds = expandedOrganizationIds
       ?? await this.getAccessibleOrganizationIds(user)

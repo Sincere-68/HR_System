@@ -253,7 +253,7 @@ erDiagram
 
 继续使用 `users`、`roles`、`permissions`、`role_permissions`、`user_data_scopes` 和 `audit_logs`。新增：
 
-- `users.employee_id`：登录账号可选择关联员工档案。
+- `users.employee_id`：普通员工登录账号必须关联员工档案；后端将 `VIEWER` 的人员查询强制限定为该员工 ID，空值不返回人员数据。`ADMIN` 只保留一个系统管理员；`DEPT_ADMIN` 显示为 HR管理员，当前与系统管理员共享 HR 数据范围。
 - `approval_requests` / `approval_steps`：承载多级审批实例。每个特定任务匹配由 HR 导入、导出和修改的特定流程定义；审批级数、节点、审批人及审批人变更均取流程配置。申请最终通过后才写入正式业务数据，最终不通过则整个申请不通过；历史永久保留，最大权限修改审批记录时必须留下审计痕迹。具体审批状态流转仍待确认。
 - `dictionary_types` / `dictionary_items`：学历、民族、婚姻、离职原因等可配置选项。
 - `RecordStatus` 与归档字段：停用或归档，不物理删除。

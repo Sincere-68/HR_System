@@ -10,6 +10,7 @@ import { SystemSelectionPage } from '../pages/SystemSelectionPage';
 import { PerformanceActivitiesPage } from '../pages/performance/PerformanceActivitiesPage';
 import { PerformanceActivityDetailPage } from '../pages/performance/PerformanceActivityDetailPage';
 import { PerformanceDashboardPage } from '../pages/performance/PerformanceDashboardPage';
+import { PerformanceFeishuTaskInboxPage } from '../pages/performance/PerformanceFeishuTaskInboxPage';
 import { PerformanceMyTasksPage } from '../pages/performance/PerformanceMyTasksPage';
 import { PerformanceResultsPage } from '../pages/performance/PerformanceResultsPage';
 import { PerformanceTasksPage } from '../pages/performance/PerformanceTasksPage';
@@ -57,6 +58,7 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/performance/feishu-task-inbox" element={<PerformanceFeishuTaskInboxPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AdministratorRoute />}>
         <Route index element={<SystemSelectionPage />} />

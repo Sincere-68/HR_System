@@ -3,7 +3,6 @@ import {
   ArrowLeftOutlined,
   ArrowUpOutlined,
   CheckCircleFilled,
-  DownOutlined,
   DeleteOutlined,
   FileMarkdownOutlined,
   InfoCircleOutlined,
@@ -44,6 +43,8 @@ import {
   getFixedWeightTotal,
   getIndicatorWeightTotal,
   getPerformanceFlowItems,
+  isPerformanceWorkflowModule,
+  normalizeMarkdownPerformanceModules,
   reorderPerformanceModules,
   reorderPerformanceWorkflowSteps,
   type PerformanceIndicator,
@@ -53,7 +54,7 @@ import {
   type PerformanceWorkflowManualStepType,
 } from '../../features/performance/hrbp-template';
 
-const workflowSteps = ['基本信息', '流程设置', '考核表设置', '下发指标', '权限设置'];
+const workflowSteps = ['基本信息', '考核表设置', '流程设置', '下发指标', '权限设置'];
 const workflowManualStepLabels: Record<PerformanceWorkflowManualStepType, string> = {
   REVIEW: '审核',
   CONFIRMATION: '本人确认',
@@ -76,7 +77,7 @@ type ExecutorPickerState = {
 };
 
 const moduleTypeLabels: Record<PerformanceModuleKind, string> = {
-  metric: '指标计算',
+  metric: '定量考核',
   evaluation: '人工评估',
   adjustment: '结果调整',
 };
@@ -172,8 +173,8 @@ export function PerformanceTemplateEditorPage() {
   const [selectedFlowItemId, setSelectedFlowItemId] = useState('');
   const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
   const [dragOverModuleId, setDragOverModuleId] = useState<string | null>(null);
-  const [draggedWorkflowStepId, setDraggedWorkflowStepId] = useState<string | null>(null);
-  const [dragOverWorkflowStepId, setDragOverWorkflowStepId] = useState<string | null>(null);
+  const [draggedFlowItemId, setDraggedFlowItemId] = useState<string | null>(null);
+  const [dragOverFlowItemId, setDragOverFlowItemId] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState<'MARKDOWN' | 'MANUAL'>('MANUAL');
   const [sourceName, setSourceName] = useState(initialTemplate.sourceName);
   const [initializedTemplateId, setInitializedTemplateId] = useState<string | null>(null);
@@ -205,18 +206,20 @@ export function PerformanceTemplateEditorPage() {
     })));
     setSelectedFlowItemId(manualSteps[0]
       ? `manual:${manualSteps[0].id}`
-      : `assessment:${version.definition.modules.find((module) => module.enabled && module.type !== 'METRIC')?.id ?? ''}`);
+      : `assessment:${version.definition.modules.find((module) => isPerformanceWorkflowModule({
+        ...module,
+        type: module.type.toLowerCase() as PerformanceModuleKind,
+      }))?.id ?? ''}`);
     setSelectedModuleId(version.definition.modules[0]?.id ?? '');
     setInitializedTemplateId(templateId ?? null);
   }, [existingTemplate.data, initializedTemplateId, templateId]);
 
   const selectedModule = modules.find((module) => module.id === selectedModuleId) ?? modules[0];
-  const flowAssessmentModules = modules.filter((module) => module.enabled && module.type !== 'metric');
+  const flowAssessmentModules = modules.filter(isPerformanceWorkflowModule);
   const selectedFlowAssessmentModule = flowAssessmentModules.find((module) => `assessment:${module.id}` === selectedFlowItemId);
   const selectedFlowManualStep = workflowManualSteps.find((step) => `manual:${step.id}` === selectedFlowItemId);
   const selectedWorkflowStep = selectedFlowManualStep;
-  const selectedExecutorEmployeeIds = selectedModule?.executor.employeeIds ?? [];
-  const activeExecutorModule = activeStep === 1 && selectedFlowAssessmentModule
+  const activeExecutorModule = activeStep === 2 && selectedFlowAssessmentModule
     ? selectedFlowAssessmentModule
     : selectedModule;
   const activeExecutorPicker = activeExecutorModule
@@ -253,7 +256,7 @@ export function PerformanceTemplateEditorPage() {
       })))
     : executorPickerStateFromSnapshots([]);
   const selectedWorkflowExecutorEmployeeIds = selectedWorkflowStep?.executor.employeeIds ?? [];
-  const isEditingWorkflowExecutor = activeStep === 1 && Boolean(selectedWorkflowStep);
+  const isEditingWorkflowExecutor = activeStep === 2 && Boolean(selectedWorkflowStep);
   const executorEmployees = useEmployees({
     keyword: isEditingWorkflowExecutor
       ? activeWorkflowExecutorPicker.keyword || undefined
@@ -278,12 +281,31 @@ export function PerformanceTemplateEditorPage() {
   const isWeightValid = Math.abs(fixedWeightTotal - 100) < 0.0001;
   const metricIndicatorWeightIssues = useMemo(() => modules.flatMap((module) => (
     module.type === 'metric' && Math.abs(getIndicatorWeightTotal(module) - 100) >= 0.0001
-      ? [`模块“${module.name}”的业务指标权重合计为 ${getIndicatorWeightTotal(module)}%，必须等于 100%。`]
+      ? [`模块“${module.name}”的定量考核指标权重合计为 ${getIndicatorWeightTotal(module)}%，必须等于 100%。`]
       : []
   )), [modules]);
 
   const updateModule = (moduleId: string, change: Partial<PerformanceTemplateModule>) => {
     setModules((current) => current.map((module) => (module.id === moduleId ? { ...module, ...change } : module)));
+  };
+
+  const changeAssessmentModuleType = (module: PerformanceTemplateModule, type: PerformanceModuleKind) => {
+    const isAdjustment = type === 'adjustment';
+    updateModule(module.id, {
+      type,
+      participatesInTotal: isAdjustment ? false : module.participatesInTotal,
+      weight: isAdjustment ? null : module.weight ?? 0,
+      executor: type === 'metric'
+        ? { type: 'AUTO', executionMode: 'SINGLE' }
+        : module.executor.type === 'AUTO'
+          ? { type: 'USER', executionMode: 'SINGLE', employeeIds: [], employeeSnapshots: [] }
+          : module.executor,
+      ...(isAdjustment ? {
+        adjustmentDirection: module.adjustmentDirection ?? 'ADD',
+        adjustmentMin: module.adjustmentMin ?? 0,
+        adjustmentMax: module.adjustmentMax ?? 20,
+      } : {}),
+    });
   };
 
   const updateWorkflowStep = (stepId: string, change: Partial<PerformanceWorkflowManualStep>) => {
@@ -396,18 +418,18 @@ export function PerformanceTemplateEditorPage() {
         return;
       }
       setTemplateName(parsed.definition.name);
-      const nextModules = parsed.definition.modules.map((module) => ({
+      const nextModules = normalizeMarkdownPerformanceModules(parsed.definition.modules.map((module) => ({
         ...module,
         type: module.type.toLowerCase() as PerformanceModuleKind,
         responsibleRole: module.executor.type === 'AUTO' ? '系统自动计算' : '待指定执行人',
         executor: { ...module.executor, executionMode: module.executor.executionMode ?? 'SINGLE', employeeIds: module.executor.employeeIds ?? [], employeeSnapshots: module.executor.employeeSnapshots ?? [] },
         indicators: module.indicators.map((indicator) => ({ ...indicator, weightLabel: `${indicator.weight}%`, source: importedSourceName })),
-      }));
+      })));
       setModules(nextModules);
       setWorkflowManualSteps([]);
       setSelectedModuleId(nextModules[0]?.id ?? '');
       setSelectedWorkflowStepId('');
-      setSelectedFlowItemId(`assessment:${nextModules.find((module) => module.enabled && module.type !== 'metric')?.id ?? ''}`);
+      setSelectedFlowItemId(`assessment:${nextModules.find(isPerformanceWorkflowModule)?.id ?? ''}`);
       setParseWarnings(parsed.warnings.map((item) => item.message));
       messageApi.success('Markdown 已由后端解析为可确认的模板结构');
     } catch (error) {
@@ -428,6 +450,21 @@ export function PerformanceTemplateEditorPage() {
     return false;
   };
 
+  const saveCurrentSettings = () => {
+    const currentTarget = activeStep === 0
+      ? '基本信息'
+      : activeStep === 1
+        ? selectedModule ? `考核模块“${selectedModule.name}”` : '考核表设置'
+        : activeStep === 2
+          ? selectedFlowAssessmentModule
+            ? `流程步骤“${selectedFlowAssessmentModule.name}”`
+            : selectedWorkflowStep
+              ? `流程步骤“${selectedWorkflowStep.name}”`
+              : '流程设置'
+          : selectedModule ? `模块“${selectedModule.name}”的指标设置` : '指标设置';
+    messageApi.success(`${currentTarget}的修改已保留，请在权限设置中保存模板`);
+  };
+
   const saveTemplate = async () => {
     if (!templateName.trim()) {
       setActiveStep(0);
@@ -435,7 +472,7 @@ export function PerformanceTemplateEditorPage() {
       return;
     }
     if (!isWeightValid) {
-      setActiveStep(2);
+      setActiveStep(1);
       messageApi.error(`固定权重模块合计为 ${fixedWeightTotal}%，必须等于 100% 后才能保存模板`);
       return;
     }
@@ -454,7 +491,7 @@ export function PerformanceTemplateEditorPage() {
     ));
     if (invalidMetric) {
       setActiveStep(3);
-      messageApi.error(`请为业务指标模块“${invalidMetric.name}”至少配置一个指标`);
+      messageApi.error(`请为定量考核模块“${invalidMetric.name}”至少配置一个指标`);
       return;
     }
     const invalidExecutor = modules.find((module) => {
@@ -478,7 +515,7 @@ export function PerformanceTemplateEditorPage() {
       return false;
     });
     if (invalidWorkflowStep) {
-      setActiveStep(1);
+      setActiveStep(2);
       messageApi.error(`请为流程步骤“${invalidWorkflowStep.name}”配置有效的执行人或驳回策略`);
       return;
     }
@@ -523,7 +560,6 @@ export function PerformanceTemplateEditorPage() {
         await createTemplate.mutateAsync(input);
       }
       messageApi.success('模板已保存');
-      navigate('/performance/templates');
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : '模板保存失败');
     }
@@ -608,7 +644,7 @@ export function PerformanceTemplateEditorPage() {
       <div className="performance-template-form-surface">
         <label className="performance-template-field">
           <span><i>*</i> 模板名称</span>
-          <Input value={templateName} onChange={(event) => setTemplateName(event.target.value)} />
+          <Input aria-label="模板名称" value={templateName} onChange={(event) => setTemplateName(event.target.value)} />
         </label>
         <label className="performance-template-field">
           <span>模板来源</span>
@@ -661,21 +697,33 @@ export function PerformanceTemplateEditorPage() {
     const precedingSteps = selectedWorkflowStep
       ? workflowManualSteps.slice(0, workflowManualSteps.findIndex((step) => step.id === selectedWorkflowStep.id))
       : [];
-    const moveWorkflowStep = (sourceStepId: string, targetStepId: string) => {
-      setWorkflowManualSteps((current) => reorderPerformanceWorkflowSteps(current, sourceStepId, targetStepId));
-      setDraggedWorkflowStepId(null);
-      setDragOverWorkflowStepId(null);
+    const moveFlowItem = (sourceItemId: string, targetItemId: string) => {
+      const sourceAssessmentId = sourceItemId.startsWith('assessment:') ? sourceItemId.slice('assessment:'.length) : null;
+      const targetAssessmentId = targetItemId.startsWith('assessment:') ? targetItemId.slice('assessment:'.length) : null;
+      const sourceManualId = sourceItemId.startsWith('manual:') ? sourceItemId.slice('manual:'.length) : null;
+      const targetManualId = targetItemId.startsWith('manual:') ? targetItemId.slice('manual:'.length) : null;
+
+      if (sourceAssessmentId && targetAssessmentId) {
+        setModules((current) => reorderPerformanceModules(current, sourceAssessmentId, targetAssessmentId));
+      } else if (sourceManualId && targetManualId) {
+        setWorkflowManualSteps((current) => reorderPerformanceWorkflowSteps(current, sourceManualId, targetManualId));
+      } else {
+        messageApi.warning('考核表步骤必须排在后续流程步骤之前；同一类型的步骤可拖动排序');
+      }
+      setDraggedFlowItemId(null);
+      setDragOverFlowItemId(null);
     };
     return (
       <section className="performance-template-step-content" aria-labelledby="template-flow-title">
         <div className="performance-template-section-heading">
           <div><span>执行推进</span><h2 id="template-flow-title">流程设置</h2></div>
-          <p>考核表中的人工评估和结果调整会自动加入流程并只读展示。业务指标在活动启动时自动计算；流程新增步骤只推进处理，不参与分数、权重或结果运算。</p>
+          <p>考核表中启用的业务达成、人工评估和结果调整会按顺序加入流程。定量考核由后端直接计算，不配置执行人也不进入流程；流程新增步骤只推进处理，不参与分数、权重或结果运算。</p>
         </div>
         <div className="performance-template-workspace performance-workflow-workspace">
           <aside className="performance-template-module-list" aria-label="绩效流程步骤列表">
             <div className="performance-flow-list-heading">
               <strong>处理顺序</strong>
+              <span><HolderOutlined /> 拖动调整顺序</span>
               <Button size="small" icon={<PlusOutlined />} onClick={addWorkflowStep}>新增步骤</Button>
             </div>
             <div className="performance-template-module-scroll">
@@ -684,34 +732,33 @@ export function PerformanceTemplateEditorPage() {
                 const manualStep = item.manualStep;
                 const isSelected = item.itemId === selectedFlowItemId;
                 return <button
-                  className={`performance-template-module-card${isSelected ? ' is-selected' : ''}${isAssessment ? ' is-readonly' : ''}${draggedWorkflowStepId === manualStep?.id ? ' is-dragging' : ''}${dragOverWorkflowStepId === manualStep?.id && draggedWorkflowStepId !== manualStep?.id ? ' is-drop-target' : ''}`}
+                  className={`performance-template-module-card${isSelected ? ' is-selected' : ''}${draggedFlowItemId === item.itemId ? ' is-dragging' : ''}${dragOverFlowItemId === item.itemId && draggedFlowItemId !== item.itemId ? ' is-drop-target' : ''}`}
                   key={item.itemId}
                   type="button"
-                  draggable={Boolean(manualStep)}
+                  draggable
                   onClick={() => {
                     setSelectedFlowItemId(item.itemId);
                     if (manualStep) setSelectedWorkflowStepId(manualStep.id);
                   }}
                   onDragStart={(event) => {
-                    if (!manualStep) return;
                     event.dataTransfer.effectAllowed = 'move';
-                    event.dataTransfer.setData('text/plain', manualStep.id);
-                    setDraggedWorkflowStepId(manualStep.id);
+                    event.dataTransfer.setData('text/plain', item.itemId);
+                    setDraggedFlowItemId(item.itemId);
                   }}
                   onDragOver={(event) => {
-                    if (!manualStep || !draggedWorkflowStepId || draggedWorkflowStepId === manualStep.id) return;
+                    if (!draggedFlowItemId || draggedFlowItemId === item.itemId) return;
                     event.preventDefault();
                     event.dataTransfer.dropEffect = 'move';
-                    setDragOverWorkflowStepId(manualStep.id);
+                    setDragOverFlowItemId(item.itemId);
                   }}
-                  onDragEnd={() => { setDraggedWorkflowStepId(null); setDragOverWorkflowStepId(null); }}
+                  onDragEnd={() => { setDraggedFlowItemId(null); setDragOverFlowItemId(null); }}
                   onDrop={(event) => {
-                    if (!manualStep || !draggedWorkflowStepId) return;
+                    if (!draggedFlowItemId) return;
                     event.preventDefault();
-                    moveWorkflowStep(draggedWorkflowStepId, manualStep.id);
+                    moveFlowItem(draggedFlowItemId, item.itemId);
                   }}
                 >
-                  <span className="performance-module-card-head"><b>{index + 1}</b><strong>{item.name}</strong>{manualStep ? <span className="performance-module-drag-handle" aria-label="拖动调整流程步骤顺序"><HolderOutlined /></span> : null}</span>
+                  <span className="performance-module-card-head"><b>{index + 1}</b><strong>{item.name}</strong><span className="performance-module-drag-handle" aria-label="拖动调整流程步骤顺序"><HolderOutlined /></span></span>
                   <span className="performance-module-card-meta"><Tag>{isAssessment ? item.type === 'ASSESSMENT_ADJUSTMENT' ? '结果调整' : '人工评估' : workflowManualStepLabels[item.type as PerformanceWorkflowManualStepType]}</Tag><span>{isAssessment ? '考核表步骤' : '后续操作'}</span></span>
                 </button>;
               })}
@@ -791,7 +838,15 @@ export function PerformanceTemplateEditorPage() {
             </div>
             <div className="performance-template-detail-form">
               <label><span><i>*</i> 模块名称</span><Input aria-label="考核模块名称" value={selectedModule.name} onChange={(event) => updateModule(selectedModule.id, { name: event.target.value })} /></label>
-              <label><span>模块类型</span><Input value={moduleTypeLabels[selectedModule.type]} disabled /></label>
+              <label>
+                <span>模块类型</span>
+                <Select
+                  aria-label="考核模块类型"
+                  value={selectedModule.type}
+                  options={[{ value: 'metric', label: '定量考核' }, { value: 'evaluation', label: '人工评估' }, { value: 'adjustment', label: '结果调整' }]}
+                  onChange={(type: PerformanceModuleKind) => changeAssessmentModuleType(selectedModule, type)}
+                />
+              </label>
               <label>
                 <span>参与总分计算</span>
                 <Checkbox checked={selectedModule.participatesInTotal} disabled={selectedModule.type === 'adjustment'} onChange={(event) => updateModule(selectedModule.id, { participatesInTotal: event.target.checked })}>计入固定权重</Checkbox>
@@ -812,7 +867,7 @@ export function PerformanceTemplateEditorPage() {
               )}
               <label>
                 <span>评分口径</span>
-                <Input value={selectedModule.type === 'metric' ? '活动启动时自动计算，不作为流程节点' : selectedModule.type === 'adjustment' ? '按事实依据进行额外加减分，并映射为流程步骤' : '百分制，模块总分按模块权重参与结果计算，并映射为流程步骤'} disabled />
+                <Input value={selectedModule.type === 'metric' ? '定量考核由后端直接计算，不配置执行人，也不进入流程' : selectedModule.type === 'adjustment' ? '按事实依据进行额外加减分，并映射为流程步骤' : '百分制，模块总分按模块权重参与结果计算，并映射为流程步骤'} disabled />
               </label>
               <label><span>模块说明</span><Input.TextArea value={selectedModule.description} autoSize={{ minRows: 3, maxRows: 5 }} onChange={(event) => updateModule(selectedModule.id, { description: event.target.value })} /></label>
             </div>
@@ -892,7 +947,7 @@ export function PerformanceTemplateEditorPage() {
     </section>
   );
 
-  const contents = [renderBasicInformation(), renderFlowSettings(), renderAssessmentSettings(), renderDispatchIndicators(), renderPermissionSettings()];
+  const contents = [renderBasicInformation(), renderAssessmentSettings(), renderFlowSettings(), renderDispatchIndicators(), renderPermissionSettings()];
 
   return (
     <section className="performance-template-editor-page" aria-labelledby="performance-template-editor-title">
@@ -906,14 +961,17 @@ export function PerformanceTemplateEditorPage() {
             <h1 id="performance-template-editor-title">{templateName || '未命名绩效模板'}</h1>
           </div>
         </div>
-        <Button type="primary" icon={<SaveOutlined />} onClick={saveTemplate}>保存模板</Button>
+        {activeStep === workflowSteps.length - 1
+          ? <Button type="primary" icon={<SaveOutlined />} onClick={saveTemplate}>保存模板</Button>
+          : null}
       </header>
 
       <Steps className="performance-template-steps" current={activeStep} responsive={false} onChange={setActiveStep} items={workflowSteps.map((title) => ({ title }))} />
       {contents[activeStep]}
       <footer className="performance-template-editor-footer">
-        <Button disabled={activeStep === 0} onClick={() => setActiveStep((step) => step - 1)}>上一步</Button>
-        {activeStep === workflowSteps.length - 1 ? <Button type="primary" icon={<SaveOutlined />} onClick={saveTemplate}>完成并保存</Button> : <Button type="primary" onClick={() => setActiveStep((step) => step + 1)}>下一步 <DownOutlined /></Button>}
+        {activeStep === workflowSteps.length - 1
+          ? <Button type="primary" icon={<SaveOutlined />} onClick={saveTemplate}>保存模板</Button>
+          : <Button type="primary" icon={<SaveOutlined />} onClick={saveCurrentSettings}>保存当前设置</Button>}
       </footer>
     </section>
   );

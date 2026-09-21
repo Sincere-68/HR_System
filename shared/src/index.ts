@@ -326,6 +326,11 @@ export interface AuthUser {
   roleName: string;
   permissions: PermissionCode[];
   organizationIds: string[];
+  /**
+   * 普通员工账号绑定的员工主档；未绑定时不授予任何员工数据范围。
+   * 保持可选以兼容旧会话，服务端每次鉴权都会重新从 users 表读取。
+   */
+  employeeId?: string | null;
 }
 
 export interface Organization {
@@ -2039,6 +2044,10 @@ export interface PerformanceWorkflowTaskListItem {
   attemptNo: number;
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   executorName: string | null;
+  /** Frozen after every score and adjustment module is completed. */
+  finalScore: number | null;
+  /** Frozen amount derived from the employee's personal amount base. */
+  actualAmount: number | null;
   assignees: PerformanceWorkflowTaskAssignee[];
   isCurrent: boolean;
   canSubmit: boolean;
@@ -2213,6 +2222,28 @@ export interface PerformanceTaskSubmissionInput {
 export interface PerformanceWorkflowTaskSubmissionInput {
   action: PerformanceWorkflowAction;
   comment?: string;
+}
+
+export interface PerformanceFeishuTaskInbox {
+  cycleId: string;
+  cycleName: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNo: string;
+  assessmentTasks: PerformanceTaskListItem[];
+  workflowTasks: PerformanceWorkflowTaskListItem[];
+  totalPending: number;
+}
+
+export interface PerformanceFeishuTaskSessionExchangeInput {
+  state: string;
+  code: string;
+}
+
+export interface PerformanceFeishuTaskSessionExchangeResult {
+  accessToken: string;
+  expiresIn: number;
+  inbox: PerformanceFeishuTaskInbox;
 }
 
 export interface PerformanceResultModificationInput {

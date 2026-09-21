@@ -28,6 +28,8 @@ export function PerformanceTasksPage() {
     { title: '考核人员', key: 'employee', width: 150, render: (_, row) => `${row.employeeName}（${row.employeeNo}）` },
     { title: '后续流程步骤', key: 'step', width: 210, render: (_, row) => <Space size={6}>{row.stepName}<Tag>{workflowTypeLabels[row.stepType]}</Tag></Space> },
     { title: '执行人', dataIndex: 'executorName', key: 'executorName', width: 150, render: (value) => value ?? '--' },
+    { title: '最终得分', dataIndex: 'finalScore', key: 'finalScore', width: 120, render: (value: number | null | undefined) => value === null || value === undefined ? '--' : value.toFixed(4) },
+    { title: '实际金额', dataIndex: 'actualAmount', key: 'actualAmount', width: 130, render: (value: number | null | undefined) => value === null || value === undefined ? '--' : value.toFixed(2) },
     { title: '处理状态', key: 'status', width: 130, render: (_, row) => <Tag color={row.isCurrent ? 'processing' : row.status === 'COMPLETED' ? 'success' : 'default'}>{row.isCurrent ? '当前处理' : row.status === 'COMPLETED' ? '已完成' : '未开始'}</Tag> },
   ];
   const active = kind === 'assessment' ? assessmentTasks : workflowTasks;

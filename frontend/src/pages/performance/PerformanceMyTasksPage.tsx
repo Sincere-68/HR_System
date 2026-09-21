@@ -28,6 +28,8 @@ export function PerformanceMyTasksPage() {
     { title: '考核人员', key: 'employee', width: 150, render: (_, row) => `${row.employeeName}（${row.employeeNo}）` },
     { title: '后续流程步骤', key: 'step', width: 210, render: (_, row) => <Space size={6}>{row.stepName}<Tag>{workflowTypeLabels[row.stepType]}</Tag></Space> },
     { title: '执行人', dataIndex: 'executorName', key: 'executorName', width: 150, render: (value) => value ?? '--' },
+    { title: '最终得分', dataIndex: 'finalScore', key: 'finalScore', width: 120, render: (value: number | null | undefined) => value === null || value === undefined ? '--' : value.toFixed(4) },
+    { title: '实际金额', dataIndex: 'actualAmount', key: 'actualAmount', width: 130, render: (value: number | null | undefined) => value === null || value === undefined ? '--' : value.toFixed(2) },
     { title: '状态', key: 'status', width: 120, render: () => <Tag color="processing">待处理</Tag> },
     {
       title: '操作', key: 'actions', width: 180,

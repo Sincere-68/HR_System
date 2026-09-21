@@ -29,6 +29,7 @@ import { DemoDataService } from '../demo/demo-data.service';
 import { FeishuLongConnectionService } from '../feishu/feishu-long-connection.service';
 import type { FeishuCard } from '../feishu/feishu.service';
 import { FeishuService } from '../feishu/feishu.service';
+import { FeishuTaskSessionService, type FeishuTaskPrincipal } from './feishu-task-session.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PERFORMANCE_DATA_ADAPTER, type PerformanceDataAdapter } from './performance-data.adapter';
 import { PerformanceRuleEngine } from './performance-rule-engine';
@@ -50,7 +51,7 @@ import {
   CreateEmployeePerformanceAmountBaseDto,
   QueryEmployeePerformanceAmountBaseDto,
 } from './dto/performance.dto';
-import type { PerformanceExecutorDefinition, PerformanceModuleDefinition, PerformanceTemplateDefinition, PerformanceWorkflowManualStepDefinition } from '@hr-demo/shared';
+import type { PerformanceExecutorDefinition, PerformanceFeishuTaskInbox, PerformanceModuleDefinition, PerformanceTemplateDefinition, PerformanceWorkflowManualStepDefinition } from '@hr-demo/shared';
 
 const DECIMAL = (value: number) => new Prisma.Decimal(value.toFixed(4));
 const MONEY = (value: number) => new Prisma.Decimal(value.toFixed(2));
@@ -100,6 +101,8 @@ type PerformanceWorkflowTaskRecord = {
   instance?: {
     currentWorkflowOrder: number | null;
     employeeId: string;
+    finalScore: Prisma.Decimal | null;
+    actualAmount: Prisma.Decimal | null;
     cycle: { name: string };
     employee: { name: string | null; employeeNo: string };
   };
@@ -141,6 +144,7 @@ type PerformanceTaskRecord = {
 @Injectable()
 export class PerformanceService {
   private readonly adapter: PerformanceDataAdapter;
+  private readonly inboxNotifications = new Map<string, Promise<void>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -152,6 +156,7 @@ export class PerformanceService {
     @Inject(PERFORMANCE_DATA_ADAPTER) adapter: PerformanceDataAdapter,
     private readonly feishu: FeishuService,
     feishuLongConnection?: FeishuLongConnectionService,
+    private readonly feishuTaskSessions?: FeishuTaskSessionService,
   ) {
     this.adapter = adapter;
     feishuLongConnection?.registerCardActionHandler((event) => this.handleLongConnectionCardAction(event.payload, event.eventId));
@@ -1051,6 +1056,78 @@ export class PerformanceService {
     return { id: row.id, employeeId, versionNo: row.versionNo };
   }
 
+  async exchangeFeishuTaskSession(state: string, code: string) {
+    const sessions = this.feishuTaskSessions;
+    if (!sessions?.enabled) throw new ConflictException('飞书绩效待办入口尚未启用');
+    return sessions.exchange(state, code, (employeeId, cycleId) => this.getFeishuTaskInbox(employeeId, cycleId));
+  }
+
+  async getFeishuTaskInbox(employeeId: string, cycleId: string) {
+    this.assertDatabaseMode();
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, name: true, employeeNo: true } });
+    const cycle = await this.prisma.performanceCycle.findUnique({ where: { id: cycleId }, select: { id: true, name: true } });
+    if (!employee || !cycle) throw new NotFoundException('飞书绩效待办不存在');
+    const [assessmentTasks, workflowTasks] = await Promise.all([
+      this.prisma.performanceModuleTask.findMany({
+        where: { instance: { cycleId }, status: TaskStatus.IN_PROGRESS, assignees: { some: { employeeId, status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } } } },
+        include: { instance: { include: { cycle: true, employee: { select: { name: true, employeeNo: true } } } }, assignees: { orderBy: { createdAt: 'asc' } } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      }),
+      this.prisma.performanceWorkflowTask.findMany({
+        where: { instance: { cycleId }, status: TaskStatus.IN_PROGRESS, assignees: { some: { employeeId, status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } } } },
+        include: { instance: { include: { cycle: true, employee: { select: { name: true, employeeNo: true } } } }, assignees: { orderBy: { createdAt: 'asc' } } },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      }),
+    ]);
+    return {
+      cycleId: cycle.id,
+      cycleName: cycle.name,
+      employeeId: employee.id,
+      employeeName: employee.name ?? '',
+      employeeNo: employee.employeeNo,
+      assessmentTasks: assessmentTasks.map((task) => this.presentTask(task, undefined)),
+      workflowTasks: workflowTasks.map((task) => this.presentWorkflowTask(task, undefined)),
+      totalPending: assessmentTasks.length + workflowTasks.length,
+    };
+  }
+
+  async submitFeishuAssessmentTask(principal: FeishuTaskPrincipal, id: string, dto: PerformanceTaskSubmissionDto) {
+    this.assertDatabaseMode();
+    const task = await this.prisma.performanceModuleTask.findUnique({ where: { id }, include: { instance: { include: { cycle: true, tasks: { orderBy: { moduleOrder: 'asc' } } } }, assignees: { orderBy: { createdAt: 'asc' } } } });
+    if (!task || task.instance.cycleId !== principal.cycleId) throw new NotFoundException('飞书绩效任务不存在');
+    const assignee = task.assignees.find((item) => item.employeeId === principal.employeeId);
+    if (!assignee) throw new ForbiddenException('当前员工不是此任务执行人');
+    await this.submitTaskForEmployee(task as unknown as PerformanceTaskRecord, assignee as PerformanceTaskAssigneeRecord, dto, principal);
+    await this.notifyFeishuTaskInbox(principal.employeeId, principal.cycleId);
+    return this.getFeishuTaskInbox(principal.employeeId, principal.cycleId);
+  }
+
+  async submitFeishuWorkflowTask(principal: FeishuTaskPrincipal, id: string, dto: PerformanceWorkflowTaskSubmissionDto) {
+    this.assertDatabaseMode();
+    const task = await this.prisma.performanceWorkflowTask.findUnique({ where: { id }, include: { instance: { include: { cycle: true, employee: { select: { name: true, employeeNo: true } } } }, assignees: { orderBy: { createdAt: 'asc' } } } });
+    if (!task || task.instance.cycleId !== principal.cycleId) throw new NotFoundException('飞书绩效流程任务不存在');
+    const assignee = task.assignees.find((item) => item.employeeId === principal.employeeId);
+    if (!assignee) throw new ForbiddenException('当前员工不是此流程步骤执行人');
+    await this.performWorkflowAction(task as unknown as PerformanceWorkflowTaskRecord, assignee as PerformanceWorkflowTaskAssigneeRecord, dto.action, dto.comment, PerformanceWorkflowActionSource.FEISHU, null, undefined);
+    await this.notifyFeishuTaskInbox(principal.employeeId, principal.cycleId);
+    return this.getFeishuTaskInbox(principal.employeeId, principal.cycleId);
+  }
+
+  private async submitTaskForEmployee(task: PerformanceTaskRecord, assignee: PerformanceTaskAssigneeRecord, dto: PerformanceTaskSubmissionDto, principal: FeishuTaskPrincipal) {
+    if (assignee.status === TaskStatus.COMPLETED) throw new ConflictException('当前员工已经提交过此模块');
+    if (task.status !== TaskStatus.IN_PROGRESS || task.instance?.currentModuleOrder !== task.moduleOrder) throw new ConflictException('当前模块尚未开放或已经完成');
+    if (task.instance?.assessmentStatus === ProcessStatus.COMPLETED) throw new ConflictException('考核表已完成，不能重新提交评分');
+    const module = task.moduleSnapshot as unknown as PerformanceModuleDefinition;
+    if (module.requireAttachment) throw new ConflictException('当前模板要求附件，但附件能力尚未接入');
+    if (module.requireComment && !dto.comment?.trim()) throw new BadRequestException('当前模块必须填写评语');
+    if (task.moduleType === PerformanceModuleType.METRIC) throw new BadRequestException('业务指标模块由系统自动执行');
+    const score = task.moduleType === PerformanceModuleType.EVALUATION ? dto.score : dto.adjustment;
+    if (score === undefined || !Number.isFinite(score)) throw new BadRequestException(task.moduleType === PerformanceModuleType.EVALUATION ? '人工评估模块必须提交 0-100 分' : '调整模块必须提交调整分值');
+    if (task.moduleType === PerformanceModuleType.EVALUATION && (score < 0 || score > 100)) throw new BadRequestException('人工评估模块分数必须在 0-100 范围内');
+    if (task.moduleType === PerformanceModuleType.ADJUSTMENT && (score < (module.adjustmentMin ?? 0) || score > (module.adjustmentMax ?? module.adjustmentMin ?? 0))) throw new BadRequestException(`调整分值必须在 ${module.adjustmentMin ?? 0}-${module.adjustmentMax ?? 0} 范围内`);
+    return this.submitAssigneeScore(task, assignee, {} as AuthenticatedUser, score, { score: task.moduleType === PerformanceModuleType.EVALUATION ? score : undefined, adjustment: task.moduleType === PerformanceModuleType.ADJUSTMENT ? score : undefined, comment: dto.comment?.trim() || undefined, source: 'FEISHU_WEB', employeeId: principal.employeeId });
+  }
+
   async listTasks(user: AuthenticatedUser, query: QueryPerformanceDto, mine = false) {
     this.assertDatabaseMode();
     const scope = await this.access.getAccessibleOrganizationIds(user);
@@ -1559,14 +1636,16 @@ export class PerformanceService {
         completedAt: submittedAt,
       },
     });
-    if (updated.count !== 1) throw new ConflictException('当前账号已经提交过此模块');
-    await this.audit.create({ userId: user.id }, AuditAction.UPDATE, assignee.id, { resource: 'performance-task-assignee', taskId: task.id, action: 'submit', score }, this.prisma, 'performance_module_task_assignee');
+    if (updated.count !== 1) throw new ConflictException('当前执行人已经提交过此模块');
+    await this.audit.create(user.id ? { userId: user.id } : {}, AuditAction.UPDATE, assignee.id, { resource: 'performance-task-assignee', taskId: task.id, action: 'submit', score, source: submission.source === 'FEISHU_WEB' ? 'FEISHU_WEB' : 'WEB' }, this.prisma, 'performance_module_task_assignee');
 
     const assignees = await this.prisma.performanceModuleTaskAssignee.findMany({
       where: { taskId: task.id },
       orderBy: { createdAt: 'asc' },
     });
-    if (assignees.some((item) => item.status !== TaskStatus.COMPLETED || item.score === null)) return this.getTask(user, task.id);
+    if (assignees.some((item) => item.status !== TaskStatus.COMPLETED || item.score === null)) {
+      return user.id ? this.getTask(user, task.id) : undefined;
+    }
     if (assignees.length === 0) throw new ConflictException('当前模块没有可汇总的执行人提交');
 
     const moduleScore = assignees.reduce((sum, item) => sum + Number(item.score), 0) / assignees.length;
@@ -1779,6 +1858,9 @@ export class PerformanceService {
       },
     });
     if (!instance || instance.assessmentStatus !== ProcessStatus.COMPLETED) return;
+    if (instance.finalScore === null || instance.actualAmount === null) {
+      throw new ConflictException('最终得分和实际金额生成后才能进入审核确认流程');
+    }
     const definition = instance.definitionSnapshot as unknown as PerformanceTemplateDefinition;
     const step = this.workflowManualSteps(definition)[manualStepIndex];
     if (!step) {
@@ -1875,7 +1957,96 @@ export class PerformanceService {
   }
 
   private async notifyWorkflowTaskOpened(task: any) {
-    await Promise.all(task.assignees.map((assignee: any) => this.deliverWorkflowCard(task, assignee)));
+    if (!this.feishuTaskSessions?.enabled) {
+      await Promise.all((task.assignees ?? []).map((assignee: any) => this.deliverWorkflowCard(task, assignee)));
+      return;
+    }
+    const employeeIds: string[] = [...new Set<string>((task.assignees ?? [])
+      .map((assignee: any) => assignee.employeeId)
+      .filter((id: unknown): id is string => typeof id === 'string' && Boolean(id)))];
+    const cycleId: string | undefined = typeof task.instance?.cycleId === 'string'
+      ? task.instance.cycleId
+      : typeof task.instance?.cycle?.id === 'string' ? task.instance.cycle.id : undefined;
+    if (!cycleId) return;
+    await Promise.all(employeeIds.map((employeeId: string) => this.notifyFeishuTaskInbox(employeeId, cycleId)));
+  }
+
+  private async notifyFeishuTaskInbox(employeeId: string, cycleId: string) {
+    if (!this.feishuTaskSessions?.enabled || !this.feishu.enabled) return;
+    const key = `${cycleId}:${employeeId}`;
+    const pending = this.inboxNotifications.get(key);
+    if (pending) return pending;
+    const notification = this.updateFeishuTaskInbox(employeeId, cycleId).finally(() => this.inboxNotifications.delete(key));
+    this.inboxNotifications.set(key, notification);
+    return notification;
+  }
+
+  private async updateFeishuTaskInbox(employeeId: string, cycleId: string) {
+    const sessions = this.feishuTaskSessions;
+    if (!sessions?.enabled) return;
+    const inbox = await this.getFeishuTaskInbox(employeeId, cycleId);
+    const existing = await this.prisma.performanceFeishuTaskInboxDelivery.findFirst({ where: { employeeId, cycleId } });
+    if (inbox.totalPending === 0) {
+      if (existing?.messageId) await this.feishu.updateCard(existing.messageId, this.feishuTaskInboxCompletedCard(inbox.cycleName));
+      return;
+    }
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { workEmail: true, mobile: true } });
+    if (!employee) return;
+    const openId = await this.feishu.resolveOpenIdByContact(employee);
+    if (!openId) return;
+    const state = await sessions.createState(employeeId, cycleId);
+    if (!state) return;
+    const url = sessions.authorizationUrl(state);
+    if (!url) return;
+    const session = await this.prisma.performanceFeishuTaskSession.findUnique({ where: { stateHash: createHash('sha256').update(state).digest('hex') }, select: { id: true } });
+    if (!session) return;
+    const card = this.feishuTaskInboxCard(inbox, url);
+    if (existing?.messageId) {
+      const updated = await this.feishu.updateCard(existing.messageId, card);
+      await this.prisma.performanceFeishuTaskInboxDelivery.update({ where: { id: existing.id }, data: { sessionId: session.id, status: updated ? 'DELIVERED' : 'FAILED', deliveredAt: updated ? new Date() : existing.deliveredAt, failureReason: updated ? null : '飞书个人汇总卡片更新失败' } });
+      return;
+    }
+    let delivery;
+    try {
+      delivery = await this.prisma.performanceFeishuTaskInboxDelivery.create({ data: { employeeId, cycleId, sessionId: session.id, status: 'PENDING' } });
+    } catch {
+      delivery = await this.prisma.performanceFeishuTaskInboxDelivery.findFirst({ where: { employeeId, cycleId } });
+      if (!delivery) throw new ConflictException('飞书汇总通知状态发生变化，请重试');
+    }
+    const current = await this.prisma.performanceFeishuTaskInboxDelivery.findUnique({ where: { id: delivery.id }, select: { messageId: true } });
+    if (current?.messageId) {
+      const updated = await this.feishu.updateCard(current.messageId, card);
+      await this.prisma.performanceFeishuTaskInboxDelivery.update({ where: { id: delivery.id }, data: { sessionId: session.id, status: updated ? 'DELIVERED' : 'FAILED', deliveredAt: updated ? new Date() : null, failureReason: updated ? null : '飞书个人汇总卡片更新失败' } });
+      return;
+    }
+    const messageId = await this.feishu.sendCardMessageToOpenId(openId, card);
+    await this.prisma.performanceFeishuTaskInboxDelivery.updateMany({ where: { id: delivery.id, messageId: null }, data: { messageId, status: messageId ? 'DELIVERED' : 'FAILED', deliveredAt: messageId ? new Date() : null, failureReason: messageId ? null : '飞书个人汇总卡片发送失败' } });
+  }
+
+  private feishuTaskInboxCompletedCard(cycleName: string): FeishuCard {
+    return {
+      schema: '2.0',
+      config: { enable_forward: false },
+      header: { title: { tag: 'plain_text', content: '绩效活动处理完成' }, template: 'green' },
+      body: { elements: [{ tag: 'markdown', content: `**绩效活动**：${cycleName}\n当前活动暂无待处理事项。` }] },
+    };
+  }
+
+  private feishuTaskInboxCard(inbox: Pick<PerformanceFeishuTaskInbox, 'cycleName' | 'totalPending' | 'assessmentTasks' | 'workflowTasks'>, url: string): FeishuCard {
+    const assessmentCount = inbox.assessmentTasks.length;
+    const workflowCount = inbox.workflowTasks.length;
+    const workflowResults = inbox.workflowTasks.map((task) => (
+      `- ${task.employeeName}（${task.employeeNo}）｜${task.stepName}\n  最终得分：${this.formatScore(task.finalScore)}｜实际金额：${this.formatMoney(task.actualAmount)}`
+    ));
+    return {
+      schema: '2.0',
+      config: { enable_forward: false },
+      header: { title: { tag: 'plain_text', content: '绩效活动待处理提醒' }, template: 'blue' },
+      body: { elements: [
+        { tag: 'markdown', content: `**绩效活动**：${inbox.cycleName}\n**待提交评价**：${assessmentCount} 项\n**待审核/流程处理**：${workflowCount} 项\n**合计**：${inbox.totalPending} 项${workflowResults.length ? `\n\n**待审核结果**\n${workflowResults.join('\n')}` : ''}` },
+        { tag: 'button', text: { tag: 'plain_text', content: '查看详情' }, type: 'primary', multi_url: { url } },
+      ] },
+    };
   }
 
   private workflowCard(task: any, cardToken: string) {
@@ -1894,7 +2065,7 @@ export class PerformanceService {
       header: { title: { tag: 'plain_text' as const, content: `绩效流程：${task.stepName}` }, template: 'blue' as const },
       body: {
         elements: [
-          { tag: 'markdown', content: `**绩效活动**：${task.instance.cycle.name}\n**被考核人**：${task.instance.employee.name ?? '未命名员工'}\n**当前步骤**：${task.stepName}` },
+          { tag: 'markdown', content: `**绩效活动**：${task.instance.cycle.name}\n**被考核人**：${task.instance.employee.name ?? '未命名员工'}\n**当前步骤**：${task.stepName}\n**最终得分**：${this.formatScore(this.number(task.instance.finalScore))}\n**实际金额**：${this.formatMoney(this.number(task.instance.actualAmount))}` },
           { tag: 'form', name: 'performance_workflow_action', elements: [
             { tag: 'input', name: 'comment', input_type: 'multiline_text', placeholder: { tag: 'plain_text', content: task.stepType === PerformanceWorkflowStepType.REVIEW || task.stepType === PerformanceWorkflowStepType.APPROVAL ? '处理意见；驳回时必填' : '处理说明（可选）' } },
             ...actionElements,
@@ -1907,16 +2078,15 @@ export class PerformanceService {
   private async notifyTaskOpened(taskId: string) {
     const task = await this.prisma.performanceModuleTask.findUnique({
       where: { id: taskId },
-      include: {
-        instance: { include: { cycle: true, employee: { select: { name: true } } } },
-        assignees: {
-          where: { status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } },
-          include: { employee: { select: { workEmail: true, mobile: true } } },
-        },
-      },
+      include: { instance: { include: { cycle: true, employee: { select: { name: true } } } }, assignees: { where: { status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } }, include: { employee: { select: { workEmail: true, mobile: true } } } } },
     });
     if (!task || task.moduleType === PerformanceModuleType.METRIC) return;
-    await Promise.all(task.assignees.map((assignee) => this.deliverAssessmentCard(task, assignee)));
+    if (!this.feishuTaskSessions?.enabled) {
+      await Promise.all(task.assignees.map((assignee) => this.deliverAssessmentCard(task, assignee)));
+      return;
+    }
+    const employeeIds = [...new Set(task.assignees.map((assignee) => assignee.employeeId).filter((id): id is string => Boolean(id)))];
+    await Promise.all(employeeIds.map((employeeId) => this.notifyFeishuTaskInbox(employeeId, task.instance.cycleId)));
   }
 
   private async deliverAssessmentCard(task: any, assignee: any) {
@@ -2630,6 +2800,8 @@ export class PerformanceService {
       attemptNo: row.attemptNo,
       status: row.status,
       executorName: (assignees.map((assignee: { displayName: string }) => assignee.displayName).join('、') || row.executorNameSnapshot) ?? null,
+      finalScore: this.number(row.instance?.finalScore),
+      actualAmount: this.number(row.instance?.actualAmount),
       assignees,
       isCurrent: current,
       canSubmit: current && Boolean(currentUserId && assignees.some((assignee: { userId: string | null; status: TaskStatus }) => assignee.userId === currentUserId && assignee.status !== TaskStatus.COMPLETED)),
@@ -2686,6 +2858,8 @@ export class PerformanceService {
 
   private templateNameFromDefinition(definition: unknown) { return this.isRecord(definition) && typeof definition.name === 'string' ? definition.name : ''; }
   private moduleCount(definition: unknown) { return this.isRecord(definition) && Array.isArray(definition.modules) ? definition.modules.length : 0; }
+  private formatScore(value: number | null | undefined) { return value === null || value === undefined ? '--' : value.toFixed(4); }
+  private formatMoney(value: number | null | undefined) { return value === null || value === undefined ? '--' : value.toFixed(2); }
   private number(value: Prisma.Decimal | null | undefined) { return value === null || value === undefined ? null : Number(value); }
   private round(value: number, decimals: number) { return Number(value.toFixed(decimals)); }
   private date(value: Date) { return value.toISOString().slice(0, 10); }

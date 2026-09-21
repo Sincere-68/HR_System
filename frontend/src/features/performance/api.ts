@@ -27,7 +27,7 @@ import type {
   PerformanceTemplateParseResult,
 } from '@hr-demo/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '../../lib/api';
+import { apiRequest, feishuTaskRequest } from '../../lib/api';
 
 function params(query: Record<string, unknown>) {
   const search = new URLSearchParams();
@@ -64,6 +64,10 @@ export const performanceApi = {
   copyTemplate: (id: string) => apiRequest<PerformanceTemplateCopyResult>(`/performance/templates/${id}/copy`, { method: 'POST' }),
   archiveTemplate: (id: string, input: PerformanceArchiveTemplateInput = {}) => apiRequest<PerformanceTemplateListItem>(`/performance/templates/${id}/archive`, { method: 'POST', body: JSON.stringify(input) }),
   createTemplateVersion: (id: string, input: PerformanceCreateTemplateInput) => apiRequest<PerformanceTemplateDetail>(`/performance/templates/${id}/versions`, { method: 'POST', body: JSON.stringify(input) }),
+  exchangeFeishuTaskSession: (state: string, code: string) => apiRequest<import('@hr-demo/shared').PerformanceFeishuTaskSessionExchangeResult>('/performance/feishu-task-inbox/session', { method: 'POST', body: JSON.stringify({ state, code }) }),
+  feishuTaskInbox: () => feishuTaskRequest<import('@hr-demo/shared').PerformanceFeishuTaskInbox>('/performance/feishu-task-inbox'),
+  submitFeishuAssessmentTask: (id: string, input: PerformanceTaskSubmissionInput) => feishuTaskRequest<import('@hr-demo/shared').PerformanceFeishuTaskInbox>(`/performance/feishu-task-inbox/assessment-tasks/${id}/submit`, { method: 'POST', body: JSON.stringify(input) }),
+  submitFeishuWorkflowTask: (id: string, input: PerformanceWorkflowTaskSubmissionInput) => feishuTaskRequest<import('@hr-demo/shared').PerformanceFeishuTaskInbox>(`/performance/feishu-task-inbox/workflow-tasks/${id}/submit`, { method: 'POST', body: JSON.stringify(input) }),
   publishTemplateVersion: (id: string, versionId: string) => apiRequest(`/performance/templates/${id}/versions/${versionId}/publish`, { method: 'POST' }),
   listCycles: (query: Record<string, unknown>) => apiRequest<Paginated<PerformanceCycleListItem>>(`/performance/cycles?${params(query)}`),
   getCycle: (id: string) => apiRequest<PerformanceCycleDetail>(`/performance/cycles/${id}`),
@@ -92,6 +96,9 @@ export const performanceApi = {
   createEmployeeAmountBase: (input: EmployeePerformanceAmountBaseInput) => apiRequest<EmployeePerformanceAmountBase>('/performance/settings/employee-amount-bases', { method: 'POST', body: JSON.stringify(input) }),
 };
 
+export function useFeishuTaskInbox(enabled = true) { return useQuery({ queryKey: ['performance', 'feishu-task-inbox'], queryFn: performanceApi.feishuTaskInbox, enabled }); }
+export function useSubmitFeishuAssessmentTask() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, input }: { id: string; input: PerformanceTaskSubmissionInput }) => performanceApi.submitFeishuAssessmentTask(id, input), onSuccess: () => client.invalidateQueries({ queryKey: ['performance', 'feishu-task-inbox'] }) }); }
+export function useSubmitFeishuWorkflowTask() { const client = useQueryClient(); return useMutation({ mutationFn: ({ id, input }: { id: string; input: PerformanceWorkflowTaskSubmissionInput }) => performanceApi.submitFeishuWorkflowTask(id, input), onSuccess: () => client.invalidateQueries({ queryKey: ['performance', 'feishu-task-inbox'] }) }); }
 export function usePerformanceDashboard() { return useQuery({ queryKey: performanceKeys.dashboard, queryFn: performanceApi.dashboard }); }
 export function usePerformanceTemplates() { return useQuery({ queryKey: performanceKeys.templates, queryFn: performanceApi.listTemplates }); }
 export function usePerformanceTemplate(id: string) { return useQuery({ queryKey: performanceKeys.template(id), queryFn: () => performanceApi.getTemplate(id), enabled: Boolean(id) }); }

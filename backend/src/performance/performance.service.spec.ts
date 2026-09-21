@@ -605,6 +605,74 @@ describe('Performance card callbacks', () => {
 });
 
 describe('Performance task personal notifications', () => {
+  it('builds one activity-level card with aggregated counts and frozen workflow results', () => {
+    const instance = new PerformanceService({} as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    const card = (instance as any).feishuTaskInboxCard({
+      cycleName: '测试活动',
+      totalPending: 5,
+      assessmentTasks: [{}, {}, {}],
+      workflowTasks: [
+        { employeeName: '甲', employeeNo: 'E001', stepName: '审核', finalScore: 88.5, actualAmount: 1770 },
+        { employeeName: '乙', employeeNo: 'E002', stepName: '本人确认', finalScore: 92, actualAmount: 1840 },
+      ],
+    }, 'https://hr.example.invalid/inbox');
+
+    expect(card.header.title.content).toBe('绩效活动待处理提醒');
+    expect(card.body.elements[0].content).toContain('待提交评价**：3 项');
+    expect(card.body.elements[0].content).toContain('待审核/流程处理**：2 项');
+    expect(card.body.elements[0].content).toContain('最终得分：88.5000｜实际金额：1770.00');
+    expect(card.body.elements[0].content).toContain('最终得分：92.0000｜实际金额：1840.00');
+    expect(card.body.elements[1]).toMatchObject({ multi_url: { url: 'https://hr.example.invalid/inbox' } });
+  });
+
+  it('includes frozen score and amount in every direct workflow card', () => {
+    const instance = new PerformanceService({} as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    const card = (instance as any).workflowCard({
+      stepName: 'HR 审核',
+      stepType: 'REVIEW',
+      instance: { finalScore: 88.5, actualAmount: 1770, cycle: { name: '测试活动' }, employee: { name: '虚构员工' } },
+    }, 'token');
+
+    expect(card.body.elements[0].content).toContain('最终得分**：88.5000');
+    expect(card.body.elements[0].content).toContain('实际金额**：1770.00');
+  });
+
+  it('presents persisted workflow results without recalculating them', () => {
+    const instance = new PerformanceService({} as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    const result = (instance as any).presentWorkflowTask({
+      id: 'workflow-1', instanceId: 'instance-1', stepId: 'review', stepName: '审核', stepType: 'REVIEW', stepOrder: 0, attemptNo: 1, status: 'IN_PROGRESS', executorNameSnapshot: '审核人', completedAt: null, assignees: [],
+      instance: { cycleId: 'cycle-1', employeeId: 'employee-1', currentWorkflowOrder: 0, finalScore: 88.5, actualAmount: 1770, cycle: { name: '测试活动' }, employee: { name: '虚构员工', employeeNo: 'E001' } },
+    });
+
+    expect(result).toMatchObject({ finalScore: 88.5, actualAmount: 1770 });
+  });
+
+  it('opens each next workflow step after the frozen result already exists', async () => {
+    const definitionWithSteps = { workflow: { manualSteps: [{ id: 'review', name: '审核', type: 'REVIEW' }, { id: 'confirm', name: '确认', type: 'CONFIRMATION' }] } };
+    const tx = {
+      performanceWorkflowTask: { update: jest.fn().mockResolvedValue({}) },
+      performanceInstance: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      performanceInstance: { findUniqueOrThrow: jest.fn().mockResolvedValue({ definitionSnapshot: definitionWithSteps }) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const instance = new PerformanceService(prisma as never, {} as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    const openWorkflowStep = jest.spyOn(instance as any, 'openWorkflowStep').mockResolvedValue(undefined);
+
+    await (instance as any).completeWorkflowTask({ id: 'task-1', instanceId: 'instance-1', stepOrder: 0 }, null);
+
+    expect(openWorkflowStep).toHaveBeenCalledWith('instance-1', 1);
+  });
+
+  it('refuses to open a workflow step before score and amount are generated', async () => {
+    const prisma = { performanceInstance: { findUnique: jest.fn().mockResolvedValue({ assessmentStatus: ProcessStatus.COMPLETED, finalScore: null, actualAmount: null }) } };
+    const instance = new PerformanceService(prisma as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+
+    await expect((instance as any).openWorkflowStep('instance-1', 0)).rejects.toThrow('最终得分和实际金额生成后才能进入审核确认流程');
+  });
+
   it('records a skipped delivery when Feishu is disabled', async () => {
     const feishu = { enabled: false, sendCardToOpenId: jest.fn(), resolveOpenIdByContact: jest.fn() };
     const prisma = {

@@ -26,6 +26,12 @@ interface FeishuMessageResponse {
   data?: { message_id?: string };
 }
 
+export interface FeishuAuthorizationIdentity {
+  openId: string;
+  userId?: string | null;
+  unionId?: string | null;
+}
+
 export interface FeishuCard {
   schema: '2.0';
   config?: { enable_forward?: boolean };
@@ -96,6 +102,39 @@ export class FeishuService {
     }
   }
 
+  async exchangeAuthorizationCode(code: string, redirectUri: string): Promise<FeishuAuthorizationIdentity | null> {
+    if (!this.enabled || !code || !redirectUri) return null;
+    const appId = this.config.get<string>('FEISHU_APP_ID');
+    const appSecret = this.config.get<string>('FEISHU_APP_SECRET');
+    if (!appId || !appSecret) return null;
+    try {
+      const tokenResponse = await this.request<{
+        access_token?: string;
+        code?: number;
+        msg?: string;
+      }>('https://accounts.feishu.cn/oauth/v3/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({ grant_type: 'authorization_code', client_id: appId, client_secret: appSecret, code, redirect_uri: redirectUri }),
+      });
+      if (!tokenResponse.access_token) return null;
+      const userResponse = await this.request<{
+        code?: number;
+        msg?: string;
+        data?: { open_id?: string; user_id?: string; union_id?: string };
+      }>('https://open.feishu.cn/open-apis/authen/v1/user_info', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+      });
+      const openId = userResponse.data?.open_id;
+      if (!openId) return null;
+      return { openId, userId: userResponse.data?.user_id ?? null, unionId: userResponse.data?.union_id ?? null };
+    } catch (error) {
+      this.logger.warn(`飞书网页授权交换失败: ${error instanceof Error ? error.message : 'unknown error'}`);
+      return null;
+    }
+  }
+
   async sendTextToOpenId(openId: string, text: string) {
     return this.sendText(openId, text, 'open_id');
   }
@@ -106,9 +145,14 @@ export class FeishuService {
 
   /** Sends a personal interactive card. Cards never target chat_id or groups. */
   async sendCardToOpenId(openId: string, card: FeishuCard) {
-    if (!this.enabled || !openId) return false;
+    return Boolean(await this.sendCardMessageToOpenId(openId, card));
+  }
+
+  /** Sends a personal card and returns its provider message ID for later updates. */
+  async sendCardMessageToOpenId(openId: string, card: FeishuCard) {
+    if (!this.enabled || !openId) return null;
     const token = await this.getTenantAccessToken();
-    if (!token) return false;
+    if (!token) return null;
     try {
       const response = await this.request<FeishuMessageResponse>(
         'https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id',
@@ -118,14 +162,14 @@ export class FeishuService {
           body: JSON.stringify({ receive_id: openId, msg_type: 'interactive', content: JSON.stringify(card) }),
         },
       );
-      if (response.code !== 0) {
-        this.logger.warn(`飞书交互卡片发送失败: ${response.msg || 'unknown error'}`);
-        return false;
+      if (response.code !== 0 || !response.data?.message_id) {
+        this.logger.warn(`飞书交互卡片发送失败: ${response.msg || 'missing message_id'}`);
+        return null;
       }
-      return true;
+      return response.data.message_id;
     } catch (error) {
       this.logger.warn(`飞书交互卡片请求失败: ${error instanceof Error ? error.message : 'unknown error'}`);
-      return false;
+      return null;
     }
   }
 
