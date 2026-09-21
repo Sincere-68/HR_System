@@ -141,6 +141,16 @@ describe('PerformanceActivityDetailPage', () => {
     expect(screen.getByRole('button', { name: '编辑' })).toBeInTheDocument();
   });
 
+  it('uses employee ids for participant selection actions', () => {
+    renderPage();
+    const row = screen.getByText('测试员工').closest('tr');
+    expect(row).not.toBeNull();
+    const checkbox = row?.querySelector('input[type="checkbox"]');
+    expect(checkbox).not.toBeNull();
+    fireEvent.click(checkbox as HTMLInputElement);
+    expect(screen.getByRole('button', { name: '开启绩效' })).toBeInTheDocument();
+  });
+
   it('opens the assessment detail drawer from the employee name', () => {
     renderPage();
 

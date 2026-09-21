@@ -311,7 +311,7 @@ export function PerformanceActivityDetailPage() {
           {cycle.isLoading ? <Skeleton active paragraph={{ rows: 7 }} /> : (
             <Table<PerformanceCycleParticipant>
               className="performance-table performance-participant-table"
-              rowKey="id"
+              rowKey="employeeId"
               rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as string[]), columnWidth: 44 }}
               columns={columns}
               dataSource={pagedParticipants}

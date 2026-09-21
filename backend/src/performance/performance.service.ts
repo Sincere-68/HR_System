@@ -524,6 +524,12 @@ export class PerformanceService {
       await tx.performanceWorkflowTask.updateMany({ where: { instance: { cycleId, employeeId: { in: employeeIds } }, status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } }, data: { status: TaskStatus.CANCELLED } });
       await tx.performanceModuleTask.updateMany({ where: { instance: { cycleId, employeeId: { in: employeeIds } }, status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } }, data: { status: TaskStatus.CANCELLED } });
       await tx.performanceInstance.updateMany({ where: { cycleId, employeeId: { in: employeeIds } }, data: { status: ProcessStatus.CANCELLED } });
+      const remainingActiveInstances = await tx.performanceInstance.count({
+        where: { cycleId, employeeId: { notIn: employeeIds }, status: { not: ProcessStatus.CANCELLED } },
+      });
+      if (remainingActiveInstances === 0) {
+        await tx.performanceCycle.update({ where: { id: cycleId }, data: { status: ProcessStatus.CANCELLED, completedAt: new Date() } });
+      }
       await this.audit.create({ userId: user.id }, AuditAction.UPDATE, cycleId, { resource: 'performance-cycle-participant', action: 'close', employeeIds }, tx, 'performance_cycle_participant');
     });
     return this.getCycle(cycleId, user);
@@ -2841,6 +2847,7 @@ export class PerformanceService {
       executionMode: row.executionMode ?? PerformanceExecutionMode.SINGLE,
       status: row.status,
       executorName,
+      indicators: this.indicatorsFromSnapshot(row.moduleSnapshot),
       assignees,
       isCurrent: current,
       canSubmit: current && Boolean(currentUserId && this.isTaskAssignee(row, currentUserId) && !assignees.some((assignee: { userId: string | null; status: TaskStatus }) => assignee.userId === currentUserId && assignee.status === TaskStatus.COMPLETED)),
@@ -2854,6 +2861,18 @@ export class PerformanceService {
     const scope = await this.access.getAccessibleOrganizationIds(user);
     if (cycleOrganizationId && scope?.includes(cycleOrganizationId)) return;
     if (instances.some((instance) => !instance.organizationId || !scope?.includes(instance.organizationId))) throw new ForbiddenException('绩效周期不在当前账号数据范围内');
+  }
+
+  private indicatorsFromSnapshot(snapshot: unknown) {
+    if (!this.isRecord(snapshot) || !Array.isArray(snapshot.indicators)) return [];
+    return snapshot.indicators.filter((indicator): indicator is PerformanceModuleDefinition['indicators'][number] => this.isRecord(indicator) && typeof indicator.id === 'string' && typeof indicator.name === 'string' && typeof indicator.weight === 'number' && Array.isArray(indicator.standards)).map((indicator) => ({
+      id: indicator.id,
+      name: indicator.name,
+      description: typeof indicator.description === 'string' ? indicator.description : '',
+      standards: indicator.standards.filter((standard): standard is string => typeof standard === 'string'),
+      weight: indicator.weight,
+      ...(typeof indicator.dataField === 'string' ? { dataField: indicator.dataField } : {}),
+    }));
   }
 
   private templateNameFromDefinition(definition: unknown) { return this.isRecord(definition) && typeof definition.name === 'string' ? definition.name : ''; }

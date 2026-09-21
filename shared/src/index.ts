@@ -2083,6 +2083,7 @@ export interface PerformanceTaskListItem {
   executionMode: PerformanceExecutionMode;
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   executorName: string | null;
+  indicators: PerformanceIndicatorDefinition[];
   assignees: PerformanceTaskAssignee[];
   isCurrent: boolean;
   canSubmit: boolean;

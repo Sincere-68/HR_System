@@ -140,6 +140,46 @@ describe('Performance activity creation', () => {
     await expect(instance.startCycle({ id: 'manager' } as never, 'cycle-1')).rejects.toThrow('部分被考核人尚未配置绩效模板');
   });
 
+  it('closes the activity when every participant is cancelled', async () => {
+    const tx = {
+      performanceWorkflowTask: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      performanceModuleTask: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      performanceInstance: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), count: jest.fn().mockResolvedValue(0) },
+      performanceCycle: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      performanceCycle: { findUnique: jest.fn().mockResolvedValue({ id: 'cycle-1', organizationId: 'org-root', instances: [{ employeeId: 'employee-1', organizationId: 'org-root' }] }) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const instance = new PerformanceService(prisma as never, { hasAllEmployeeData: jest.fn().mockReturnValue(true) } as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    (instance as any).getCycle = jest.fn().mockResolvedValue({ id: 'cycle-1', status: 'CANCELLED' });
+
+    const result = await instance.closeCycleParticipants({ id: 'manager' } as never, 'cycle-1', { employeeIds: ['employee-1'] });
+
+    expect(tx.performanceCycle.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: ProcessStatus.CANCELLED, completedAt: expect.any(Date) }) }));
+    expect(result).toMatchObject({ status: 'CANCELLED' });
+  });
+
+  it('keeps the activity in progress when other participants remain active', async () => {
+    const tx = {
+      performanceWorkflowTask: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      performanceModuleTask: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      performanceInstance: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), count: jest.fn().mockResolvedValue(1) },
+      performanceCycle: { update: jest.fn() },
+    };
+    const prisma = {
+      performanceCycle: { findUnique: jest.fn().mockResolvedValue({ id: 'cycle-1', organizationId: 'org-root', instances: [{ employeeId: 'employee-1', organizationId: 'org-root' }, { employeeId: 'employee-2', organizationId: 'org-root' }] }) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const instance = new PerformanceService(prisma as never, { hasAllEmployeeData: jest.fn().mockReturnValue(true) } as never, { create: jest.fn().mockResolvedValue(undefined) } as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    (instance as any).getCycle = jest.fn().mockResolvedValue({ id: 'cycle-1', status: 'IN_PROGRESS' });
+
+    await instance.closeCycleParticipants({ id: 'manager' } as never, 'cycle-1', { employeeIds: ['employee-1'] });
+
+    expect(tx.performanceCycle.update).not.toHaveBeenCalled();
+  });
+
   it('archives an activity without physically deleting instances or tasks', async () => {
     const archived = { id: 'cycle-1', name: '测试活动', organizationId: 'org-root', isPublic: false, linkedLevel: true, year: 2026, periodType: 'QUARTERLY', exceptionHandlerType: 'DIRECT_MANAGER', exceptionHandlerEmployeeId: null, lockRelation: false, periodStart: new Date('2026-01-01'), periodEnd: new Date('2026-03-31'), status: 'CANCELLED', archivedAt: new Date(), template: { name: '模板' }, templateVersion: { versionNo: 1 }, organization: { id: 'org-root', name: '根组织' }, createdBy: { displayName: '创建人' }, exceptionHandlerEmployee: null, _count: { instances: 1 }, createdAt: new Date() };
     const tx = {
