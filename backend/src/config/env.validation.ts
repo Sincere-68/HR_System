@@ -74,7 +74,7 @@ class EnvironmentVariables {
   @IsInt()
   @Min(60)
   @Max(86_400)
-  FEISHU_TASK_SESSION_TTL_SECONDS = 600;
+  FEISHU_TASK_SESSION_TTL_SECONDS: number = 600;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
