@@ -137,6 +137,8 @@ describe('PerformanceActivityDetailPage', () => {
     expect(screen.getByText('E0001')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '当前执行人' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '最终系数' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '金额基数' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '编辑' })).toBeInTheDocument();
   });
 
   it('opens the assessment detail drawer from the employee name', () => {

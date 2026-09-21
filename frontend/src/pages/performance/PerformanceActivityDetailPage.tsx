@@ -1,11 +1,11 @@
 import { ArrowLeftOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
-import { Alert, Button, Descriptions, Drawer, Empty, Input, message, Modal, Pagination, Select, Skeleton, Space, Table, Tabs, Tag, Timeline, type TableColumnsType } from 'antd';
+import { Alert, Button, Descriptions, Drawer, Empty, Form, Input, InputNumber, message, Modal, Pagination, Select, Skeleton, Space, Table, Tabs, Tag, Timeline, type TableColumnsType } from 'antd';
 import type { EmployeeListItem, EmploymentStatus, PerformanceCycleParticipant, PerformanceFlowStepAssignee, PerformanceParticipantAssessmentDetail, PerformanceParticipantFlowStep, ProcessStatus } from '@hr-demo/shared';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 import { useEmployees, useOrganizations } from '../../features/employees/api';
-import { useAddPerformanceCycleParticipants, useCloseCycleParticipants, usePerformanceCycle, usePerformanceParticipantAssessmentDetail, usePerformanceParticipantWorkflow, usePerformanceTemplates, useRestartPerformanceCycle, useStartPerformanceCycle, useUpdatePerformanceCycleParticipantTemplate } from '../../features/performance/api';
+import { useAddPerformanceCycleParticipants, useCloseCycleParticipants, useCreateCycleParticipantAmountBase, usePerformanceCycle, usePerformanceParticipantAssessmentDetail, usePerformanceParticipantWorkflow, usePerformanceTemplates, useRestartPerformanceCycle, useStartPerformanceCycle, useUpdatePerformanceCycleParticipantTemplate } from '../../features/performance/api';
 
 const processStatusLabels: Record<ProcessStatus, string> = {
   DRAFT: '草稿',
@@ -106,6 +106,8 @@ export function PerformanceActivityDetailPage() {
   const [participantTemplateVersionId, setParticipantTemplateVersionId] = useState<string>();
   const [templateTarget, setTemplateTarget] = useState<PerformanceCycleParticipant | null>(null);
   const [replacementTemplateVersionId, setReplacementTemplateVersionId] = useState<string>();
+  const [amountTarget, setAmountTarget] = useState<PerformanceCycleParticipant | null>(null);
+  const [amountForm] = Form.useForm<{ amount: number; effectiveAt: string; reason: string }>();
   const [selectedParticipant, setSelectedParticipant] = useState<PerformanceCycleParticipant | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'assessment' | 'workflow'>('assessment');
@@ -122,6 +124,7 @@ export function PerformanceActivityDetailPage() {
   const restartCycle = useRestartPerformanceCycle();
   const closeCycleParticipants = useCloseCycleParticipants();
   const updateParticipantTemplate = useUpdatePerformanceCycleParticipantTemplate();
+  const createParticipantAmountBase = useCreateCycleParticipantAmountBase();
   const templates = usePerformanceTemplates();
   const publishedTemplates = useMemo(() => (templates.data ?? []).filter((template) => template.latestVersion?.status === 'PUBLISHED' && template.latestVersion.id), [templates.data]);
   const assessmentDetail = usePerformanceParticipantAssessmentDetail(activityId, selectedParticipant?.id ?? '', drawerOpen && drawerTab === 'assessment');
@@ -221,6 +224,23 @@ export function PerformanceActivityDetailPage() {
     }
   };
 
+  const openAmountEditor = (participant: PerformanceCycleParticipant) => {
+    setAmountTarget(participant);
+    amountForm.setFieldsValue({ amount: participant.employeeAmountBaseAmount ?? undefined, effectiveAt: new Date().toISOString().slice(0, 10), reason: '' });
+  };
+
+  const saveParticipantAmountBase = async (values: { amount: number; effectiveAt: string; reason: string }) => {
+    if (!amountTarget) return;
+    try {
+      await createParticipantAmountBase.mutateAsync({ cycleId: activityId, employeeId: amountTarget.employeeId, input: values });
+      messageApi.success('金额基数已保存');
+      setAmountTarget(null);
+      amountForm.resetFields();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : '金额基数保存失败');
+    }
+  };
+
   const columns: TableColumnsType<PerformanceCycleParticipant> = [
     {
       title: '员工',
@@ -235,7 +255,7 @@ export function PerformanceActivityDetailPage() {
     },
     { title: '部门', dataIndex: 'organizationName', key: 'organization', width: 178, render: (value: string | null) => value ?? '--' },
     { title: '模板', dataIndex: 'templateName', key: 'template', width: 180, render: (value: string) => value || '--' },
-    { title: '金额基数', key: 'amountBase', width: 120, render: (_, participant) => participant.employeeAmountBaseConfigured ? '已配置' : '未配置' },
+    { title: '金额基数', key: 'amountBase', width: 170, render: (_, participant) => <Space size={6}><span>{participant.employeeAmountBaseConfigured ? '已配置' : '未配置'}</span><Button type="link" size="small" onClick={() => openAmountEditor(participant)}>编辑</Button></Space> },
     { title: '指标模板', dataIndex: 'indicatorTemplateName', key: 'indicatorTemplate', width: 150, render: (value: string | null) => value ?? '--' },
     { title: '当前步骤', key: 'currentStep', width: 168, render: (_, participant) => participant.currentStepName ? <Space size={6}>{participant.currentStepName}<Tag>{participant.currentStepKind === 'WORKFLOW' ? '后续流程' : '考核表'}</Tag></Space> : '--' },
     {
@@ -332,6 +352,27 @@ export function PerformanceActivityDetailPage() {
             />
           </label>
         </div>
+      </Modal>
+
+      <Modal
+        className="performance-activity-modal"
+        title="编辑金额基数"
+        open={Boolean(amountTarget)}
+        onCancel={() => { setAmountTarget(null); amountForm.resetFields(); }}
+        destroyOnHidden
+        width={520}
+        footer={null}
+      >
+        <Form form={amountForm} layout="vertical" onFinish={(values) => void saveParticipantAmountBase(values)}>
+          <Form.Item label="被考核人"><Input value={amountTarget ? `${amountTarget.employeeName}（${amountTarget.employeeNo}）` : ''} disabled /></Form.Item>
+          <Form.Item name="amount" label="金额基数" rules={[{ required: true, message: '请输入金额基数' }]}><InputNumber min={0} precision={2} step={0.01} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="effectiveAt" label="生效日期" rules={[{ required: true, message: '请选择生效日期' }]}><Input type="date" /></Form.Item>
+          <Form.Item name="reason" label="修改原因" rules={[{ required: true, message: '请输入修改原因' }]}><Input.TextArea rows={3} /></Form.Item>
+          <Space>
+            <Button onClick={() => { setAmountTarget(null); amountForm.resetFields(); }}>取消</Button>
+            <Button type="primary" htmlType="submit" loading={createParticipantAmountBase.isPending}>保存</Button>
+          </Space>
+        </Form>
       </Modal>
 
       <Modal
