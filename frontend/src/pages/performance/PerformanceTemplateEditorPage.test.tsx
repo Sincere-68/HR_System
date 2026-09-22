@@ -41,24 +41,28 @@ describe('PerformanceTemplateEditorPage', () => {
     expect(screen.getByRole('button', { name: /保存并下一步/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '保存模板' })).not.toBeInTheDocument();
 
+    fireEvent.change(screen.getByRole('textbox', { name: '模板名称' }), { target: { value: '模板名称' } });
     await user.click(screen.getByRole('button', { name: /保存并下一步/ }));
     expect(screen.getByRole('heading', { name: '流程设置' })).toBeInTheDocument();
-    expect(screen.getByText('基本信息已保存，已进入下一步')).toBeInTheDocument();
+    expect(screen.getByText('基本信息已保存，已进入流程设置')).toBeInTheDocument();
 
     await user.click(screen.getByText('下发指标'));
     expect(screen.getAllByRole('button', { name: /保存模板/ })).toHaveLength(2);
   });
 
-  it('keeps intermediate settings locally and does not call the template API', async () => {
+  it('requires the current process settings before advancing and does not call the template API', async () => {
     const user = userEvent.setup();
     const createTemplateSpy = vi.spyOn(performanceApi, 'createTemplate');
     renderEditor();
 
     fireEvent.change(screen.getByRole('textbox', { name: '模板名称' }), { target: { value: '待完成模板' } });
     await user.click(screen.getByRole('button', { name: /保存并下一步/ }));
-
-    expect(createTemplateSpy).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: '流程设置' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /保存并下一步/ }));
+    expect(screen.getByRole('heading', { name: '流程设置' })).toBeInTheDocument();
+    expect(screen.getByText('至少需要配置一个绩效模块')).toBeInTheDocument();
+    expect(createTemplateSpy).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: '待完成模板' })).toBeInTheDocument();
   });
 
@@ -111,6 +115,19 @@ describe('PerformanceTemplateEditorPage', () => {
     expect(screen.queryByRole('combobox', { name: '考核执行人来源' })).not.toBeInTheDocument();
   });
 
+  it('does not advance approval settings until every approval step has an executor', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(screen.getByText('审批设置'));
+    const approvals = screen.getByRole('complementary', { name: '绩效审批步骤列表' });
+    await user.click(within(approvals).getByRole('button', { name: /新增审批步骤/ }));
+    expect(screen.getByRole('combobox', { name: '审批执行人来源' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /保存并下一步/ }));
+
+    expect(screen.getByRole('heading', { name: '审批设置' })).toBeInTheDocument();
+  });
+
   it('keeps approval settings separate from assessment modules', async () => {
     const user = userEvent.setup();
     renderEditor();
@@ -127,6 +144,22 @@ describe('PerformanceTemplateEditorPage', () => {
     expect(screen.getByRole('combobox', { name: '审批步骤类型' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '审批执行人来源' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '审核' })).toBeInTheDocument();
+  });
+
+  it('locks a confirmation step executor to the assessed employee', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(screen.getByText('审批设置'));
+    const approvals = screen.getByRole('complementary', { name: '绩效审批步骤列表' });
+    await user.click(within(approvals).getByRole('button', { name: /新增审批步骤/ }));
+    await user.click(screen.getByRole('combobox', { name: '审批步骤类型' }));
+    await user.click(await screen.findByText('本人确认'));
+
+    expect(screen.getByText('执行人：被考核员工')).toBeInTheDocument();
+    expect(screen.getByText('活动启动后自动绑定当前活动的被考核人，不能修改。')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '审批执行人来源' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '审批具体执行人' })).not.toBeInTheDocument();
   });
 
   it('keeps executor filters independent between process and approval settings', async () => {

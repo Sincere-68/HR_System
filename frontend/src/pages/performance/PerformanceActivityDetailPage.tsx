@@ -466,7 +466,7 @@ export function PerformanceActivityDetailPage() {
               optionFilterProp="label"
               placeholder="请选择已发布的绩效模板"
               value={replacementTemplateVersionId}
-              options={publishedTemplates.map((template) => ({ label: `${template.name}（V${template.latestVersion?.versionNo}）`, value: template.latestVersion?.id }))}
+              options={publishedTemplates.map((template) => ({ label: template.name, value: template.latestVersion?.id }))}
               onChange={setReplacementTemplateVersionId}
             />
           </label>
@@ -523,7 +523,7 @@ export function PerformanceActivityDetailPage() {
               optionFilterProp="label"
               placeholder="请选择已发布的绩效模板"
               value={participantTemplateVersionId}
-              options={publishedTemplates.map((template) => ({ label: `${template.name}（V${template.latestVersion?.versionNo}）`, value: template.latestVersion?.id }))}
+              options={publishedTemplates.map((template) => ({ label: template.name, value: template.latestVersion?.id }))}
               onChange={setParticipantTemplateVersionId}
             />
           </label>

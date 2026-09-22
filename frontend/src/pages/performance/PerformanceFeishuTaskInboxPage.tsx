@@ -13,6 +13,17 @@ function moneyDisplay(value: number | null | undefined) {
   return value === null || value === undefined ? '--' : value.toFixed(2);
 }
 
+function DispatchedIndicators({ task }: { task: PerformanceTaskListItem }) {
+  if (task.indicators.length === 0) return <Typography.Text type="secondary">暂无下发指标</Typography.Text>;
+  return <ol className="performance-feishu-indicators">
+    {task.indicators.map((indicator) => <li key={indicator.id}>
+      <strong>{indicator.name}</strong>
+      {indicator.description ? <span>{indicator.description}</span> : null}
+      {indicator.standards.length ? <ul>{indicator.standards.map((standard, index) => <li key={`${indicator.id}-${index}`}>{standard}</li>)}</ul> : <span>暂无衡量标准</span>}
+    </li>)}
+  </ol>;
+}
+
 export function PerformanceFeishuTaskInboxPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [messageApi, contextHolder] = message.useMessage();
@@ -89,7 +100,7 @@ export function PerformanceFeishuTaskInboxPage() {
       </Card>
     </>}
     <Modal title={assessmentTarget ? `提交：${assessmentTarget.moduleName}` : ''} open={Boolean(assessmentTarget)} onCancel={() => setAssessmentTarget(null)} footer={null} destroyOnHidden>
-      {assessmentTarget ? <Form form={assessmentForm} layout="vertical" onFinish={submitAssessmentValue}><Typography.Paragraph type="secondary">下发指标：{assessmentTarget.indicators.length ? assessmentTarget.indicators.map((indicator) => `${indicator.name}（${indicator.standards.length ? indicator.standards.join('；') : '暂无衡量标准'}）`).join('；') : '无'}</Typography.Paragraph><Form.Item name={assessmentTarget.moduleType === 'EVALUATION' ? 'score' : 'adjustment'} label={assessmentTarget.moduleType === 'EVALUATION' ? '评分（0-100）' : '调整分值'} rules={assessmentTarget.moduleType === 'ADJUSTMENT' && assessmentTarget.optional ? [] : [{ required: true, message: '请输入分值' }]}><InputNumber min={assessmentTarget.moduleType === 'EVALUATION' ? 0 : 0} max={assessmentTarget.moduleType === 'EVALUATION' ? 100 : undefined} style={{ width: '100%' }} /></Form.Item><Form.Item name="comment" label="评语"><Input.TextArea rows={4} /></Form.Item><Space><Button type="primary" htmlType="submit" loading={submitAssessment.isPending}>提交</Button>{assessmentTarget.moduleType === 'ADJUSTMENT' && assessmentTarget.optional ? <Button htmlType="submit" loading={submitAssessment.isPending}>无调整，跳过</Button> : null}</Space></Form> : null}
+      {assessmentTarget ? <Form form={assessmentForm} layout="vertical" onFinish={submitAssessmentValue}><section className="performance-feishu-indicator-section" aria-label="下发指标"><Typography.Text strong>下发指标</Typography.Text><DispatchedIndicators task={assessmentTarget} /></section><Form.Item name={assessmentTarget.moduleType === 'EVALUATION' ? 'score' : 'adjustment'} label={assessmentTarget.moduleType === 'EVALUATION' ? '评分（0-100）' : '调整分值'} rules={assessmentTarget.moduleType === 'ADJUSTMENT' && assessmentTarget.optional ? [] : [{ required: true, message: '请输入分值' }]}><InputNumber min={assessmentTarget.moduleType === 'EVALUATION' ? 0 : 0} max={assessmentTarget.moduleType === 'EVALUATION' ? 100 : undefined} style={{ width: '100%' }} /></Form.Item><Form.Item name="comment" label="评语"><Input.TextArea rows={4} /></Form.Item><Space><Button type="primary" htmlType="submit" loading={submitAssessment.isPending}>提交</Button>{assessmentTarget.moduleType === 'ADJUSTMENT' && assessmentTarget.optional ? <Button htmlType="submit" loading={submitAssessment.isPending}>无调整，跳过</Button> : null}</Space></Form> : null}
     </Modal>
     <Modal title={workflowTarget ? `处理：${workflowTarget.stepName}` : ''} open={Boolean(workflowTarget)} onCancel={() => setWorkflowTarget(null)} footer={null} destroyOnHidden>
       {workflowTarget ? <Form form={workflowForm} layout="vertical"><Alert type="info" showIcon message={`最终得分：${scoreDisplay(workflowTarget.finalScore)}`} description={`实际金额：${moneyDisplay(workflowTarget.actualAmount)}`} /><Form.Item name="comment" label="处理意见"><Input.TextArea rows={4} /></Form.Item><Space wrap><Button type="primary" onClick={() => void submitWorkflowValue(workflowTarget.stepType === 'CONFIRMATION' ? 'CONFIRM' : workflowTarget.stepType === 'HR_ARCHIVE' ? 'ARCHIVE' : 'APPROVE')} loading={submitWorkflow.isPending}>通过 / 确认</Button>{workflowTarget.stepType === 'REVIEW' || workflowTarget.stepType === 'APPROVAL' ? <Button danger onClick={() => void submitWorkflowValue('REJECT')} loading={submitWorkflow.isPending}>驳回</Button> : null}</Space></Form> : null}

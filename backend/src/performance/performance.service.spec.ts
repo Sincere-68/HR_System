@@ -451,7 +451,19 @@ describe('Performance template archive and draft activities', () => {
     await expect((instance as any).assertExecutorUserScope({ id: 'manager' }, { modules: [{ name: '岗位评估', executor: { type: 'DIRECTORY', directoryType: 'POSITION', directoryId: 'position-1' } }] })).resolves.toBeUndefined();
   });
 
-  it('keeps workflow definitions separate from assessment modules and requires an executor for every flow type', () => {
+  it('normalizes a confirmation step to the bound assessed employee executor', () => {
+    const parser = new PerformanceTemplateParser();
+    const parsed = parser.assertValidDefinition({
+      schemaVersion: 1,
+      name: '确认模板',
+      modules: [{ id: 'evaluation', name: '人工模块', type: 'EVALUATION', enabled: true, participatesInTotal: true, weight: 100, description: '', executor: { type: 'USER', executionMode: 'SINGLE', employeeIds: ['employee-1'] }, indicators: [] }],
+      workflow: { manualSteps: [{ id: 'confirm', name: '本人确认', type: 'CONFIRMATION', executor: { type: 'USER', executionMode: 'SINGLE', employeeIds: ['other-employee'] } }] },
+    }, true);
+
+    expect(parsed.workflow?.manualSteps[0]).toMatchObject({ type: 'CONFIRMATION', executor: { type: 'PARTICIPANT', executionMode: 'SINGLE' } });
+  });
+
+  it('keeps workflow definitions separate from assessment modules and requires an executor for non-confirmation flow types', () => {
     const parser = new PerformanceTemplateParser();
     const parsed = parser.assertValidDefinition({
       schemaVersion: 1,
@@ -462,12 +474,36 @@ describe('Performance template archive and draft activities', () => {
     expect(parsed.modules).toHaveLength(1);
     expect(parsed.workflow?.manualSteps).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'review', type: 'REVIEW' }),
-      expect.objectContaining({ id: 'confirm', type: 'CONFIRMATION', executor: expect.objectContaining({ employeeIds: ['employee-3'] }) }),
+      expect.objectContaining({ id: 'confirm', type: 'CONFIRMATION', executor: expect.objectContaining({ type: 'PARTICIPANT', executionMode: 'SINGLE' }) }),
     ]));
     expect(() => parser.assertValidDefinition({
       ...parsed,
-      workflow: { manualSteps: [{ id: 'missing-executor', name: '无执行人步骤', type: 'CONFIRMATION' }] },
+      workflow: { manualSteps: [{ id: 'missing-executor', name: '无执行人步骤', type: 'REVIEW' }] },
     }, true)).toThrow();
+  });
+
+  it('binds a confirmation workflow task to the assessed employee instead of the template executor', async () => {
+    const employee = { id: 'assessed-employee', name: '被考核员工', employeeNo: 'E001', workEmail: 'employee@example.invalid', mobile: null, user: null };
+    const created = { id: 'confirmation-task', assignees: [{ employee: { workEmail: employee.workEmail, mobile: null } }], instance: { cycle: { id: 'cycle-1' }, employee: { name: employee.name } } };
+    const createWorkflowTask = jest.fn().mockResolvedValue(created);
+    const updateInstance = jest.fn().mockResolvedValue({});
+    const prisma = {
+      performanceInstance: { findUnique: jest.fn().mockResolvedValue({ id: 'instance-1', assessmentStatus: ProcessStatus.COMPLETED, finalScore: 90, actualAmount: 900, cycle: { periodStart: new Date('2026-01-01') }, employee }) },
+      performanceWorkflowTask: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn((callback) => callback({ performanceWorkflowTask: { create: createWorkflowTask }, performanceInstance: { update: updateInstance } })),
+    };
+    const service = new PerformanceService(prisma as never, {} as never, { create: jest.fn() } as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    jest.spyOn(service as any, 'workflowManualSteps').mockReturnValue([{ id: 'confirm', name: '本人确认', type: 'CONFIRMATION', executor: { type: 'PARTICIPANT', executionMode: 'SINGLE' } }]);
+    jest.spyOn(service as any, 'notifyWorkflowTaskOpened').mockResolvedValue(undefined);
+
+    await (service as any).openWorkflowStep('instance-1', 0);
+
+    expect(createWorkflowTask).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        executorNameSnapshot: employee.name,
+        assignees: { create: [expect.objectContaining({ employeeId: employee.id, userId: null, displayNameSnapshot: employee.name })] },
+      }),
+    }));
   });
 
   it('records an accountless employee notification using employee contact data', async () => {

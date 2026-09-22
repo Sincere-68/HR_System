@@ -42,6 +42,26 @@ describe('PerformanceFeishuTaskInboxPage', () => {
     expect(screen.getByText('正在等待飞书身份授权，请从飞书个人提醒卡片进入')).toBeInTheDocument();
   });
 
+  it('shows dispatched indicators and standards as numbered items in the assessment modal', async () => {
+    sessionStorage.setItem('hr_demo_feishu_task_token', 'session-token');
+    inboxData = {
+      cycleName: '测试活动', employeeName: '执行人', employeeNo: 'E100', totalPending: 1,
+      assessmentTasks: [{ id: 'task-1', cycleId: 'cycle-1', cycleName: '测试活动', instanceId: 'instance-1', employeeId: 'employee-1', employeeName: '被考核人', employeeNo: 'E001', moduleId: 'evaluation', moduleName: '直属评价', moduleType: 'EVALUATION', moduleOrder: 0, moduleWeight: 100, executionMode: 'SINGLE', status: 'IN_PROGRESS', executorName: '执行人', indicators: [{ id: 'indicator-1', name: '交付质量', description: '按计划完成工作', standards: ['按时完成', '结果准确'], weight: 100 }], assignees: [], isCurrent: true, canSubmit: true, completedAt: null }],
+      workflowTasks: [],
+    };
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const user = userEvent.setup();
+    renderPage('/performance/feishu-task-inbox');
+
+    await user.click(screen.getByRole('button', { name: '处理' }));
+
+    expect(screen.getByRole('region', { name: '下发指标' })).toBeInTheDocument();
+    expect(screen.getByText('交付质量')).toBeInTheDocument();
+    expect(screen.getByText('按计划完成工作')).toBeInTheDocument();
+    expect(screen.getByText('按时完成')).toBeInTheDocument();
+    expect(screen.getByText('结果准确')).toBeInTheDocument();
+  });
+
   it('shows frozen score and actual amount on workflow items and their action modal', async () => {
     sessionStorage.setItem('hr_demo_feishu_task_token', 'session-token');
     inboxData = {

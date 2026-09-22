@@ -19,7 +19,7 @@ export interface PerformanceTemplateModule {
   type: PerformanceModuleKind;
   responsibleRole: string;
   executor: {
-    type: 'AUTO' | 'USER' | 'DIRECTORY';
+    type: 'AUTO' | 'USER' | 'DIRECTORY' | 'PARTICIPANT';
     executionMode?: 'SINGLE' | 'MULTIPLE';
     employeeIds?: string[];
     employeeSnapshots?: Array<{

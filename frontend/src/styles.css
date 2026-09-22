@@ -159,6 +159,13 @@ a { text-decoration: none; }
 .performance-feishu-inbox-heading h2.ant-typography { margin: 4px 0 6px; color: #203847; }
 .performance-feishu-inbox-card { margin-top: 16px; border-color: #dce8ea; }
 .performance-feishu-inbox-card .ant-list-item-meta-title { color: #28424d; }
+.performance-feishu-indicator-section { display: grid; gap: 8px; margin-bottom: 18px; padding: 13px 14px; border: 1px solid #dce8ea; border-radius: 6px; background: #f8fbfb; }
+.performance-feishu-indicators { display: grid; gap: 10px; margin: 0; padding-left: 22px; color: #40545d; }
+.performance-feishu-indicators > li { padding-left: 3px; }
+.performance-feishu-indicators strong, .performance-feishu-indicators span { display: block; }
+.performance-feishu-indicators strong { color: #29434e; line-height: 21px; }
+.performance-feishu-indicators span { margin-top: 2px; color: #65777e; font-size: 12px; line-height: 19px; }
+.performance-feishu-indicators ul { display: grid; gap: 3px; margin: 5px 0 0; padding-left: 18px; color: #4b6069; font-size: 12px; line-height: 19px; }
 .performance-participant-employee { display: grid; gap: 2px; min-width: 0; }
 .performance-participant-employee > span { color: #087f87; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .performance-participant-employee > small { color: #8a9aa1; font-size: 12px; line-height: 17px; }

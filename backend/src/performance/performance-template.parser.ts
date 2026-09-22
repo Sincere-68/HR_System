@@ -217,7 +217,9 @@ export class PerformanceTemplateParser {
         errors.push({ path: `${stepPath}.type`, message: '流程只能新增审核、本人确认、审批或 HR 归档步骤' });
         continue;
       }
-      const executor = this.validateExecutor(rawStep.executor, `${stepPath}.executor`, errors, requireExecutorDetails);
+      const executor = type === 'CONFIRMATION'
+        ? { type: 'PARTICIPANT' as const, executionMode: 'SINGLE' as const }
+        : this.validateExecutor(rawStep.executor, `${stepPath}.executor`, errors, requireExecutorDetails);
       if (executor?.type === 'AUTO') errors.push({ path: `${stepPath}.executor`, message: '手动流程步骤不能使用 AUTO 执行人' });
 
       const rawStrategy = this.stringValue(rawStep.rejectionStrategy);
@@ -264,10 +266,10 @@ export class PerformanceTemplateParser {
 
   private validateExecutor(value: unknown, path: string, errors: PerformanceParseError[], requireDetails: boolean) {
     if (!this.isRecord(value) || !EXECUTOR_TYPES.has(String(value.type))) {
-      errors.push({ path, message: '执行人配置必须为 AUTO、USER 或 DIRECTORY' });
+      errors.push({ path, message: '执行人配置必须为 AUTO、USER、DIRECTORY 或 PARTICIPANT' });
       return null;
     }
-    const type = String(value.type) as 'AUTO' | 'USER' | 'DIRECTORY';
+    const type = String(value.type) as 'AUTO' | 'USER' | 'DIRECTORY' | 'PARTICIPANT';
     const rawExecutionMode = this.stringValue(value.executionMode) ?? 'SINGLE';
     if (!EXECUTION_MODES.has(rawExecutionMode)) {
       errors.push({ path: `${path}.executionMode`, message: '执行方式必须为 SINGLE 或 MULTIPLE' });
@@ -276,6 +278,10 @@ export class PerformanceTemplateParser {
     if (type === 'AUTO') {
       if (executionMode !== 'SINGLE') errors.push({ path: `${path}.executionMode`, message: '系统自动计算只能单人执行' });
       return { type, executionMode } as const;
+    }
+    if (type === 'PARTICIPANT') {
+      if (executionMode !== 'SINGLE') errors.push({ path: `${path}.executionMode`, message: '被考核员工执行人只能单人执行' });
+      return { type, executionMode: 'SINGLE' } as const;
     }
     if (type === 'USER') {
       const employeeIds = Array.isArray(value.employeeIds)

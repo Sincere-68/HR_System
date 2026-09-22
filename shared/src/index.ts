@@ -289,7 +289,7 @@ export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 export const PERFORMANCE_MODULE_TYPES = ['METRIC', 'EVALUATION', 'ADJUSTMENT'] as const;
 export type PerformanceModuleType = (typeof PERFORMANCE_MODULE_TYPES)[number];
 export type PerformanceModuleKind = 'metric' | 'evaluation' | 'adjustment';
-export const PERFORMANCE_EXECUTOR_TYPES = ['AUTO', 'USER', 'DIRECTORY'] as const;
+export const PERFORMANCE_EXECUTOR_TYPES = ['AUTO', 'USER', 'DIRECTORY', 'PARTICIPANT'] as const;
 export type PerformanceExecutorType = (typeof PERFORMANCE_EXECUTOR_TYPES)[number];
 export const PERFORMANCE_EXECUTION_MODES = ['SINGLE', 'MULTIPLE'] as const;
 export type PerformanceExecutionMode = (typeof PERFORMANCE_EXECUTION_MODES)[number];
@@ -1683,6 +1683,7 @@ export interface PerformanceExecutorDefinition {
   type: PerformanceExecutorType;
   /** Defaults to SINGLE for definitions created before execution modes existed. */
   executionMode?: PerformanceExecutionMode;
+  /** PARTICIPANT is the assessed employee bound to the activity instance; it is system-owned and SINGLE only. */
   /** Selected personnel for a USER executor. MULTIPLE requires at least two distinct employees. */
   employeeIds?: string[];
   /** Display-only snapshots paired with employeeIds; never used for authorization. */

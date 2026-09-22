@@ -1473,7 +1473,8 @@ export class PerformanceService {
       moduleType: module.type,
       moduleWeight: module.weight === null ? null : DECIMAL(module.weight),
       moduleSnapshot: module as unknown as Prisma.InputJsonValue,
-      executorType: module.executor.type,
+      // PARTICIPANT is a workflow-only executor and must never be stored on scored module tasks.
+      executorType: module.executor.type === 'PARTICIPANT' ? PerformanceExecutorType.USER : module.executor.type,
       executionMode: this.executionMode(module),
       executorUserId: null,
       executorDirectoryType: module.executor.directoryType,
@@ -1929,7 +1930,9 @@ export class PerformanceService {
     if (existing?.status === TaskStatus.IN_PROGRESS) return;
 
     const effectiveAt = instance.cycle.periodStart;
-    const executors = await this.resolveWorkflowExecutors(step, effectiveAt);
+    const executors = step.type === PerformanceWorkflowStepType.CONFIRMATION
+      ? [instance.employee]
+      : await this.resolveWorkflowExecutors(step, effectiveAt);
     if (executors.length === 0) throw new BadRequestException(`流程步骤“${step.name}”未解析到有效执行人`);
     const executionMode = this.executorExecutionMode(step.executor);
     if (executionMode === PerformanceExecutionMode.SINGLE && executors.length !== 1) throw new BadRequestException(`流程步骤“${step.name}”单人执行必须唯一指定一名人员`);
@@ -1979,6 +1982,7 @@ export class PerformanceService {
 
   private async resolveWorkflowExecutors(step: PerformanceWorkflowManualStepDefinition, effectiveAt: Date) {
     const executor = step.executor;
+    if (executor?.type === ('PARTICIPANT' as PerformanceExecutorType)) throw new BadRequestException(`流程步骤“${step.name}”必须从活动被考核人绑定执行人`);
     if (!executor) throw new BadRequestException(`流程步骤“${step.name}”未配置执行人`);
     const module = { name: step.name, executor } as PerformanceModuleDefinition;
     if (executor.type === PerformanceExecutorType.USER) return this.resolveExecutorEmployees(module, effectiveAt);
