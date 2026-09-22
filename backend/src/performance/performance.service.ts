@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { createDecipheriv, createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   AssignmentStatus,
@@ -999,6 +999,42 @@ export class PerformanceService {
     return this.getCycle(cycleId, user);
   }
 
+  async removeCycleParticipant(user: AuthenticatedUser, cycleId: string, employeeId: string) {
+    this.assertDatabaseMode();
+    const instance = await this.prisma.performanceInstance.findFirst({
+      where: { cycleId, employeeId },
+      include: {
+        cycle: { include: { instances: { select: { organizationId: true } } } },
+        tasks: { select: { status: true } },
+        workflowTasks: { select: { status: true } },
+        revisions: { select: { id: true } },
+      },
+    });
+    if (!instance) throw new NotFoundException('被考核人不存在于该绩效活动');
+    // Removal is scoped to this participant in this activity. Other activity
+    // participants—and the employee's participation in other activities—must
+    // not affect whether this current activity record can be removed.
+    await this.assertCycleScope(user, [{ organizationId: instance.organizationId }], instance.cycle.organizationId);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Result revisions are the only non-cascading child relationship. The
+        // remaining tasks, assignees, actions and delivery rows cascade from
+        // the participant instance in both supported database schemas.
+        await tx.performanceResultRevision.deleteMany({ where: { instanceId: instance.id } });
+        await tx.performanceInstance.delete({ where: { id: instance.id } });
+      });
+    } catch (error) {
+      const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined;
+      throw new InternalServerErrorException(code
+        ? `移除当前活动人员失败（数据库错误 ${code}）`
+        : '移除当前活动人员失败');
+    }
+    // The deleted instance ID is metadata only: logging against the activity
+    // keeps auditing independent of the removed record.
+    await this.audit.create({ userId: user.id }, AuditAction.UPDATE, cycleId, { resource: 'performance-cycle-participant', action: 'remove', cycleId, employeeId, instanceId: instance.id, instanceStatus: instance.status, hadCompletedTask: instance.tasks.some((task) => task.status === TaskStatus.COMPLETED), hadWorkflowTask: instance.workflowTasks.length > 0, hadResultRevision: instance.revisions.length > 0 }, this.prisma, 'performance_cycle_participant');
+    return this.getCycle(cycleId, user);
+  }
+
   async updateCycleParticipantTemplate(
     user: AuthenticatedUser,
     cycleId: string,
@@ -1128,6 +1164,9 @@ export class PerformanceService {
     if (module.requireComment && !dto.comment?.trim()) throw new BadRequestException('当前模块必须填写评语');
     if (task.moduleType === PerformanceModuleType.METRIC) throw new BadRequestException('业务指标模块由系统自动执行');
     const score = task.moduleType === PerformanceModuleType.EVALUATION ? dto.score : dto.adjustment;
+    if (score === undefined && task.moduleType === PerformanceModuleType.ADJUSTMENT && module.optional === true) {
+      return this.completeTask(task, {} as AuthenticatedUser, 0, { adjustment: 0, skipped: true, comment: dto.comment?.trim() || undefined, source: 'FEISHU_WEB', employeeId: principal.employeeId });
+    }
     if (score === undefined || !Number.isFinite(score)) throw new BadRequestException(task.moduleType === PerformanceModuleType.EVALUATION ? '人工评估模块必须提交 0-100 分' : '调整模块必须提交调整分值');
     if (task.moduleType === PerformanceModuleType.EVALUATION && (score < 0 || score > 100)) throw new BadRequestException('人工评估模块分数必须在 0-100 范围内');
     if (task.moduleType === PerformanceModuleType.ADJUSTMENT && (score < (module.adjustmentMin ?? 0) || score > (module.adjustmentMax ?? module.adjustmentMin ?? 0))) throw new BadRequestException(`调整分值必须在 ${module.adjustmentMin ?? 0}-${module.adjustmentMax ?? 0} 范围内`);
@@ -1189,6 +1228,9 @@ export class PerformanceService {
     if (module.requireComment && !dto.comment?.trim()) throw new BadRequestException('当前模块必须填写评语');
     if (task.moduleType === PerformanceModuleType.METRIC) throw new BadRequestException('业务指标模块由系统自动执行');
     const score = task.moduleType === PerformanceModuleType.EVALUATION ? dto.score : dto.adjustment;
+    if (score === undefined && task.moduleType === PerformanceModuleType.ADJUSTMENT && module.optional === true) {
+      return this.completeTask(task, user, 0, { adjustment: 0, skipped: true, comment: dto.comment?.trim() || undefined });
+    }
     if (score === undefined) throw new BadRequestException(task.moduleType === PerformanceModuleType.EVALUATION ? '人工评估模块必须提交 0-100 分' : '调整模块必须提交调整分值');
     if (!Number.isFinite(score)) throw new BadRequestException('提交分数必须是有限数字');
     if (task.moduleType === PerformanceModuleType.EVALUATION && (score < 0 || score > 100)) throw new BadRequestException('人工评估模块分数必须在 0-100 范围内');
@@ -1279,7 +1321,7 @@ export class PerformanceService {
 
   private async processFeishuCardAction(
     payload: Record<string, any>,
-    action: { kind: 'assessment' | 'workflow'; token: string; action?: PerformanceWorkflowAction; moduleType?: PerformanceModuleType },
+    action: { kind: 'assessment' | 'workflow'; token: string; action?: PerformanceWorkflowAction; moduleType?: PerformanceModuleType; skip?: boolean },
     operatorOpenId: string,
     callbackEventId?: string,
   ) {
@@ -1617,6 +1659,9 @@ export class PerformanceService {
     if (module.requireComment && !dto.comment?.trim()) throw new BadRequestException('当前模块必须填写评语');
     if (task.moduleType === PerformanceModuleType.METRIC) throw new BadRequestException('业务指标模块由系统自动执行');
     const score = task.moduleType === PerformanceModuleType.EVALUATION ? dto.score : dto.adjustment;
+    if (score === undefined && task.moduleType === PerformanceModuleType.ADJUSTMENT && module.optional === true) {
+      return this.completeTask(task, user, 0, { adjustment: 0, skipped: true, comment: dto.comment?.trim() || undefined });
+    }
     if (score === undefined) throw new BadRequestException(task.moduleType === PerformanceModuleType.EVALUATION ? '人工评估模块必须提交 0-100 分' : '调整模块必须提交调整分值');
     if (!Number.isFinite(score)) throw new BadRequestException('提交分数必须是有限数字');
     if (task.moduleType === PerformanceModuleType.EVALUATION && (score < 0 || score > 100)) throw new BadRequestException('人工评估模块分数必须在 0-100 范围内');
@@ -2182,6 +2227,7 @@ export class PerformanceService {
             { tag: 'input', name: 'value', placeholder: { tag: 'plain_text', content: label }, input_type: 'text' },
             { tag: 'input', name: 'comment', input_type: 'multiline_text', placeholder: { tag: 'plain_text', content: '评语（可选）' } },
             { tag: 'button', name: 'submit_score', text: { tag: 'plain_text', content: '提交评分' }, type: 'primary', form_action_type: 'submit', behaviors: [{ type: 'callback', value: { kind: 'assessment', token: cardToken, moduleType: task.moduleType } }] },
+            ...(isAdjustment && module.optional ? [{ tag: 'button', name: 'skip_adjustment', text: { tag: 'plain_text', content: '无调整，跳过' }, type: 'default', form_action_type: 'submit', behaviors: [{ type: 'callback', value: { kind: 'assessment', token: cardToken, moduleType: task.moduleType, skip: true } }] }] : []),
           ] },
         ],
       },
@@ -2404,7 +2450,7 @@ export class PerformanceService {
       ?? payload.action?.actions?.[0]?.value;
     const normalized = this.cardActionValue(value);
     if (!normalized || typeof normalized.kind !== 'string' || typeof normalized.token !== 'string') return null;
-    return normalized as { kind: 'assessment' | 'workflow'; token: string; action?: PerformanceWorkflowAction; moduleType?: PerformanceModuleType };
+    return normalized as { kind: 'assessment' | 'workflow'; token: string; action?: PerformanceWorkflowAction; moduleType?: PerformanceModuleType; skip?: boolean };
   }
 
   private cardActionValue(value: unknown): Record<string, unknown> | null {
@@ -2471,7 +2517,7 @@ export class PerformanceService {
   }
 
   private async submitAssessmentCardAction(
-    action: { token: string; moduleType?: PerformanceModuleType; value?: string; comment?: string },
+    action: { token: string; moduleType?: PerformanceModuleType; value?: string; comment?: string; skip?: boolean },
     openId: string,
     callbackEventId: string | undefined,
     messageId?: string | null,
@@ -2487,10 +2533,16 @@ export class PerformanceService {
     await this.assertFeishuEmployeeIdentity(assignee.employee, openId);
     const parsedValue = Number(action.value);
     const comment = action.comment;
-    if (!Number.isFinite(parsedValue)) throw new BadRequestException('飞书卡片分数必须是有限数字');
     const task = assignee.task as unknown as PerformanceTaskRecord;
     if (task.moduleType === PerformanceModuleType.METRIC) throw new BadRequestException('业务指标模块由系统自动计算');
     const module = task.moduleSnapshot as unknown as PerformanceModuleDefinition;
+    if (action.skip === true) {
+      if (task.moduleType !== PerformanceModuleType.ADJUSTMENT || module.optional !== true) throw new BadRequestException('当前调整项不允许跳过');
+      await this.submitAssessmentAssigneeScore(task, assignee as PerformanceTaskAssigneeRecord, 0, { adjustment: 0, skipped: true, comment: comment?.trim() || undefined }, callbackEventId);
+      if (messageId) await this.feishu.updateCard(messageId, this.submittedAssessmentCard(task, 0, comment));
+      return;
+    }
+    if (!Number.isFinite(parsedValue)) throw new BadRequestException('飞书卡片分数必须是有限数字');
     if (task.moduleType === PerformanceModuleType.EVALUATION && (parsedValue < 0 || parsedValue > 100)) throw new BadRequestException('人工评估模块分数必须在 0-100 范围内');
     if (task.moduleType === PerformanceModuleType.ADJUSTMENT && (parsedValue < (module.adjustmentMin ?? 0) || parsedValue > (module.adjustmentMax ?? module.adjustmentMin ?? 0))) throw new BadRequestException(`调整分值必须在 ${module.adjustmentMin ?? 0}-${module.adjustmentMax ?? module.adjustmentMin ?? 0} 范围内`);
     await this.submitAssessmentAssigneeScore(task, assignee as PerformanceTaskAssigneeRecord, parsedValue, { score: task.moduleType === PerformanceModuleType.EVALUATION ? parsedValue : undefined, adjustment: task.moduleType === PerformanceModuleType.ADJUSTMENT ? parsedValue : undefined, comment: comment?.trim() || undefined }, callbackEventId);
@@ -2847,6 +2899,7 @@ export class PerformanceService {
       executionMode: row.executionMode ?? PerformanceExecutionMode.SINGLE,
       status: row.status,
       executorName,
+      optional: this.moduleIsOptional(row.moduleSnapshot),
       indicators: this.indicatorsFromSnapshot(row.moduleSnapshot),
       assignees,
       isCurrent: current,
@@ -2861,6 +2914,10 @@ export class PerformanceService {
     const scope = await this.access.getAccessibleOrganizationIds(user);
     if (cycleOrganizationId && scope?.includes(cycleOrganizationId)) return;
     if (instances.some((instance) => !instance.organizationId || !scope?.includes(instance.organizationId))) throw new ForbiddenException('绩效周期不在当前账号数据范围内');
+  }
+
+  private moduleIsOptional(snapshot: unknown) {
+    return this.isRecord(snapshot) && snapshot.optional === true;
   }
 
   private indicatorsFromSnapshot(snapshot: unknown) {

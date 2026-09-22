@@ -28,7 +28,7 @@ describe('PerformanceFeishuTaskInboxPage', () => {
   afterEach(cleanup);
 
   it('exchanges the OAuth code and stores a dedicated session token', async () => {
-    exchangeFeishuTaskSession.mockResolvedValue({ accessToken: 'feishu-session-token', expiresIn: 600, inbox: { assessmentTasks: [], workflowTasks: [] } });
+    exchangeFeishuTaskSession.mockResolvedValue({ accessToken: 'feishu-session-token', expiresIn: null, inbox: { assessmentTasks: [], workflowTasks: [] } });
     renderPage('/performance/feishu-task-inbox?state=opaque-state&code=authorization-code');
 
     await waitFor(() => expect(exchangeFeishuTaskSession).toHaveBeenCalledWith('opaque-state', 'authorization-code'));

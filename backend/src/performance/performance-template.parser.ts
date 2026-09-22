@@ -154,6 +154,7 @@ export class PerformanceTemplateParser {
           adjustmentDirection: this.stringValue(module.adjustmentDirection) as PerformanceModuleDefinition['adjustmentDirection'],
           adjustmentMin: this.numberValue(module.adjustmentMin) ?? undefined,
           adjustmentMax: this.numberValue(module.adjustmentMax) ?? undefined,
+          optional: module.optional === true || (type === 'ADJUSTMENT' && /工作失误|超额奖励|超额贡献/.test(name)),
           requireComment: module.requireComment === true,
           requireAttachment: module.requireAttachment === true,
         });
@@ -423,7 +424,7 @@ export class PerformanceTemplateParser {
         description: '',
         executor: { type: 'USER' as const, executionMode: 'SINGLE' as const, userIds: [] },
         indicators: [],
-        ...(adjustment ? { adjustmentDirection: /减分项|扣减/.test(name) ? 'DEDUCT' as const : 'ADD' as const, adjustmentMin: 0, adjustmentMax: 100 } : {}),
+        ...(adjustment ? { adjustmentDirection: /减分项|扣减/.test(name) ? 'DEDUCT' as const : 'ADD' as const, adjustmentMin: 0, adjustmentMax: 100, optional: /工作失误|超额奖励|超额贡献/.test(name) } : {}),
       } satisfies PerformanceModuleDefinition;
     };
     const startIndicator = (rawName: string) => {
@@ -581,6 +582,7 @@ export class PerformanceTemplateParser {
           adjustmentDirection: inferred.adjustmentDirection,
           adjustmentMin: 0,
           adjustmentMax: 100,
+          optional: /工作失误|超额奖励|超额贡献/.test(name),
         } : {}),
       } satisfies PerformanceModuleDefinition;
 

@@ -45,6 +45,7 @@ export interface PerformanceTemplateModule {
   adjustmentDirection?: 'ADD' | 'DEDUCT';
   adjustmentMin?: number;
   adjustmentMax?: number;
+  optional?: boolean;
 }
 
 export type PerformanceWorkflowManualStepType = 'REVIEW' | 'CONFIRMATION' | 'APPROVAL' | 'HR_ARCHIVE';
@@ -126,6 +127,7 @@ export function getIndicatorWeightTotal(module: PerformanceTemplateModule) {
 
 export function normalizeMarkdownPerformanceModules(modules: PerformanceTemplateModule[]) {
   return modules.map((module) => {
+    if (module.type === 'adjustment' && /工作失误|超额奖励|超额贡献/.test(module.name)) return { ...module, optional: true };
     if (module.type !== 'metric' || module.name.trim() !== '业务达成') return module;
     return {
       ...module,

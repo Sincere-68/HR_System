@@ -33,7 +33,6 @@ import {
   type UploadProps,
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { performanceApi, useCreatePerformanceTemplate, useCreatePerformanceTemplateVersion, usePerformanceOptions, usePerformanceTemplate } from '../../features/performance/api';
 import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
@@ -42,8 +41,6 @@ import {
   createInitialPerformanceTemplate,
   getFixedWeightTotal,
   getIndicatorWeightTotal,
-  getPerformanceFlowItems,
-  isPerformanceWorkflowModule,
   normalizeMarkdownPerformanceModules,
   reorderPerformanceModules,
   reorderPerformanceWorkflowSteps,
@@ -54,7 +51,7 @@ import {
   type PerformanceWorkflowManualStepType,
 } from '../../features/performance/hrbp-template';
 
-const workflowSteps = ['基本信息', '考核表设置', '流程设置', '下发指标', '权限设置'];
+const workflowSteps = ['基本信息', '流程设置', '审批设置', '下发指标'];
 const workflowManualStepLabels: Record<PerformanceWorkflowManualStepType, string> = {
   REVIEW: '审核',
   CONFIRMATION: '本人确认',
@@ -81,12 +78,6 @@ const moduleTypeLabels: Record<PerformanceModuleKind, string> = {
   evaluation: '人工评估',
   adjustment: '结果调整',
 };
-
-const permissionRows = [
-  { key: 'hr-admin', role: 'HR 管理员', scope: '导入 Markdown、编辑模板、保存模板、下发指标' },
-  { key: 'module-owner', role: '模块负责人', scope: '处理当前模块并查看前序模块已提交信息' },
-  { key: 'approver', role: '审批人', scope: '查看最终得分、金额基数快照和审批金额' },
-];
 
 function ModuleTypeTag({ type }: { type: PerformanceModuleKind }) {
   return <Tag className={`performance-module-kind is-${type}`}>{moduleTypeLabels[type]}</Tag>;
@@ -169,7 +160,6 @@ export function PerformanceTemplateEditorPage() {
   const [modules, setModules] = useState<PerformanceTemplateModule[]>(initialTemplate.modules);
   const [workflowManualSteps, setWorkflowManualSteps] = useState<PerformanceWorkflowManualStep[]>(initialTemplate.workflowManualSteps);
   const [selectedModuleId, setSelectedModuleId] = useState(initialTemplate.modules[0]?.id ?? '');
-  const [selectedWorkflowStepId, setSelectedWorkflowStepId] = useState('');
   const [selectedFlowItemId, setSelectedFlowItemId] = useState('');
   const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
   const [dragOverModuleId, setDragOverModuleId] = useState<string | null>(null);
@@ -204,24 +194,14 @@ export function PerformanceTemplateEditorPage() {
       // Templates saved before explicit workflow executors remain editable.
       executor: { ...step.executor, executionMode: step.executor.executionMode ?? 'SINGLE', employeeIds: step.executor.employeeIds ?? [], employeeSnapshots: step.executor.employeeSnapshots ?? [] },
     })));
-    setSelectedFlowItemId(manualSteps[0]
-      ? `manual:${manualSteps[0].id}`
-      : `assessment:${version.definition.modules.find((module) => isPerformanceWorkflowModule({
-        ...module,
-        type: module.type.toLowerCase() as PerformanceModuleKind,
-      }))?.id ?? ''}`);
+    setSelectedFlowItemId(manualSteps[0] ? `manual:${manualSteps[0].id}` : '');
     setSelectedModuleId(version.definition.modules[0]?.id ?? '');
     setInitializedTemplateId(templateId ?? null);
   }, [existingTemplate.data, initializedTemplateId, templateId]);
 
   const selectedModule = modules.find((module) => module.id === selectedModuleId) ?? modules[0];
-  const flowAssessmentModules = modules.filter(isPerformanceWorkflowModule);
-  const selectedFlowAssessmentModule = flowAssessmentModules.find((module) => `assessment:${module.id}` === selectedFlowItemId);
-  const selectedFlowManualStep = workflowManualSteps.find((step) => `manual:${step.id}` === selectedFlowItemId);
-  const selectedWorkflowStep = selectedFlowManualStep;
-  const activeExecutorModule = activeStep === 2 && selectedFlowAssessmentModule
-    ? selectedFlowAssessmentModule
-    : selectedModule;
+  const selectedWorkflowStep = workflowManualSteps.find((step) => `manual:${step.id}` === selectedFlowItemId);
+  const activeExecutorModule = selectedModule;
   const activeExecutorPicker = activeExecutorModule
     ? executorPickersByModuleId[activeExecutorModule.id]
       ?? executorPickerStateFromSnapshots((activeExecutorModule.executor.employeeSnapshots ?? []).map((snapshot) => ({
@@ -335,7 +315,6 @@ export function PerformanceTemplateEditorPage() {
       rejectionStrategy: 'END',
     };
     setWorkflowManualSteps((current) => [...current, step]);
-    setSelectedWorkflowStepId(id);
     setSelectedFlowItemId(`manual:${id}`);
   };
 
@@ -346,8 +325,7 @@ export function PerformanceTemplateEditorPage() {
           ? { ...step, rejectionStrategy: 'END' as const, rejectionTargetStepId: undefined }
           : step
       ));
-      setSelectedWorkflowStepId(next[0]?.id ?? '');
-      setSelectedFlowItemId(next[0] ? `manual:${next[0].id}` : `assessment:${flowAssessmentModules[0]?.id ?? ''}`);
+      setSelectedFlowItemId(next[0] ? `manual:${next[0].id}` : '');
       return next;
     });
     setWorkflowExecutorPickersByStepId((current) => {
@@ -428,8 +406,7 @@ export function PerformanceTemplateEditorPage() {
       setModules(nextModules);
       setWorkflowManualSteps([]);
       setSelectedModuleId(nextModules[0]?.id ?? '');
-      setSelectedWorkflowStepId('');
-      setSelectedFlowItemId(`assessment:${nextModules.find(isPerformanceWorkflowModule)?.id ?? ''}`);
+      setSelectedFlowItemId('');
       setParseWarnings(parsed.warnings.map((item) => item.message));
       messageApi.success('Markdown 已由后端解析为可确认的模板结构');
     } catch (error) {
@@ -454,15 +431,10 @@ export function PerformanceTemplateEditorPage() {
     const currentTarget = activeStep === 0
       ? '基本信息'
       : activeStep === 1
-        ? selectedModule ? `考核模块“${selectedModule.name}”` : '考核表设置'
-        : activeStep === 2
-          ? selectedFlowAssessmentModule
-            ? `流程步骤“${selectedFlowAssessmentModule.name}”`
-            : selectedWorkflowStep
-              ? `流程步骤“${selectedWorkflowStep.name}”`
-              : '流程设置'
-          : selectedModule ? `模块“${selectedModule.name}”的指标设置` : '指标设置';
-    messageApi.success(`${currentTarget}的修改已保留，请在权限设置中保存模板`);
+        ? selectedModule ? `考核模块“${selectedModule.name}”` : '流程设置'
+        : '审批设置';
+    setActiveStep((step) => Math.min(step + 1, workflowSteps.length - 1));
+    messageApi.success(`${currentTarget}已保存，已进入下一步`);
   };
 
   const saveTemplate = async () => {
@@ -502,12 +474,11 @@ export function PerformanceTemplateEditorPage() {
         : (executor.employeeIds?.length ?? 0) === 0 || (executor.executionMode === 'MULTIPLE' && (executor.employeeIds?.length ?? 0) < 2);
     });
     if (invalidExecutor) {
-      setActiveStep(2);
+      setActiveStep(1);
       messageApi.error(`请为考核模块“${invalidExecutor.name}”配置有效的执行人`);
       return;
     }
     const invalidWorkflowStep = workflowManualSteps.find((step, index) => {
-      if (step.type === 'CONFIRMATION') return false;
       const executor = step.executor ? serializeExecutor(step.executor) : null;
       if (!executor || (executor.type === 'DIRECTORY' ? !executor.directoryType || !executor.directoryId : (executor.employeeIds?.length ?? 0) === 0 || (executor.executionMode === 'MULTIPLE' && (executor.employeeIds?.length ?? 0) < 2))) return true;
       if (step.rejectionStrategy === 'RETURN_PREVIOUS' && index === 0) return true;
@@ -516,7 +487,7 @@ export function PerformanceTemplateEditorPage() {
     });
     if (invalidWorkflowStep) {
       setActiveStep(2);
-      messageApi.error(`请为流程步骤“${invalidWorkflowStep.name}”配置有效的执行人或驳回策略`);
+      messageApi.error(`请为审批步骤“${invalidWorkflowStep.name}”配置有效的执行人或驳回策略`);
       return;
     }
     const definition = {
@@ -536,6 +507,7 @@ export function PerformanceTemplateEditorPage() {
         adjustmentDirection: module.adjustmentDirection,
         adjustmentMin: module.adjustmentMin,
         adjustmentMax: module.adjustmentMax,
+        optional: module.optional,
         requireComment: module.requireComment,
         requireAttachment: module.requireAttachment,
       })),
@@ -657,7 +629,6 @@ export function PerformanceTemplateEditorPage() {
               setModules([]);
               setWorkflowManualSteps([]);
               setSelectedModuleId('');
-              setSelectedWorkflowStepId('');
               setSelectedFlowItemId('');
             }
           }} />
@@ -690,128 +661,99 @@ export function PerformanceTemplateEditorPage() {
     </section>
   );
 
-  const renderFlowSettings = () => {
-    const flowItems = getPerformanceFlowItems(modules, workflowManualSteps);
+  const renderApprovalSettings = () => {
     const workflowExecutor = selectedWorkflowStep?.executor ?? { type: 'USER' as const, executionMode: 'SINGLE' as const, employeeIds: [] };
     const canReject = selectedWorkflowStep?.type === 'REVIEW' || selectedWorkflowStep?.type === 'APPROVAL';
     const precedingSteps = selectedWorkflowStep
       ? workflowManualSteps.slice(0, workflowManualSteps.findIndex((step) => step.id === selectedWorkflowStep.id))
       : [];
-    const moveFlowItem = (sourceItemId: string, targetItemId: string) => {
-      const sourceAssessmentId = sourceItemId.startsWith('assessment:') ? sourceItemId.slice('assessment:'.length) : null;
-      const targetAssessmentId = targetItemId.startsWith('assessment:') ? targetItemId.slice('assessment:'.length) : null;
-      const sourceManualId = sourceItemId.startsWith('manual:') ? sourceItemId.slice('manual:'.length) : null;
-      const targetManualId = targetItemId.startsWith('manual:') ? targetItemId.slice('manual:'.length) : null;
-
-      if (sourceAssessmentId && targetAssessmentId) {
-        setModules((current) => reorderPerformanceModules(current, sourceAssessmentId, targetAssessmentId));
-      } else if (sourceManualId && targetManualId) {
-        setWorkflowManualSteps((current) => reorderPerformanceWorkflowSteps(current, sourceManualId, targetManualId));
-      } else {
-        messageApi.warning('考核表步骤必须排在后续流程步骤之前；同一类型的步骤可拖动排序');
-      }
+    const moveApprovalStep = (sourceStepId: string, targetStepId: string) => {
+      setWorkflowManualSteps((current) => reorderPerformanceWorkflowSteps(current, sourceStepId, targetStepId));
       setDraggedFlowItemId(null);
       setDragOverFlowItemId(null);
     };
     return (
       <section className="performance-template-step-content" aria-labelledby="template-flow-title">
         <div className="performance-template-section-heading">
-          <div><span>执行推进</span><h2 id="template-flow-title">流程设置</h2></div>
-          <p>考核表中启用的业务达成、人工评估和结果调整会按顺序加入流程。定量考核由后端直接计算，不配置执行人也不进入流程；流程新增步骤只推进处理，不参与分数、权重或结果运算。</p>
+          <div><span>考核完成后处理</span><h2 id="template-flow-title">审批设置</h2></div>
+          <p>审批设置只维护审核、本人确认、审批和 HR 归档。考核模块及其评分执行人仅在流程设置中维护，不在此处展示。</p>
         </div>
         <div className="performance-template-workspace performance-workflow-workspace">
-          <aside className="performance-template-module-list" aria-label="绩效流程步骤列表">
+          <aside className="performance-template-module-list" aria-label="绩效审批步骤列表">
             <div className="performance-flow-list-heading">
-              <strong>处理顺序</strong>
+              <strong>审批顺序</strong>
               <span><HolderOutlined /> 拖动调整顺序</span>
-              <Button size="small" icon={<PlusOutlined />} onClick={addWorkflowStep}>新增步骤</Button>
+              <Button size="small" icon={<PlusOutlined />} onClick={addWorkflowStep}>新增审批步骤</Button>
             </div>
             <div className="performance-template-module-scroll">
-              {flowItems.map((item, index) => {
-                const isAssessment = item.source === 'ASSESSMENT';
-                const manualStep = item.manualStep;
-                const isSelected = item.itemId === selectedFlowItemId;
+              {workflowManualSteps.map((step, index) => {
+                const itemId = `manual:${step.id}`;
+                const isSelected = itemId === selectedFlowItemId;
                 return <button
-                  className={`performance-template-module-card${isSelected ? ' is-selected' : ''}${draggedFlowItemId === item.itemId ? ' is-dragging' : ''}${dragOverFlowItemId === item.itemId && draggedFlowItemId !== item.itemId ? ' is-drop-target' : ''}`}
-                  key={item.itemId}
+                  className={`performance-template-module-card${isSelected ? ' is-selected' : ''}${draggedFlowItemId === itemId ? ' is-dragging' : ''}${dragOverFlowItemId === itemId && draggedFlowItemId !== itemId ? ' is-drop-target' : ''}`}
+                  key={itemId}
                   type="button"
                   draggable
                   onClick={() => {
-                    setSelectedFlowItemId(item.itemId);
-                    if (manualStep) setSelectedWorkflowStepId(manualStep.id);
+                    setSelectedFlowItemId(itemId);
                   }}
                   onDragStart={(event) => {
                     event.dataTransfer.effectAllowed = 'move';
-                    event.dataTransfer.setData('text/plain', item.itemId);
-                    setDraggedFlowItemId(item.itemId);
+                    event.dataTransfer.setData('text/plain', step.id);
+                    setDraggedFlowItemId(itemId);
                   }}
                   onDragOver={(event) => {
-                    if (!draggedFlowItemId || draggedFlowItemId === item.itemId) return;
+                    if (!draggedFlowItemId || draggedFlowItemId === itemId) return;
                     event.preventDefault();
                     event.dataTransfer.dropEffect = 'move';
-                    setDragOverFlowItemId(item.itemId);
+                    setDragOverFlowItemId(itemId);
                   }}
                   onDragEnd={() => { setDraggedFlowItemId(null); setDragOverFlowItemId(null); }}
                   onDrop={(event) => {
                     if (!draggedFlowItemId) return;
                     event.preventDefault();
-                    moveFlowItem(draggedFlowItemId, item.itemId);
+                    moveApprovalStep(draggedFlowItemId.replace(/^manual:/, ''), step.id);
                   }}
                 >
-                  <span className="performance-module-card-head"><b>{index + 1}</b><strong>{item.name}</strong><span className="performance-module-drag-handle" aria-label="拖动调整流程步骤顺序"><HolderOutlined /></span></span>
-                  <span className="performance-module-card-meta"><Tag>{isAssessment ? item.type === 'ASSESSMENT_ADJUSTMENT' ? '结果调整' : '人工评估' : workflowManualStepLabels[item.type as PerformanceWorkflowManualStepType]}</Tag><span>{isAssessment ? '考核表步骤' : '后续操作'}</span></span>
+                  <span className="performance-module-card-head"><b>{index + 1}</b><strong>{step.name}</strong><span className="performance-module-drag-handle" aria-label="拖动调整审批步骤顺序"><HolderOutlined /></span></span>
+                  <span className="performance-module-card-meta"><Tag>{workflowManualStepLabels[step.type]}</Tag><span>审批步骤</span></span>
                 </button>;
               })}
-              {!flowItems.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请先在考核表新增评估模块，或新增后续流程步骤" /> : null}
+              {!workflowManualSteps.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请新增审核、本人确认、审批或 HR 归档步骤" /> : null}
             </div>
           </aside>
-          {selectedFlowAssessmentModule ? <section className="performance-template-detail" aria-labelledby="selected-flow-assessment-title">
-            <div className="performance-template-detail-title"><div><ModuleTypeTag type={selectedFlowAssessmentModule.type} /><h3 id="selected-flow-assessment-title">{selectedFlowAssessmentModule.name}</h3></div><Tag>来自考核表</Tag></div>
-            <div className="performance-template-detail-form">
-              <label><span>步骤类型</span><Input value={selectedFlowAssessmentModule.type === 'adjustment' ? '结果调整' : '人工评估'} disabled /></label>
-              <label><span><i>*</i> 执行人来源</span><Select aria-label="考核流程执行人来源" value={selectedFlowAssessmentModule.executor.type === 'AUTO' ? undefined : selectedFlowAssessmentModule.executor.type} options={[{ label: '具体执行人', value: 'USER' }, { label: '特定岗位名称', value: 'DIRECTORY' }]} onChange={(type: 'USER' | 'DIRECTORY') => { resetExecutorPicker(selectedFlowAssessmentModule.id); updateModule(selectedFlowAssessmentModule.id, { executor: type === 'USER' ? { type, executionMode: 'SINGLE', employeeIds: [], employeeSnapshots: [] } : { type, executionMode: 'SINGLE' } }); }} /></label>
-              <label><span><i>*</i> 执行方式</span><Select aria-label="考核流程执行方式" disabled={selectedFlowAssessmentModule.executor.type === 'DIRECTORY'} value={selectedFlowAssessmentModule.executor.executionMode ?? 'SINGLE'} options={[{ label: '单人执行', value: 'SINGLE' }, { label: '多人执行', value: 'MULTIPLE', disabled: selectedFlowAssessmentModule.executor.type !== 'USER' }]} onChange={(executionMode: 'SINGLE' | 'MULTIPLE') => updateModule(selectedFlowAssessmentModule.id, { executor: { type: 'USER', executionMode, employeeIds: executionMode === 'SINGLE' ? (selectedFlowAssessmentModule.executor.employeeIds ?? []).slice(0, 1) : selectedFlowAssessmentModule.executor.employeeIds ?? [], employeeSnapshots: executionMode === 'SINGLE' ? (selectedFlowAssessmentModule.executor.employeeSnapshots ?? []).slice(0, 1) : selectedFlowAssessmentModule.executor.employeeSnapshots ?? [] } })} /></label>
-              {selectedFlowAssessmentModule.executor.type === 'USER' ? <>
-                <label><span>筛选部门</span><OrganizationTreeSelect aria-label="筛选考核流程执行人部门" allowClear organizations={organizations.data ?? []} placeholder="部门" value={activeExecutorPicker.filterOrganizationId} onChange={(organizationId) => updateExecutorPicker(selectedFlowAssessmentModule.id, { filterOrganizationId: organizationId ?? undefined })} /></label>
-                <label><span>姓名或工号</span><Input aria-label="搜索考核流程执行人" allowClear placeholder="输入姓名或工号筛选" value={activeExecutorPicker.keyword} onChange={(event) => updateExecutorPicker(selectedFlowAssessmentModule.id, { keyword: event.target.value })} /></label>
-                <label><span><i>*</i> 指定人员</span><Select aria-label="考核流程具体执行人" mode={(selectedFlowAssessmentModule.executor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? 'multiple' : undefined} showSearch={false} maxTagCount="responsive" loading={executorEmployees.isFetching} options={visibleExecutorEmployees.map((employee) => ({ label: formatExecutorEmployee(employee), value: employee.employeeId }))} value={(selectedFlowAssessmentModule.executor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? selectedFlowAssessmentModule.executor.employeeIds ?? [] : selectedFlowAssessmentModule.executor.employeeIds?.[0]} onChange={(value: string | string[]) => { const employeeIds = Array.isArray(value) ? value : value ? [value] : []; const selectedEmployees = employeeIds.map((employeeId) => visibleExecutorEmployees.find((employee) => employee.employeeId === employeeId) ?? activeExecutorPicker.selectedById[employeeId]).filter((employee): employee is ExecutorDisplayEmployee => Boolean(employee)); const selectedById = Object.fromEntries(selectedEmployees.map((employee) => [employee.employeeId, employee])); updateExecutorPicker(selectedFlowAssessmentModule.id, { selectedById }); updateModule(selectedFlowAssessmentModule.id, { executor: { type: 'USER', executionMode: selectedFlowAssessmentModule.executor.executionMode ?? 'SINGLE', employeeIds, employeeSnapshots: selectedEmployees.map(toExecutorEmployeeSnapshot) } }); confirmExecutorSelection(selectedEmployees.map((employee) => employee.name).join('、') || '已清空'); }} /></label>
-              </> : null}
-              {selectedFlowAssessmentModule.executor.type === 'DIRECTORY' ? <label><span><i>*</i> 特定岗位名称</span><Select aria-label="考核流程特定岗位名称" showSearch options={[...(options.data?.positions ?? []).map((option) => ({ label: `职位：${option.name}`, value: `POSITION:${option.id}` })), ...(options.data?.jobTitles ?? []).map((option) => ({ label: `职务：${option.code} - ${option.name}`, value: `JOB_TITLE:${option.id}` }))]} value={selectedFlowAssessmentModule.executor.directoryId ? `${selectedFlowAssessmentModule.executor.directoryType}:${selectedFlowAssessmentModule.executor.directoryId}` : undefined} onChange={(value: string) => { const [directoryType, directoryId] = value.split(':'); updateModule(selectedFlowAssessmentModule.id, { executor: { type: 'DIRECTORY', executionMode: 'SINGLE', directoryType: directoryType as 'POSITION' | 'JOB_TITLE', directoryId } }); }} /></label> : null}
-            </div>
-            <div className="performance-template-flow-note"><InfoCircleOutlined /><span>模块名称、启用状态、权重和指标只在考核表设置中维护；此处只配置执行人。</span></div>
-          </section> : null}
           {selectedWorkflowStep ? <section className="performance-template-detail" aria-labelledby="selected-workflow-step-title">
-            <div className="performance-template-detail-title"><div><Tag>{workflowManualStepLabels[selectedWorkflowStep.type]}</Tag><h3 id="selected-workflow-step-title">{selectedWorkflowStep.name}</h3></div><Tooltip title="删除后续流程步骤"><Button aria-label="删除流程步骤" danger type="text" icon={<DeleteOutlined />} onClick={() => removeWorkflowStep(selectedWorkflowStep.id)} /></Tooltip></div>
+            <div className="performance-template-detail-title"><div><Tag>{workflowManualStepLabels[selectedWorkflowStep.type]}</Tag><h3 id="selected-workflow-step-title">{selectedWorkflowStep.name}</h3></div><Tooltip title="删除审批步骤"><Button aria-label="删除审批步骤" danger type="text" icon={<DeleteOutlined />} onClick={() => removeWorkflowStep(selectedWorkflowStep.id)} /></Tooltip></div>
             <div className="performance-template-detail-form">
-              <label><span><i>*</i> 步骤名称</span><Input aria-label="流程步骤名称" value={selectedWorkflowStep.name} onChange={(event) => updateWorkflowStep(selectedWorkflowStep.id, { name: event.target.value })} /></label>
-              <label><span><i>*</i> 步骤类型</span><Select aria-label="流程步骤类型" value={selectedWorkflowStep.type} options={(Object.keys(workflowManualStepLabels) as PerformanceWorkflowManualStepType[]).map((type) => ({ label: workflowManualStepLabels[type], value: type }))} onChange={(type: PerformanceWorkflowManualStepType) => updateWorkflowStep(selectedWorkflowStep.id, { type, name: selectedWorkflowStep.name === workflowManualStepLabels[selectedWorkflowStep.type] ? workflowManualStepLabels[type] : selectedWorkflowStep.name, rejectionStrategy: type === 'REVIEW' || type === 'APPROVAL' ? selectedWorkflowStep.rejectionStrategy ?? 'END' : undefined, rejectionTargetStepId: undefined })} /></label>
-              <label><span><i>*</i> 执行人来源</span><Select aria-label="流程执行人来源" value={workflowExecutor.type === 'AUTO' ? undefined : workflowExecutor.type} options={[{ label: '具体执行人', value: 'USER' }, { label: '特定岗位名称', value: 'DIRECTORY' }]} onChange={(type: 'USER' | 'DIRECTORY') => updateWorkflowStep(selectedWorkflowStep.id, { executor: type === 'USER' ? { type, executionMode: 'SINGLE', employeeIds: [], employeeSnapshots: [] } : { type, executionMode: 'SINGLE' } })} /></label>
-              <label><span><i>*</i> 执行方式</span><Select aria-label="流程执行方式" disabled={workflowExecutor.type === 'DIRECTORY'} value={workflowExecutor.executionMode ?? 'SINGLE'} options={[{ label: '单人执行', value: 'SINGLE' }, { label: '多人执行', value: 'MULTIPLE', disabled: workflowExecutor.type !== 'USER' }]} onChange={(executionMode: 'SINGLE' | 'MULTIPLE') => updateWorkflowStep(selectedWorkflowStep.id, { executor: { type: 'USER', executionMode, employeeIds: executionMode === 'SINGLE' ? selectedWorkflowExecutorEmployeeIds.slice(0, 1) : selectedWorkflowExecutorEmployeeIds, employeeSnapshots: executionMode === 'SINGLE' ? (workflowExecutor.employeeSnapshots ?? []).slice(0, 1) : workflowExecutor.employeeSnapshots ?? [] } })} /></label>
+              <label><span><i>*</i> 步骤名称</span><Input aria-label="审批步骤名称" value={selectedWorkflowStep.name} onChange={(event) => updateWorkflowStep(selectedWorkflowStep.id, { name: event.target.value })} /></label>
+              <label><span><i>*</i> 步骤类型</span><Select aria-label="审批步骤类型" value={selectedWorkflowStep.type} options={(Object.keys(workflowManualStepLabels) as PerformanceWorkflowManualStepType[]).map((type) => ({ label: workflowManualStepLabels[type], value: type }))} onChange={(type: PerformanceWorkflowManualStepType) => updateWorkflowStep(selectedWorkflowStep.id, { type, name: selectedWorkflowStep.name === workflowManualStepLabels[selectedWorkflowStep.type] ? workflowManualStepLabels[type] : selectedWorkflowStep.name, rejectionStrategy: type === 'REVIEW' || type === 'APPROVAL' ? selectedWorkflowStep.rejectionStrategy ?? 'END' : undefined, rejectionTargetStepId: undefined })} /></label>
+              <label><span><i>*</i> 执行人来源</span><Select aria-label="审批执行人来源" value={workflowExecutor.type === 'AUTO' ? undefined : workflowExecutor.type} options={[{ label: '具体执行人', value: 'USER' }, { label: '特定岗位名称', value: 'DIRECTORY' }]} onChange={(type: 'USER' | 'DIRECTORY') => updateWorkflowStep(selectedWorkflowStep.id, { executor: type === 'USER' ? { type, executionMode: 'SINGLE', employeeIds: [], employeeSnapshots: [] } : { type, executionMode: 'SINGLE' } })} /></label>
+              <label><span><i>*</i> 执行方式</span><Select aria-label="审批执行方式" disabled={workflowExecutor.type === 'DIRECTORY'} value={workflowExecutor.executionMode ?? 'SINGLE'} options={[{ label: '单人执行', value: 'SINGLE' }, { label: '多人执行', value: 'MULTIPLE', disabled: workflowExecutor.type !== 'USER' }]} onChange={(executionMode: 'SINGLE' | 'MULTIPLE') => updateWorkflowStep(selectedWorkflowStep.id, { executor: { type: 'USER', executionMode, employeeIds: executionMode === 'SINGLE' ? selectedWorkflowExecutorEmployeeIds.slice(0, 1) : selectedWorkflowExecutorEmployeeIds, employeeSnapshots: executionMode === 'SINGLE' ? (workflowExecutor.employeeSnapshots ?? []).slice(0, 1) : workflowExecutor.employeeSnapshots ?? [] } })} /></label>
               {workflowExecutor.type === 'USER' ? <>
-                <label><span>筛选部门</span><OrganizationTreeSelect aria-label="筛选流程执行人部门" allowClear organizations={organizations.data ?? []} placeholder="部门" value={activeWorkflowExecutorPicker.filterOrganizationId} onChange={(organizationId) => updateWorkflowExecutorPicker(selectedWorkflowStep.id, { filterOrganizationId: organizationId ?? undefined })} /></label>
-                <label><span>姓名或工号</span><Input aria-label="搜索流程执行人" allowClear placeholder="输入姓名或工号筛选" value={activeWorkflowExecutorPicker.keyword} onChange={(event) => updateWorkflowExecutorPicker(selectedWorkflowStep.id, { keyword: event.target.value })} /></label>
-                <label><span><i>*</i> 指定人员</span><Select aria-label="流程具体执行人" mode={(workflowExecutor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? 'multiple' : undefined} showSearch={false} maxTagCount="responsive" loading={executorEmployees.isFetching} options={visibleExecutorEmployees.map((employee) => ({ label: formatExecutorEmployee(employee), value: employee.employeeId }))} value={(workflowExecutor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? selectedWorkflowExecutorEmployeeIds : selectedWorkflowExecutorEmployeeIds[0]} onChange={(value: string | string[]) => { const employeeIds = Array.isArray(value) ? value : value ? [value] : []; const selectedEmployees = employeeIds.map((employeeId) => visibleExecutorEmployees.find((employee) => employee.employeeId === employeeId) ?? activeWorkflowExecutorPicker.selectedById[employeeId]).filter((employee): employee is ExecutorDisplayEmployee => Boolean(employee)); const selectedById = Object.fromEntries(selectedEmployees.map((employee) => [employee.employeeId, employee])); updateWorkflowExecutorPicker(selectedWorkflowStep.id, { selectedById }); updateWorkflowStep(selectedWorkflowStep.id, { executor: { type: 'USER', executionMode: workflowExecutor.executionMode ?? 'SINGLE', employeeIds, employeeSnapshots: selectedEmployees.map(toExecutorEmployeeSnapshot) } }); confirmExecutorSelection(selectedEmployees.map((employee) => employee.name).join('、') || '已清空'); }} /></label>
+                <label><span>筛选部门</span><OrganizationTreeSelect aria-label="筛选审批执行人部门" allowClear organizations={organizations.data ?? []} placeholder="部门" value={activeWorkflowExecutorPicker.filterOrganizationId} onChange={(organizationId) => updateWorkflowExecutorPicker(selectedWorkflowStep.id, { filterOrganizationId: organizationId ?? undefined })} /></label>
+                <label><span>姓名或工号</span><Input aria-label="搜索审批执行人" allowClear placeholder="输入姓名或工号筛选" value={activeWorkflowExecutorPicker.keyword} onChange={(event) => updateWorkflowExecutorPicker(selectedWorkflowStep.id, { keyword: event.target.value })} /></label>
+                <label><span><i>*</i> 指定人员</span><Select aria-label="审批具体执行人" mode={(workflowExecutor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? 'multiple' : undefined} showSearch={false} maxTagCount="responsive" loading={executorEmployees.isFetching} options={visibleExecutorEmployees.map((employee) => ({ label: formatExecutorEmployee(employee), value: employee.employeeId }))} value={(workflowExecutor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? selectedWorkflowExecutorEmployeeIds : selectedWorkflowExecutorEmployeeIds[0]} onChange={(value: string | string[]) => { const employeeIds = Array.isArray(value) ? value : value ? [value] : []; const selectedEmployees = employeeIds.map((employeeId) => visibleExecutorEmployees.find((employee) => employee.employeeId === employeeId) ?? activeWorkflowExecutorPicker.selectedById[employeeId]).filter((employee): employee is ExecutorDisplayEmployee => Boolean(employee)); const selectedById = Object.fromEntries(selectedEmployees.map((employee) => [employee.employeeId, employee])); updateWorkflowExecutorPicker(selectedWorkflowStep.id, { selectedById }); updateWorkflowStep(selectedWorkflowStep.id, { executor: { type: 'USER', executionMode: workflowExecutor.executionMode ?? 'SINGLE', employeeIds, employeeSnapshots: selectedEmployees.map(toExecutorEmployeeSnapshot) } }); confirmExecutorSelection(selectedEmployees.map((employee) => employee.name).join('、') || '已清空'); }} /></label>
               </> : null}
-              {workflowExecutor.type === 'DIRECTORY' ? <label><span><i>*</i> 特定岗位名称</span><Select aria-label="流程特定岗位名称" showSearch options={[...(options.data?.positions ?? []).map((option) => ({ label: `职位：${option.name}`, value: `POSITION:${option.id}` })), ...(options.data?.jobTitles ?? []).map((option) => ({ label: `职务：${option.code} - ${option.name}`, value: `JOB_TITLE:${option.id}` }))]} value={workflowExecutor.directoryId ? `${workflowExecutor.directoryType}:${workflowExecutor.directoryId}` : undefined} onChange={(value: string) => { const [directoryType, directoryId] = value.split(':'); updateWorkflowStep(selectedWorkflowStep.id, { executor: { type: 'DIRECTORY', executionMode: 'SINGLE', directoryType: directoryType as 'POSITION' | 'JOB_TITLE', directoryId } }); }} /></label> : null}
+              {workflowExecutor.type === 'DIRECTORY' ? <label><span><i>*</i> 特定岗位名称</span><Select aria-label="审批特定岗位名称" showSearch options={[...(options.data?.positions ?? []).map((option) => ({ label: `职位：${option.name}`, value: `POSITION:${option.id}` })), ...(options.data?.jobTitles ?? []).map((option) => ({ label: `职务：${option.code} - ${option.name}`, value: `JOB_TITLE:${option.id}` }))]} value={workflowExecutor.directoryId ? `${workflowExecutor.directoryType}:${workflowExecutor.directoryId}` : undefined} onChange={(value: string) => { const [directoryType, directoryId] = value.split(':'); updateWorkflowStep(selectedWorkflowStep.id, { executor: { type: 'DIRECTORY', executionMode: 'SINGLE', directoryType: directoryType as 'POSITION' | 'JOB_TITLE', directoryId } }); }} /></label> : null}
               {canReject ? <>
                 <label><span>驳回策略</span><Select aria-label="驳回策略" value={selectedWorkflowStep.rejectionStrategy ?? 'END'} options={[{ label: '直接结束流程', value: 'END' }, { label: '退回上一个后续步骤', value: 'RETURN_PREVIOUS', disabled: precedingSteps.length === 0 }, { label: '退回指定后续步骤', value: 'RETURN_TO_STEP', disabled: precedingSteps.length === 0 }]} onChange={(rejectionStrategy: 'END' | 'RETURN_PREVIOUS' | 'RETURN_TO_STEP') => updateWorkflowStep(selectedWorkflowStep.id, { rejectionStrategy, rejectionTargetStepId: rejectionStrategy === 'RETURN_TO_STEP' ? precedingSteps[0]?.id : undefined })} /></label>
                 {selectedWorkflowStep.rejectionStrategy === 'RETURN_TO_STEP' ? <label><span>退回步骤</span><Select aria-label="退回指定步骤" value={selectedWorkflowStep.rejectionTargetStepId} options={precedingSteps.map((step) => ({ label: step.name, value: step.id }))} onChange={(rejectionTargetStepId: string) => updateWorkflowStep(selectedWorkflowStep.id, { rejectionTargetStepId })} /></label> : null}
               </> : null}
             </div>
-            <div className="performance-template-flow-note"><InfoCircleOutlined /><span>此流程类型也必须指定执行人。后续流程只保存处理动作、意见与审计，不会重新打开、修改或重算考核表。</span></div>
+            <div className="performance-template-flow-note"><InfoCircleOutlined /><span>审批步骤必须指定执行人。审批只保存处理动作、意见与审计，不会重新打开、修改或重算考核表。</span></div>
           </section> : null}
-          {!selectedFlowAssessmentModule && !selectedWorkflowStep ? <section className="performance-template-empty-module" aria-label="尚未选择流程步骤"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择流程中的步骤，或通过左上方新增步骤加入后续操作。" /></section> : null}
+          {!selectedWorkflowStep ? <section className="performance-template-empty-module" aria-label="尚未选择审批步骤"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择审批步骤，或通过左上方新增审批步骤加入审核、本人确认、审批或 HR 归档。" /></section> : null}
         </div>
       </section>
     );
   };
 
-  const renderAssessmentSettings = () => (
+  const renderProcessSettings = () => (
     <section className="performance-template-step-content" aria-labelledby="template-assessment-title">
       <div className="performance-template-section-heading">
         <div>
-          <span>评分来源、权重与启用状态</span>
-          <h2 id="template-assessment-title">考核表设置</h2>
+          <span>考核模块、执行人、权重与启用状态</span>
+          <h2 id="template-assessment-title">流程设置</h2>
         </div>
         <div className={`performance-weight-total${isWeightValid ? ' is-valid' : ' is-invalid'}`} role="status">
           {isWeightValid ? <CheckCircleFilled /> : <InfoCircleOutlined />}
@@ -821,7 +763,7 @@ export function PerformanceTemplateEditorPage() {
       {!isWeightValid ? <Alert className="performance-weight-alert" type="error" showIcon message={`当前固定模块权重合计为 ${fixedWeightTotal}%，保存模板前必须调整为 100%。`} /> : null}
       <div className="performance-template-workspace">
         {renderModuleList('assessment')}
-        {!selectedModule ? <EmptyModulePrompt title="尚未配置考核模块" description="请先新增模块并配置启用状态和权重。执行人请在流程设置中配置。" onAdd={addModule} /> : null}
+        {!selectedModule ? <EmptyModulePrompt title="尚未配置考核模块" description="请先新增模块并配置启用状态、权重和执行人。" onAdd={addModule} /> : null}
         {selectedModule ? (
           <section className="performance-template-detail" aria-labelledby="selected-assessment-module-title">
             <div className="performance-template-detail-title">
@@ -851,6 +793,7 @@ export function PerformanceTemplateEditorPage() {
                 <span>参与总分计算</span>
                 <Checkbox checked={selectedModule.participatesInTotal} disabled={selectedModule.type === 'adjustment'} onChange={(event) => updateModule(selectedModule.id, { participatesInTotal: event.target.checked })}>计入固定权重</Checkbox>
               </label>
+              {selectedModule.type === 'adjustment' ? <label><span>无调整时可跳过</span><Checkbox checked={selectedModule.optional ?? false} onChange={(event) => updateModule(selectedModule.id, { optional: event.target.checked })}>不需要加分或扣分时，不阻塞后续流程</Checkbox></label> : null}
               {selectedModule.participatesInTotal ? (
                 <label>
                   <span><i>*</i> 模块权重</span>
@@ -867,8 +810,18 @@ export function PerformanceTemplateEditorPage() {
               )}
               <label>
                 <span>评分口径</span>
-                <Input value={selectedModule.type === 'metric' ? '定量考核由后端直接计算，不配置执行人，也不进入流程' : selectedModule.type === 'adjustment' ? '按事实依据进行额外加减分，并映射为流程步骤' : '百分制，模块总分按模块权重参与结果计算，并映射为流程步骤'} disabled />
+                <Input value={selectedModule.type === 'metric' ? '定量考核由后端直接计算，不配置执行人' : selectedModule.type === 'adjustment' ? '按事实依据进行额外加减分，由指定执行人提交' : '百分制，模块总分按模块权重参与结果计算，由指定执行人提交'} disabled />
               </label>
+              {selectedModule.type !== 'metric' ? <>
+                <label><span><i>*</i> 执行人来源</span><Select aria-label="考核执行人来源" value={selectedModule.executor.type === 'AUTO' ? undefined : selectedModule.executor.type} options={[{ label: '具体执行人', value: 'USER' }, { label: '特定岗位名称', value: 'DIRECTORY' }]} onChange={(type: 'USER' | 'DIRECTORY') => { resetExecutorPicker(selectedModule.id); updateModule(selectedModule.id, { executor: type === 'USER' ? { type, executionMode: 'SINGLE', employeeIds: [], employeeSnapshots: [] } : { type, executionMode: 'SINGLE' } }); }} /></label>
+                <label><span><i>*</i> 执行方式</span><Select aria-label="考核执行方式" disabled={selectedModule.executor.type === 'DIRECTORY'} value={selectedModule.executor.executionMode ?? 'SINGLE'} options={[{ label: '单人执行', value: 'SINGLE' }, { label: '多人执行', value: 'MULTIPLE', disabled: selectedModule.executor.type !== 'USER' }]} onChange={(executionMode: 'SINGLE' | 'MULTIPLE') => updateModule(selectedModule.id, { executor: { type: 'USER', executionMode, employeeIds: executionMode === 'SINGLE' ? (selectedModule.executor.employeeIds ?? []).slice(0, 1) : selectedModule.executor.employeeIds ?? [], employeeSnapshots: executionMode === 'SINGLE' ? (selectedModule.executor.employeeSnapshots ?? []).slice(0, 1) : selectedModule.executor.employeeSnapshots ?? [] } })} /></label>
+                {selectedModule.executor.type === 'USER' ? <>
+                  <label><span>筛选部门</span><OrganizationTreeSelect aria-label="筛选考核执行人部门" allowClear organizations={organizations.data ?? []} placeholder="部门" value={activeExecutorPicker.filterOrganizationId} onChange={(organizationId) => updateExecutorPicker(selectedModule.id, { filterOrganizationId: organizationId ?? undefined })} /></label>
+                  <label><span>姓名或工号</span><Input aria-label="搜索考核执行人" allowClear placeholder="输入姓名或工号筛选" value={activeExecutorPicker.keyword} onChange={(event) => updateExecutorPicker(selectedModule.id, { keyword: event.target.value })} /></label>
+                  <label><span><i>*</i> 指定人员</span><Select aria-label="考核具体执行人" mode={(selectedModule.executor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? 'multiple' : undefined} showSearch={false} maxTagCount="responsive" loading={executorEmployees.isFetching} options={visibleExecutorEmployees.map((employee) => ({ label: formatExecutorEmployee(employee), value: employee.employeeId }))} value={(selectedModule.executor.executionMode ?? 'SINGLE') === 'MULTIPLE' ? selectedModule.executor.employeeIds ?? [] : selectedModule.executor.employeeIds?.[0]} onChange={(value: string | string[]) => { const employeeIds = Array.isArray(value) ? value : value ? [value] : []; const selectedEmployees = employeeIds.map((employeeId) => visibleExecutorEmployees.find((employee) => employee.employeeId === employeeId) ?? activeExecutorPicker.selectedById[employeeId]).filter((employee): employee is ExecutorDisplayEmployee => Boolean(employee)); updateExecutorPicker(selectedModule.id, { selectedById: Object.fromEntries(selectedEmployees.map((employee) => [employee.employeeId, employee])) }); updateModule(selectedModule.id, { executor: { type: 'USER', executionMode: selectedModule.executor.executionMode ?? 'SINGLE', employeeIds, employeeSnapshots: selectedEmployees.map(toExecutorEmployeeSnapshot) } }); confirmExecutorSelection(selectedEmployees.map((employee) => employee.name).join('、') || '已清空'); }} /></label>
+                </> : null}
+                {selectedModule.executor.type === 'DIRECTORY' ? <label><span><i>*</i> 特定岗位名称</span><Select aria-label="考核特定岗位名称" showSearch options={[...(options.data?.positions ?? []).map((option) => ({ label: `职位：${option.name}`, value: `POSITION:${option.id}` })), ...(options.data?.jobTitles ?? []).map((option) => ({ label: `职务：${option.code} - ${option.name}`, value: `JOB_TITLE:${option.id}` }))]} value={selectedModule.executor.directoryId ? `${selectedModule.executor.directoryType}:${selectedModule.executor.directoryId}` : undefined} onChange={(value: string) => { const [directoryType, directoryId] = value.split(':'); updateModule(selectedModule.id, { executor: { type: 'DIRECTORY', executionMode: 'SINGLE', directoryType: directoryType as 'POSITION' | 'JOB_TITLE', directoryId } }); }} /></label> : null}
+              </> : null}
               <label><span>模块说明</span><Input.TextArea value={selectedModule.description} autoSize={{ minRows: 3, maxRows: 5 }} onChange={(event) => updateModule(selectedModule.id, { description: event.target.value })} /></label>
             </div>
           </section>
@@ -932,22 +885,7 @@ export function PerformanceTemplateEditorPage() {
     </section>
   );
 
-  const renderPermissionSettings = () => (
-    <section className="performance-template-step-content" aria-labelledby="template-permission-title">
-      <div className="performance-template-section-heading">
-        <div>
-          <span>访问边界</span>
-          <h2 id="template-permission-title">权限设置</h2>
-        </div>
-      </div>
-      <Alert type="info" showIcon message="考核表执行人和后续流程执行人均按有效任职解析。已登录且具有处理权限的员工可网页提交；没有内部账号的有效员工可通过飞书交互卡片提交评分、确认、审核、审批或归档动作。" />
-      <div className="performance-permission-surface">
-        <Table columns={[{ title: '角色', dataIndex: 'role', key: 'role', width: 220 }, { title: '权限范围', dataIndex: 'scope', key: 'scope' }]} dataSource={permissionRows} pagination={false} />
-      </div>
-    </section>
-  );
-
-  const contents = [renderBasicInformation(), renderAssessmentSettings(), renderFlowSettings(), renderDispatchIndicators(), renderPermissionSettings()];
+  const contents = [renderBasicInformation(), renderProcessSettings(), renderApprovalSettings(), renderDispatchIndicators()];
 
   return (
     <section className="performance-template-editor-page" aria-labelledby="performance-template-editor-title">
@@ -971,7 +909,7 @@ export function PerformanceTemplateEditorPage() {
       <footer className="performance-template-editor-footer">
         {activeStep === workflowSteps.length - 1
           ? <Button type="primary" icon={<SaveOutlined />} onClick={saveTemplate}>保存模板</Button>
-          : <Button type="primary" icon={<SaveOutlined />} onClick={saveCurrentSettings}>保存当前设置</Button>}
+          : <Button type="primary" icon={<SaveOutlined />} onClick={saveCurrentSettings}>保存并下一步</Button>}
       </footer>
     </section>
   );

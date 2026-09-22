@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { OrganizationTreeSelect } from '../../components/OrganizationTreeSelect';
 import { useEmployees, useOrganizations } from '../../features/employees/api';
-import { useAddPerformanceCycleParticipants, useCloseCycleParticipants, useCreateCycleParticipantAmountBase, usePerformanceCycle, usePerformanceParticipantAssessmentDetail, usePerformanceParticipantWorkflow, usePerformanceTemplates, useRestartPerformanceCycle, useStartPerformanceCycle, useUpdatePerformanceCycleParticipantTemplate } from '../../features/performance/api';
+import { useAddPerformanceCycleParticipants, useCloseCycleParticipants, useCreateCycleParticipantAmountBase, usePerformanceCycle, usePerformanceParticipantAssessmentDetail, usePerformanceParticipantWorkflow, usePerformanceTemplates, useRemovePerformanceCycleParticipant, useRestartPerformanceCycle, useStartPerformanceCycle, useUpdatePerformanceCycleParticipantTemplate } from '../../features/performance/api';
 
 const processStatusLabels: Record<ProcessStatus, string> = {
   DRAFT: '草稿',
@@ -65,24 +65,101 @@ function moneyDisplay(value: number | null | undefined) {
   return value === null || value === undefined ? '--' : value.toFixed(2);
 }
 
+type AssessmentDetailRow = PerformanceParticipantAssessmentDetail['modules'][number]['indicators'][number] & {
+  assessmentRingName: string;
+  assessmentRingWeight: number | null;
+  assessmentRingScore: number | null;
+  assessmentRingWeightedScore: number | null;
+  assessmentRingStatus: PerformanceParticipantAssessmentDetail['modules'][number]['status'];
+  assessmentRingScorers: string[];
+  isFirstIndicatorInRing: boolean;
+  assessmentRingRowSpan: number;
+};
+
 function AssessmentDetailContent({ detail }: { detail: PerformanceParticipantAssessmentDetail | undefined }) {
   if (!detail) return <Empty description="暂无考核表详情" />;
   if (detail.modules.length === 0) return <Empty description="活动尚未生成考核模块" />;
-  const rows = detail.modules.flatMap((module) => module.indicators.length > 0
-    ? module.indicators.map((indicator) => ({ ...indicator, moduleWeight: module.weight, moduleScore: module.moduleScore }))
-    : [{ id: `module-${module.id}`, name: '--', description: '', standards: [], moduleName: module.name, moduleType: module.type, scorerNames: module.scorerNames, rawScore: null, indicatorWeight: null, weightedScore: null, scoreStatus: module.status, scoreSource: 'UNAVAILABLE' as const, moduleWeight: module.weight, moduleScore: module.moduleScore }]);
-  const columns: TableColumnsType<(typeof rows)[number]> = [
-    { title: '指标名称', dataIndex: 'name', key: 'name', width: 142, render: (value: string) => value || '--' },
-    { title: '衡量标准/评分标准', key: 'standards', width: 250, render: (_, row) => row.standards.length ? <ul className="performance-assessment-standards">{row.standards.map((standard) => <li key={standard}>{standard}</li>)}</ul> : row.description || '--' },
-    { title: '所属考核环节', dataIndex: 'moduleName', key: 'module', width: 150 },
-    { title: '评分人', key: 'scorer', width: 138, render: (_, row) => row.scorerNames.length ? row.scorerNames.join('、') : '--' },
-    { title: '原始得分', dataIndex: 'rawScore', key: 'rawScore', width: 108, render: (value: number | null) => scoreDisplay(value) },
-    { title: '权重', dataIndex: 'indicatorWeight', key: 'weight', width: 90, render: (value: number | null) => value === null ? '--' : `${scoreDisplay(value, 2)}%` },
-    { title: '加权得分', dataIndex: 'weightedScore', key: 'weightedScore', width: 116, render: (value: number | null) => scoreDisplay(value) },
-    { title: '评分状态', dataIndex: 'scoreStatus', key: 'status', width: 108, render: (value: PerformanceParticipantAssessmentDetail['modules'][number]['status']) => <Tag color={value === 'COMPLETED' ? 'success' : value === 'IN_PROGRESS' ? 'processing' : 'default'}>{taskStatusLabels[value]}</Tag> },
+  const rows: AssessmentDetailRow[] = detail.modules.flatMap((module) => {
+    const indicators = module.indicators.length > 0
+      ? module.indicators
+      : [{
+          id: `module-${module.id}`,
+          name: '未配置指标',
+          description: '',
+          standards: [],
+          moduleName: module.name,
+          moduleType: module.type,
+          scorerNames: module.scorerNames,
+          rawScore: null,
+          indicatorWeight: null,
+          weightedScore: null,
+          scoreStatus: module.status,
+          scoreSource: 'UNAVAILABLE' as const,
+        }];
+    return indicators.map((indicator, index) => ({
+      ...indicator,
+      assessmentRingName: module.name,
+      assessmentRingWeight: module.weight,
+      assessmentRingScore: module.moduleScore,
+      assessmentRingWeightedScore: module.weightedScore,
+      assessmentRingStatus: module.status,
+      assessmentRingScorers: module.scorerNames,
+      isFirstIndicatorInRing: index === 0,
+      assessmentRingRowSpan: indicators.length,
+    }));
+  });
+  const ringCell = (row: AssessmentDetailRow) => ({
+    rowSpan: row.isFirstIndicatorInRing ? row.assessmentRingRowSpan : 0,
+  });
+  const columns: TableColumnsType<AssessmentDetailRow> = [
+    {
+      title: '考核环节',
+      key: 'assessmentRing',
+      width: 190,
+      onCell: ringCell,
+      render: (_, row) => row.isFirstIndicatorInRing ? <div className="performance-assessment-ring-cell">
+        <strong>{row.assessmentRingName}</strong>
+        <span>评分人：{row.assessmentRingScorers.length ? row.assessmentRingScorers.join('、') : '--'}</span>
+        <span>环节权重：{row.assessmentRingWeight === null ? '--' : `${scoreDisplay(row.assessmentRingWeight, 2)}%`}</span>
+        <span>加权得分：{scoreDisplay(row.assessmentRingWeightedScore)}</span>
+      </div> : null,
+    },
+    {
+      title: '指标名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: 184,
+      render: (value: string, row) => <div className="performance-assessment-indicator-name">
+        <strong>{value || '--'}</strong>
+        <span>指标权重：{row.indicatorWeight === null ? '--' : `${scoreDisplay(row.indicatorWeight, 2)}%`}</span>
+      </div>,
+    },
+    {
+      title: '衡量标准/评分标准',
+      key: 'standards',
+      render: (_, row) => row.standards.length
+        ? <ul className="performance-assessment-standards">{row.standards.map((standard) => <li key={standard}>{standard}</li>)}</ul>
+        : <span className="performance-assessment-description">{row.description || '--'}</span>,
+    },
+    {
+      title: '考核环得分',
+      key: 'assessmentRingScore',
+      width: 132,
+      onCell: ringCell,
+      render: (_, row) => row.isFirstIndicatorInRing ? <strong className="performance-assessment-ring-score">{scoreDisplay(row.assessmentRingScore)}</strong> : null,
+    },
+    {
+      title: '状态',
+      key: 'status',
+      width: 104,
+      onCell: ringCell,
+      render: (_, row) => row.isFirstIndicatorInRing
+        ? <Tag color={row.assessmentRingStatus === 'COMPLETED' ? 'success' : row.assessmentRingStatus === 'IN_PROGRESS' ? 'processing' : 'default'}>{taskStatusLabels[row.assessmentRingStatus]}</Tag>
+        : null,
+    },
   ];
   return <div className="performance-assessment-detail-content">
-    <Table className="performance-assessment-detail-table" rowKey="id" columns={columns} dataSource={rows} pagination={false} sticky={{ offsetHeader: 48, offsetScroll: 0 }} scroll={{ x: 1200 }} />
+    <Table className="performance-assessment-detail-table" rowKey="id" columns={columns} dataSource={rows} pagination={false} tableLayout="fixed" scroll={{ x: 940 }} />
     <Descriptions className="performance-assessment-summary" column={1} bordered size="small" title="得分与最终金额">
       <Descriptions.Item label="最终得分">{scoreDisplay(detail.finalScore)}</Descriptions.Item>
       <Descriptions.Item label="最终系数">{scoreDisplay(detail.finalCoefficient)}</Descriptions.Item>
@@ -105,6 +182,7 @@ export function PerformanceActivityDetailPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeListItem | null>(null);
   const [participantTemplateVersionId, setParticipantTemplateVersionId] = useState<string>();
   const [templateTarget, setTemplateTarget] = useState<PerformanceCycleParticipant | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<PerformanceCycleParticipant | null>(null);
   const [replacementTemplateVersionId, setReplacementTemplateVersionId] = useState<string>();
   const [amountTarget, setAmountTarget] = useState<PerformanceCycleParticipant | null>(null);
   const [amountForm] = Form.useForm<{ amount: number; effectiveAt: string; reason: string }>();
@@ -124,6 +202,7 @@ export function PerformanceActivityDetailPage() {
   const restartCycle = useRestartPerformanceCycle();
   const closeCycleParticipants = useCloseCycleParticipants();
   const updateParticipantTemplate = useUpdatePerformanceCycleParticipantTemplate();
+  const removeParticipant = useRemovePerformanceCycleParticipant();
   const createParticipantAmountBase = useCreateCycleParticipantAmountBase();
   const templates = usePerformanceTemplates();
   const publishedTemplates = useMemo(() => (templates.data ?? []).filter((template) => template.latestVersion?.status === 'PUBLISHED' && template.latestVersion.id), [templates.data]);
@@ -209,6 +288,18 @@ export function PerformanceActivityDetailPage() {
     }
   };
 
+  const removeParticipantFromCycle = async () => {
+    if (!removeTarget) return;
+    try {
+      await removeParticipant.mutateAsync({ cycleId: activityId, employeeId: removeTarget.employeeId });
+      setSelectedRowKeys((current) => current.filter((employeeId) => employeeId !== removeTarget.employeeId));
+      setRemoveTarget(null);
+      messageApi.success('当前活动人员已移除');
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : '移除当前活动人员失败');
+    }
+  };
+
   const saveParticipantTemplate = async () => {
     if (!templateTarget || !replacementTemplateVersionId) {
       messageApi.error('请选择绩效模板');
@@ -278,7 +369,15 @@ export function PerformanceActivityDetailPage() {
     { title: '人员状态', dataIndex: 'employmentStatus', key: 'employmentStatus', width: 126, render: (value: EmploymentStatus | null) => value ? employmentStatusLabels[value] : '--' },
     { title: '最终系数', dataIndex: 'finalCoefficient', key: 'coefficient', width: 126, render: coefficient },
     { title: '实际金额', dataIndex: 'actualAmount', key: 'actualAmount', width: 126, render: (value: number | null | undefined) => value === null || value === undefined ? '--' : value.toFixed(2) },
-    { title: '操作', key: 'actions', width: 118, render: (_, participant) => <Button type="link" onClick={() => { setTemplateTarget(participant); setReplacementTemplateVersionId(undefined); }}>编辑模板</Button> },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 180,
+      render: (_, participant) => <Space size={0}>
+        <Button type="link" onClick={() => { setTemplateTarget(participant); setReplacementTemplateVersionId(undefined); }}>编辑模板</Button>
+        <Button type="link" danger loading={removeParticipant.isPending && removeParticipant.variables?.employeeId === participant.employeeId} onClick={() => setRemoveTarget(participant)}>移除</Button>
+      </Space>,
+    },
   ];
 
   return (
@@ -324,6 +423,26 @@ export function PerformanceActivityDetailPage() {
         </div>
         {(cycle.data?.instances.length ?? 0) > pageSize ? <Pagination className="performance-participant-pagination" current={page} pageSize={pageSize} total={cycle.data?.instances.length ?? 0} showSizeChanger={false} onChange={setPage} /> : null}
       </div>
+
+      <Modal
+        className="performance-activity-modal"
+        title="移除当前活动人员"
+        open={Boolean(removeTarget)}
+        onCancel={() => setRemoveTarget(null)}
+        destroyOnHidden
+        width={520}
+        footer={[
+          <Button key="cancel" onClick={() => setRemoveTarget(null)}>取消</Button>,
+          <Button key="remove" danger type="primary" loading={removeParticipant.isPending} onClick={() => void removeParticipantFromCycle()}>移除</Button>,
+        ]}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          message="确认移除当前活动人员"
+          description={removeTarget ? `确定从当前绩效活动中移除 ${removeTarget.employeeName}（${removeTarget.employeeNo}）吗？该人员的考核任务、流程任务和当前结果将一并从本活动移除，不影响该员工在其他活动中的记录。` : ''}
+        />
+      </Modal>
 
       <Modal
         className="performance-activity-modal"
@@ -424,7 +543,14 @@ export function PerformanceActivityDetailPage() {
         </div>
       </Modal>
 
-      <Drawer className="performance-flow-drawer" title="流程信息" width={560} open={drawerOpen} onClose={closeDrawer} destroyOnHidden>
+      <Drawer
+        className="performance-flow-drawer performance-assessment-drawer"
+        title="人员绩效详情"
+        width="min(1120px, 100vw)"
+        open={drawerOpen}
+        onClose={closeDrawer}
+        destroyOnHidden
+      >
         <Descriptions className="performance-flow-summary" column={1} size="small">
           <Descriptions.Item label="被考核人员">{selectedParticipant?.employeeName ?? '--'}（{selectedParticipant?.employeeNo ?? '--'}）</Descriptions.Item>
           <Descriptions.Item label="所属绩效活动">{cycle.data?.name ?? '--'}</Descriptions.Item>

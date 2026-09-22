@@ -599,7 +599,7 @@
 - 绩效 `EVALUATION` 人工评价继续使用已有数据库分数、评语、任务状态和权重计算；飞书个人卡片仅作为录入入口，后端 token、当前任务、企业邮箱解析身份和分数范围校验均强制执行。成功提交后尝试将原卡片更新为“已提交”；更新失败不回滚正式评分。
 - 员工信息审批提醒现使用审批人绑定员工的 `workEmail` 解析唯一飞书个人身份后发送通过/驳回卡片，不接受前端传入邮箱或 `open_id`。普通审批不增加评分。当前通用审批正式的通过、驳回、下一节点和最终业务写入规则仍待 HR 确认，卡片不会擅自改写 `ApprovalStep` 状态。
 - 已安装 `@larksuiteoapi/node-sdk@1.74.0`。设置 `FEISHU_LONG_CONNECTION_ENABLED=true` 时，后端在飞书应用长连接中接收 `card.action.trigger`；HTTP 回调路径仍兼容。长连接需要飞书应用后台配置，凭据只保留在服务器环境变量。
-- 绩效待办提醒正在按“活动 + 执行人”聚合为飞书个人卡片；卡片只显示活动名称和待处理数量，并通过网页授权进入项目内嵌待办页。`PerformanceFeishuTaskSession` 只保存哈希 state、员工/活动绑定、过期和消费状态；专用待办 token 不等同于项目 User，不授予后台权限。无内部 User 但有 Employee 企业联系方式且能唯一匹配飞书账号的执行人可通过专用接口提交评价和审核。新增待应用 migration `20260920110000_add_feishu_task_inbox_sessions`，尚未执行；需要在飞书开放平台登记与 `FEISHU_OAUTH_REDIRECT_URI` 完全一致的网页授权回调地址。
+- 绩效待办提醒正在按“活动 + 执行人”聚合为飞书个人卡片；卡片只显示活动名称和待处理数量，并通过网页授权进入项目内嵌待办页。`PerformanceFeishuTaskSession` 只保存哈希 state、员工/活动绑定和完成/撤销状态；只要该活动仍有待办，卡片会话不按时间失效。专用待办 token 不等同于项目 User，不授予后台权限。无内部 User 但有 Employee 企业联系方式且能唯一匹配飞书账号的执行人可通过专用接口提交评价和审核。新增待应用 migration `20260920110000_add_feishu_task_inbox_sessions`，尚未执行；需要在飞书开放平台登记与 `FEISHU_OAUTH_REDIRECT_URI` 完全一致的网页授权回调地址。
 
 ### 绩效活动流程信息（2026-09-17，未运行 migration）
 

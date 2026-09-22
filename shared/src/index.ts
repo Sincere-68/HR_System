@@ -1728,6 +1728,8 @@ export interface PerformanceModuleDefinition {
   adjustmentDirection?: PerformanceAdjustmentDirection;
   adjustmentMin?: number;
   adjustmentMax?: number;
+  /** Optional adjustment modules may be skipped when no adjustment applies. */
+  optional?: boolean;
   requireComment?: boolean;
   requireAttachment?: boolean;
 }
@@ -2083,6 +2085,8 @@ export interface PerformanceTaskListItem {
   executionMode: PerformanceExecutionMode;
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   executorName: string | null;
+  /** Whether an adjustment task can be completed as a zero-value skip. */
+  optional?: boolean;
   indicators: PerformanceIndicatorDefinition[];
   assignees: PerformanceTaskAssignee[];
   isCurrent: boolean;
@@ -2243,7 +2247,8 @@ export interface PerformanceFeishuTaskSessionExchangeInput {
 
 export interface PerformanceFeishuTaskSessionExchangeResult {
   accessToken: string;
-  expiresIn: number;
+  /** Active until the associated activity task card is completed or revoked. */
+  expiresIn: null;
   inbox: PerformanceFeishuTaskInbox;
 }
 

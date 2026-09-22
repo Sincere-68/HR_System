@@ -340,7 +340,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 ### 飞书绩效汇总待办与无账号执行人
 
-- 飞书网页授权回调地址配置为前端 `/performance/feishu-task-inbox`；前端收到 `state/code` 后立即调用 `POST /performance/feishu-task-inbox/session`，随后从地址栏清除参数。服务端只接受一次性 state 和飞书授权 code，验证返回的真实 `open_id` 与当前任务执行人由企业邮箱/手机号解析出的唯一身份一致后，签发短期、仅限该员工和该活动的待办 token。不会创建内部 User，也不会把 open_id、授权 code 或 user access token 写入数据库。
+- 飞书网页授权回调地址配置为前端 `/performance/feishu-task-inbox`；前端收到 `state/code` 后立即调用 `POST /performance/feishu-task-inbox/session`，随后从地址栏清除参数。服务端只接受当前活动待办未完成的 state 和飞书授权 code，验证返回的真实 `open_id` 与当前任务执行人由企业邮箱/手机号解析出的唯一身份一致后，签发仅限该员工和该活动的待办 token。会话不按时间失效，直到该员工在该活动的待办全部完成或会话被撤销。不会创建内部 User，也不会把 open_id、授权 code 或 user access token 写入数据库。
 - `GET /performance/feishu-task-inbox`：使用专用飞书待办 token，返回该员工在该活动内当前待提交评价和待审核流程事项。活动与员工范围由服务端会话固定，不能通过查询参数扩大。
 - `POST /performance/feishu-task-inbox/assessment-tasks/:id/submit`：使用专用飞书待办 token 提交自己的评价/调整分和评语；后端复用既有评分、聚合、权重和金额流程。
 - `POST /performance/feishu-task-inbox/workflow-tasks/:id/submit`：使用专用飞书待办 token 提交自己的通过、驳回、确认或归档动作；驳回原因仍由后端强制要求。

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -98,12 +98,13 @@ vi.mock('../../features/performance/api', () => ({
     },
   }),
   usePerformanceParticipantWorkflow: () => ({ isLoading: false, isError: false, data: workflow }),
-  usePerformanceParticipantAssessmentDetail: () => ({ isLoading: false, isError: false, data: { modules: [{ id: 'module-1', name: '直属经理评估', type: 'EVALUATION', weight: 100, status: 'IN_PROGRESS', scorerNames: ['部门经理'], moduleScore: null, weightedScore: null, adjustmentDirection: null, indicators: [{ id: 'indicator-1', name: '交付质量', description: '完成情况', standards: ['按时交付'], moduleName: '直属经理评估', moduleType: 'EVALUATION', scorerNames: ['部门经理'], rawScore: null, indicatorWeight: 100, weightedScore: null, scoreStatus: 'IN_PROGRESS', scoreSource: 'UNAVAILABLE' }] }], finalScore: null, finalCoefficient: null, employeeAmountBaseSnapshot: null, employeeAmountBaseVersionNo: null, calculationFormula: null, actualAmount: null, emptyReason: '考核尚未完成，暂未生成最终得分和金额。' } }),
+  usePerformanceParticipantAssessmentDetail: () => ({ isLoading: false, isError: false, data: { modules: [{ id: 'module-1', name: '直属经理评估', type: 'EVALUATION', weight: 100, status: 'IN_PROGRESS', scorerNames: ['部门经理'], moduleScore: 89.5, weightedScore: 89.5, adjustmentDirection: null, indicators: [{ id: 'indicator-1', name: '交付质量', description: '完成情况', standards: ['按时交付'], moduleName: '直属经理评估', moduleType: 'EVALUATION', scorerNames: ['部门经理'], rawScore: null, indicatorWeight: 100, weightedScore: null, scoreStatus: 'IN_PROGRESS', scoreSource: 'UNAVAILABLE' }] }], finalScore: null, finalCoefficient: null, employeeAmountBaseSnapshot: null, employeeAmountBaseVersionNo: null, calculationFormula: null, actualAmount: null, emptyReason: '考核尚未完成，暂未生成最终得分和金额。' } }),
   useAddPerformanceCycleParticipants: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useStartPerformanceCycle: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useRestartPerformanceCycle: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useCloseCycleParticipants: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdatePerformanceCycleParticipantTemplate: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useRemovePerformanceCycleParticipant: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useCreateCycleParticipantAmountBase: () => ({ isPending: false, mutateAsync: vi.fn() }),
   usePerformanceTemplates: () => ({ data: [{ id: 'template-1', name: '已发布模板', latestVersion: { id: 'version-1', versionNo: 1, status: 'PUBLISHED' } }] }),
 }));
@@ -139,6 +140,17 @@ describe('PerformanceActivityDetailPage', () => {
     expect(screen.getByRole('columnheader', { name: '最终系数' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '金额基数' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '编辑' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '移除' })).toBeInTheDocument();
+  });
+
+  it('opens a contextual participant removal dialog', () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: '移除' }));
+
+    expect(screen.getByText('确认移除当前活动人员')).toBeInTheDocument();
+    expect(screen.getByText(/不影响该员工在其他活动中的记录/)).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /移\s*除/ })).toBeInTheDocument();
   });
 
   it('uses employee ids for participant selection actions', () => {
@@ -158,6 +170,10 @@ describe('PerformanceActivityDetailPage', () => {
     expect(screen.getByText('考核表详情')).toBeInTheDocument();
     expect(screen.getByText('交付质量')).toBeInTheDocument();
     expect(screen.getByText('按时交付')).toBeInTheDocument();
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headers.indexOf('考核环节')).toBeLessThan(headers.indexOf('指标名称'));
+    expect(screen.getByRole('columnheader', { name: '考核环得分' })).toBeInTheDocument();
+    expect(screen.getByText('89.5000')).toBeInTheDocument();
     expect(screen.getByText('考核尚未完成，暂未生成最终得分和金额。')).toBeInTheDocument();
   });
 

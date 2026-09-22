@@ -113,6 +113,51 @@ describe('Performance activity creation', () => {
     expect(tx.performanceInstance.createMany).toHaveBeenCalledWith(expect.objectContaining({ data: [expect.objectContaining({ employeeId: 'employee-1' })] }));
   });
 
+  it('removes a participant together with uncompleted tasks', async () => {
+    const tx = { performanceResultRevision: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) }, performanceInstance: { delete: jest.fn().mockResolvedValue({}) } };
+    const cycle = { id: 'cycle-1', organizationId: 'org-root', instances: [{ organizationId: 'org-root' }] };
+    const prisma = {
+      performanceInstance: { findFirst: jest.fn().mockResolvedValue({ id: 'instance-1', status: ProcessStatus.DRAFT, tasks: [{ status: TaskStatus.PENDING }], workflowTasks: [], revisions: [], cycle }) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const instance = new PerformanceService(prisma as never, { hasAllEmployeeData: jest.fn().mockReturnValue(true) } as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    (instance as any).getCycle = jest.fn().mockResolvedValue({ id: 'cycle-1' });
+
+    await instance.removeCycleParticipant({ id: 'manager' } as never, 'cycle-1', 'employee-1');
+
+    expect(tx.performanceInstance.delete).toHaveBeenCalledWith({ where: { id: 'instance-1' } });
+    expect(audit.create).toHaveBeenCalledWith(expect.objectContaining({ userId: 'manager' }), AuditAction.UPDATE, 'cycle-1', expect.objectContaining({ action: 'remove', employeeId: 'employee-1', instanceId: 'instance-1' }), prisma, 'performance_cycle_participant');
+  });
+
+  it('removes a participant whose performance was opened but has no completed work', async () => {
+    const tx = { performanceResultRevision: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) }, performanceInstance: { delete: jest.fn().mockResolvedValue({}) } };
+    const prisma = {
+      performanceInstance: { findFirst: jest.fn().mockResolvedValue({ id: 'instance-1', status: ProcessStatus.IN_PROGRESS, tasks: [{ status: TaskStatus.IN_PROGRESS }], workflowTasks: [], revisions: [], cycle: { organizationId: 'org-root', instances: [{ organizationId: 'org-root' }] } }) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const instance = new PerformanceService(prisma as never, { hasAllEmployeeData: jest.fn().mockReturnValue(true) } as never, { create: jest.fn().mockResolvedValue(undefined) } as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    (instance as any).getCycle = jest.fn().mockResolvedValue({ id: 'cycle-1' });
+
+    await instance.removeCycleParticipant({ id: 'manager' } as never, 'cycle-1', 'employee-1');
+
+    expect(tx.performanceInstance.delete).toHaveBeenCalledWith({ where: { id: 'instance-1' } });
+  });
+
+  it('removes a participant even when performance work is complete', async () => {
+    const tx = { performanceResultRevision: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) }, performanceInstance: { delete: jest.fn().mockResolvedValue({}) } };
+    const prisma = {
+      performanceInstance: { findFirst: jest.fn().mockResolvedValue({ id: 'instance-1', status: ProcessStatus.COMPLETED, tasks: [{ status: TaskStatus.COMPLETED }], workflowTasks: [{ status: TaskStatus.COMPLETED }], revisions: [{ id: 'revision-1' }], cycle: { organizationId: 'org-root', instances: [{ organizationId: 'org-root' }] } }) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const instance = new PerformanceService(prisma as never, { hasAllEmployeeData: jest.fn().mockReturnValue(true) } as never, { create: jest.fn().mockResolvedValue(undefined) } as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    (instance as any).getCycle = jest.fn().mockResolvedValue({ id: 'cycle-1' });
+
+    await instance.removeCycleParticipant({ id: 'manager' } as never, 'cycle-1', 'employee-1');
+
+    expect(tx.performanceInstance.delete).toHaveBeenCalledWith({ where: { id: 'instance-1' } });
+  });
+
   it('checks current amount bases only for employees already in the activity', async () => {
     const cycle = { id: 'cycle-1', organizationId: 'org-root', status: 'DRAFT', instances: [{ id: 'instance-1', employeeId: 'employee-1', organizationId: 'org-root' }] };
     const prisma = {
@@ -641,6 +686,19 @@ describe('Performance card callbacks', () => {
     await (instance as any).submitAssessmentCardAction({ token: 'token', value: '88', comment: '' }, 'ou_employee', undefined, 'message-1');
 
     expect(feishu.updateCard).toHaveBeenCalledWith('message-1', expect.objectContaining({ header: expect.objectContaining({ template: 'green' }) }));
+  });
+});
+
+describe('Optional adjustment tasks', () => {
+  it('completes an optional adjustment at zero when no adjustment value is supplied', async () => {
+    const service = new PerformanceService({} as never, {} as never, {} as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    const completeTask = jest.spyOn(service as any, 'completeTask').mockResolvedValue(undefined);
+    const task = { id: 'adjustment-task', instanceId: 'instance-1', moduleOrder: 1, moduleType: PerformanceModuleType.ADJUSTMENT, moduleSnapshot: { optional: true }, status: TaskStatus.IN_PROGRESS, instance: { currentModuleOrder: 1, assessmentStatus: ProcessStatus.IN_PROGRESS } };
+    const assignee = { id: 'assignee-1', status: TaskStatus.IN_PROGRESS };
+
+    await (service as any).submitTaskForEmployee(task, assignee, {}, { employeeId: 'executor-1' });
+
+    expect(completeTask).toHaveBeenCalledWith(task, expect.anything(), 0, expect.objectContaining({ adjustment: 0, skipped: true }));
   });
 });
 

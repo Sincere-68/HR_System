@@ -21,7 +21,7 @@ async function bootstrap() {
   }));
   app.enableCors({
     origin: config.get<string>('FRONTEND_URL', 'http://localhost:5173'),
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     exposedHeaders: ['Content-Disposition'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });

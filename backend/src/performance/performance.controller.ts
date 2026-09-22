@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '@hr-demo/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -106,6 +106,12 @@ export class PerformanceController {
   @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
   addCycleParticipants(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: AddPerformanceCycleParticipantsDto) {
     return this.service.addCycleParticipants(user, id, dto);
+  }
+
+  @Delete('cycles/:cycleId/participants/:employeeId')
+  @RequirePermissions(PERMISSIONS.PERFORMANCE_CYCLE_MANAGE)
+  removeCycleParticipant(@CurrentUser() user: AuthenticatedUser, @Param('cycleId') cycleId: string, @Param('employeeId') employeeId: string) {
+    return this.service.removeCycleParticipant(user, cycleId, employeeId);
   }
 
   @Patch('cycles/:cycleId/participants/:employeeId/template')
