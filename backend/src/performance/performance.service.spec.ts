@@ -786,9 +786,10 @@ describe('Performance task personal notifications', () => {
     const tx = {
       performanceWorkflowTask: { update: jest.fn().mockResolvedValue({}) },
       performanceInstance: { update: jest.fn().mockResolvedValue({}) },
+      performanceCycle: { update: jest.fn() },
     };
     const prisma = {
-      performanceInstance: { findUniqueOrThrow: jest.fn().mockResolvedValue({ definitionSnapshot: definitionWithSteps }) },
+      performanceInstance: { findUniqueOrThrow: jest.fn().mockResolvedValue({ definitionSnapshot: definitionWithSteps, cycleId: 'cycle-1' }) },
       $transaction: jest.fn((callback) => callback(tx)),
     };
     const audit = { create: jest.fn().mockResolvedValue(undefined) };
@@ -798,6 +799,44 @@ describe('Performance task personal notifications', () => {
     await (instance as any).completeWorkflowTask({ id: 'task-1', instanceId: 'instance-1', stepOrder: 0 }, null);
 
     expect(openWorkflowStep).toHaveBeenCalledWith('instance-1', 1);
+  });
+
+  it('completes the activity after the last active participant finishes their final approval step', async () => {
+    const definitionWithSteps = { workflow: { manualSteps: [{ id: 'archive', name: 'HR 归档', type: 'HR_ARCHIVE' }] } };
+    const tx = {
+      performanceWorkflowTask: { update: jest.fn().mockResolvedValue({}) },
+      performanceInstance: { update: jest.fn().mockResolvedValue({}), count: jest.fn().mockResolvedValue(0) },
+      performanceCycle: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      performanceInstance: { findUniqueOrThrow: jest.fn().mockResolvedValue({ definitionSnapshot: definitionWithSteps, cycleId: 'cycle-1' }) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const instance = new PerformanceService(prisma as never, {} as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+
+    await (instance as any).completeWorkflowTask({ id: 'task-1', instanceId: 'instance-1', stepOrder: 0 }, null);
+
+    expect(tx.performanceCycle.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'cycle-1' }, data: expect.objectContaining({ status: ProcessStatus.COMPLETED, completedAt: expect.any(Date) }) }));
+  });
+
+  it('completes the activity when the last participant has no approval steps', async () => {
+    const tx = {
+      performanceInstance: { update: jest.fn().mockResolvedValue({}), count: jest.fn().mockResolvedValue(0) },
+      performanceCycle: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const instanceRow = {
+      id: 'instance-1', cycleId: 'cycle-1', employeeId: 'employee-1', assessmentStatus: ProcessStatus.IN_PROGRESS,
+      definitionSnapshot: { workflow: { manualSteps: [] } }, cycle: {}, tasks: [{ moduleType: PerformanceModuleType.METRIC, status: TaskStatus.COMPLETED, moduleScore: 90, moduleWeight: 100, moduleSnapshot: { enabled: true, participatesInTotal: true } }],
+    };
+    const prisma = { performanceInstance: { findUnique: jest.fn().mockResolvedValue(instanceRow) }, $transaction: jest.fn((callback) => callback(tx)) };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const instance = new PerformanceService(prisma as never, {} as never, audit as never, { enabled: false } as never, new PerformanceTemplateParser(), new PerformanceRuleEngine(), { getMetrics: jest.fn() }, { enabled: false } as never);
+    jest.spyOn(instance as any, 'resultUpdate').mockResolvedValue({ finalScore: 90, actualAmount: 900, fixedWeightedScore: 90, adjustmentScore: 0, rawFinalScore: 90 });
+
+    await (instance as any).advanceAssessment('instance-1', { id: 'manager' });
+
+    expect(tx.performanceCycle.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'cycle-1' }, data: expect.objectContaining({ status: ProcessStatus.COMPLETED }) }));
   });
 
   it('refuses to open a workflow step before score and amount are generated', async () => {

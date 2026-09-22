@@ -334,15 +334,20 @@ export function PerformanceActivityDetailPage() {
 
   const columns: TableColumnsType<PerformanceCycleParticipant> = [
     {
-      title: '员工',
-      key: 'employee',
-      width: 178,
-      render: (_, participant) => (
-        <div className="performance-participant-employee">
-          {participant.employeeName ? <Button type="link" className="performance-current-executor-link" onClick={() => openAssessmentDetail(participant)}>{participant.employeeName}</Button> : <span>--</span>}
-          <small>{participant.employeeNo}</small>
-        </div>
-      ),
+      title: '工号',
+      dataIndex: 'employeeNo',
+      key: 'employeeNo',
+      width: 112,
+      render: (value: string) => value || '--',
+    },
+    {
+      title: '姓名',
+      dataIndex: 'employeeName',
+      key: 'employeeName',
+      width: 130,
+      render: (value: string | null, participant) => value
+        ? <Button type="link" className="performance-current-executor-link" onClick={() => openAssessmentDetail(participant)}>{value}</Button>
+        : '--',
     },
     { title: '部门', dataIndex: 'organizationName', key: 'organization', width: 178, render: (value: string | null) => value ?? '--' },
     { title: '模板', dataIndex: 'templateName', key: 'template', width: 180, render: (value: string) => value || '--' },
@@ -415,8 +420,8 @@ export function PerformanceActivityDetailPage() {
               columns={columns}
               dataSource={pagedParticipants}
               pagination={false}
-              sticky={{ offsetHeader: 48, offsetScroll: 0 }}
-              scroll={{ x: 1796 }}
+              sticky={{ offsetHeader: 0, offsetScroll: 0 }}
+              scroll={{ x: 2150 }}
               locale={{ emptyText: <Empty description="这里什么都没有..." /> }}
             />
           )}

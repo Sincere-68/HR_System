@@ -1,433 +1,377 @@
-# 人员管理系统 Demo
+# HR 系统
 
-这是一个可以在自己电脑上运行的人员管理演示项目。
+HR 人员主数据与模板驱动绩效管理系统，采用前后端分离架构，业务数据以 PostgreSQL 和 Prisma schema/migration 为唯一持久化事实来源。
 
-您可以用它体验：
+系统包含两个业务域：
 
-- 查看人员列表
-- 按姓名、工号、部门和任职状态查找人员
-- 查看人员详情
-- 新增和编辑人员
-- 使用不同账号体验不同权限
+- **人员信息**：人员主档案、任职历史、组织树、汇报关系、证件与附属资料、合同、入职、异动、离职及人员统计。
+- **绩效管理**：Markdown/手动模板、考核模块、指标下发、串行评分、结果调整、绩效活动、后续审核/确认/审批、金额基数快照、结果修订审计及飞书个人待办。
 
-## 先看这里
+## 技术栈
 
-- **默认不需要安装 PostgreSQL，也不需要创建数据库。**
-- 登录时需要输入管理员账号和密码；页面不会预填或展示任何账号密码。
-- 项目中的姓名、手机号和身份证号都是虚构的演示数据。
-- 新增或修改的数据只会临时保存在正在运行的后端中。**关闭并重新启动后端后，数据会恢复到最初状态。**
-- 请勿输入真实员工的手机号、身份证号或其他个人信息。
+| 层 | 技术 |
+| --- | --- |
+| 前端 | React 19、TypeScript、Vite、Ant Design、React Router、TanStack Query |
+| 后端 | NestJS、TypeScript、Passport JWT、Swagger、Helmet、class-validator |
+| 数据层 | PostgreSQL、Prisma ORM、Prisma Migration |
+| 共享契约 | `shared/` TypeScript 类型、枚举和目录常量 |
+| 飞书 | `@larksuiteoapi/node-sdk`、Feishu Open API、卡片 HTTP 回调/SDK 长连接、网页 OAuth |
+| 工作区 | npm workspaces：`frontend`、`backend`、`shared` |
 
----
+运行要求：Node.js `>=20`、npm `>=10`、PostgreSQL 14 或更高版本。
 
-## 第一次运行
-
-### 第 1 步：安装 Node.js
-
-Node.js 是运行本项目所需的软件。只需安装一次。
-
-1. 打开 <https://nodejs.org/zh-cn/download>。
-2. 下载并安装 **LTS（长期支持版）**，建议选择 Node.js 20 或更高版本。
-3. 安装时保持默认选项，一直点击“下一步”即可。
-4. 安装完成后，关闭并重新打开命令窗口。
-
-检查是否安装成功：
+## 目录结构
 
 ```text
-node --version
-npm --version
+frontend/                         React 页面、路由、Query hooks、样式
+backend/src/                      NestJS 模块、Controller、Service、DTO
+backend/prisma/schema.prisma      PostgreSQL Prisma schema
+backend/prisma/migrations/        版本化数据库迁移
+backend/prisma/seed.ts            目录、权限和初始管理员初始化
+shared/src/                       前后端共享类型和固定目录
+  docs/API.md                     REST 接口与字段口径
+  docs/PROJECT_STATUS.md          当前实现状态与迁移记录
 ```
 
-如果两条命令都显示版本号，例如 `v24.0.0` 和 `11.0.0`，说明安装成功。
+## 数据库配置
 
-> **命令窗口是什么？** 这是一个可以输入文字命令的窗口。Windows 中叫 PowerShell；macOS 和 Linux 中通常叫终端（Terminal）。下面会分别给出操作方法。
+项目正式运行使用 PostgreSQL。复制后端环境变量示例：
 
-### 第 2 步：安装 Git
-
-Git 用来通过命令行把项目复制到电脑上。只需安装一次。
-
-- **Windows**：打开 <https://git-scm.com/download/win>，下载后保持默认选项完成安装。
-- **macOS**：打开终端，执行 `git --version`。如果系统提示安装开发者命令行工具，请按提示安装。
-- **Linux（Ubuntu/Debian）**：打开终端，执行 `sudo apt update && sudo apt install git -y`。
-
-安装完成后，关闭并重新打开 PowerShell 或终端，再检查：
-
-```text
-git --version
-```
-
-显示版本号就说明安装成功。
-
-### 第 3 步：用命令行获取项目
-
-不需要在网页中下载 ZIP，也不需要手动解压。打开命令窗口并执行下面两条命令：
-
-```bash
-git clone https://github.com/Sincere-68/HR_System.git
-cd HR_System
-```
-
-第一条命令会把项目复制到当前目录下的新文件夹中；第二条命令会进入该文件夹。命令执行完成后，后续操作都在这个命令窗口中进行。
-
-> 如果提示 `git` 不是命令或 `command not found`，请返回第 2 步安装 Git，然后关闭并重新打开命令窗口。
-
-### 第 4 步：安装项目所需内容
-
-无论使用 Windows、macOS 还是 Linux，都在项目文件夹中执行：
-
-```text
-npm run setup
-```
-
-第一次安装通常需要几分钟。看到命令执行完毕，并重新出现可输入命令的一行，就表示安装完成。
-
-这个命令只会下载项目所需的程序包，**不会连接或安装数据库**。
-
----
-
-## 每次启动项目
-
-这个项目分为两个同时运行的部分：
-
-- **后端**：负责读取和处理演示数据，相当于项目的“工作部分”。
-- **前端**：显示在浏览器中的网页，相当于项目的“画面部分”。
-
-因此需要打开 **两个命令窗口**，并让它们同时保持运行。
-
-### Windows（PowerShell）
-
-#### 窗口 1：启动后端
-
-在项目文件夹中打开 PowerShell，执行：
-
-```powershell
-npm run dev:api
-```
-
-看到下面类似文字，说明后端已经启动：
-
-```text
-API: http://localhost:3000/api/v1
-Swagger: http://localhost:3000/api/docs
-```
-
-不要关闭这个窗口。
-
-#### 窗口 2：启动网页
-
-再打开一个新的 PowerShell 窗口，并确保它也位于项目文件夹中，然后执行：
-
-```powershell
-npm run dev:web
-```
-
-看到下面类似文字，说明网页已经启动：
-
-```text
-Local: http://localhost:5173/
-```
-
-同样不要关闭这个窗口。
-
-### macOS / Linux（终端）
-
-#### 窗口 1：启动后端
-
-在项目文件夹中打开终端，执行：
-
-```bash
-npm run dev:api
-```
-
-看到下面类似文字，说明后端已经启动：
-
-```text
-API: http://localhost:3000/api/v1
-Swagger: http://localhost:3000/api/docs
-```
-
-不要关闭这个终端窗口。
-
-#### 窗口 2：启动网页
-
-再打开一个新的终端窗口，使用 `cd` 进入同一个项目文件夹，然后执行：
-
-```bash
-npm run dev:web
-```
-
-看到下面类似文字，说明网页已经启动：
-
-```text
-Local: http://localhost:5173/
-```
-
-同样不要关闭这个终端窗口。
-
-### 打开系统
-
-两个窗口都启动成功后，用浏览器打开：
-
-<http://localhost:5173>
-
-登录页面已经填好管理员账号。直接点击 **“直接进入演示系统”** 即可。
-
-> `localhost` 表示“这台电脑”。网址中的 `3000` 和 `5173` 是两个程序各自使用的编号，也叫端口。
-
-### 停止系统
-
-分别点击两个命令窗口，然后按：
-
-```text
-Ctrl + C
-```
-
-如果系统询问是否结束任务，输入 `Y` 并按回车。关闭命令窗口也会停止系统。
-
----
-
-## 账号与访问
-
-- 登录页不再预填或展示账号和密码。
-- 请向系统管理员获取管理员账号和密码后登录。
-- 系统只在首次数据库 seed 时初始化一个 `admin` 系统管理员。初始密码只读取一次 `BOOTSTRAP_ADMIN_PASSWORD`，后续密码、HR 与普通员工账号均由 `users` 表维护。
-- `DEPT_ADMIN` 角色显示为“HR管理员”，当前与系统管理员拥有相同的 HR 业务可见范围；两者的区分只为后续系统管理职责预留。
-- `VIEWER` 角色显示为“普通员工”，后端仅允许查询其 `users.employee_id` 关联的本人档案；未绑定员工档案时不返回任何人员数据。普通员工仍不会进入 HR 管理控制台。
-
-首次数据库 seed 前，在 `backend/.env` 中设置一次 `BOOTSTRAP_ADMIN_PASSWORD`。系统只在不存在 `admin` 时读取它；管理员创建后可从实际 `.env` 删除该值。不能将实际密码写入项目文档、前端代码或测试数据。
-
-已有数据库只需同步新的账号策略时，执行 `npm run db:sync-access-policy`。该命令只更新 `roles`、`permissions` 和两者的关联，不创建/删除用户、不改密码、不改 `users.employee_id` 或部门数据范围；执行后重新登录即可获得新权限。
-
----
-
-## 常见问题
-
-### 提示“node 不是内部或外部命令”或“command not found”
-
-这表示电脑没有找到 Node.js。
-
-1. 确认已经安装 Node.js LTS。
-2. 安装后关闭所有 PowerShell 或终端窗口。
-3. 重新打开窗口，再运行 `node --version`。
-4. 如果仍然失败，重新启动电脑后再试。
-
-### `npm run setup` 下载很慢或失败
-
-首先确认网络可以正常访问 npm。然后在项目文件夹中重新执行：
-
-```text
-npm run setup
-```
-
-重复执行不会破坏项目。
-
-### 浏览器打不开 `http://localhost:5173`
-
-依次检查：
-
-1. 后端窗口是否仍在运行。
-2. 网页窗口是否仍在运行。
-3. 网页窗口是否显示了红色错误。
-4. 浏览器地址是否完整输入为 `http://localhost:5173`。
-
-如果窗口已经关闭，请重新执行“每次启动项目”中的两条启动命令。
-
-### 登录后提示“请求失败”或人员列表加载失败
-
-通常是后端没有启动。回到运行 `npm run dev:api` 的窗口，确认它没有被关闭，也没有显示红色错误。
-
-### 提示端口 3000 或 5173 已被占用
-
-这通常表示同一个程序已经在另一个窗口中运行。
-
-1. 找到之前打开的命令窗口。
-2. 按 `Ctrl + C` 停止旧程序。
-3. 再重新启动。
-
-### 新增或修改的人员不见了
-
-这是默认演示方式的正常表现。演示数据只临时保存在内存中，重新启动后端后会恢复。这样每个人下载项目后都能从相同的干净数据开始体验。
-
----
-
-## 上传到 GitHub 前
-
-本项目的 `.gitignore` 已经排除以下不应上传的内容：
-
-- `node_modules`：安装后生成的大量程序包
-- `dist`：编译后生成的文件
-- `.env`：可能包含本机数据库密码的设置文件
-- 编辑器和测试生成的临时文件
-
-请保留并上传：
-
-- `package-lock.json`：保证其他人安装到一致的程序包版本
-- `.env.example` 和 `backend/.env.example`：它们只包含示例，不应放真实密码
-- `frontend`、`backend`、`shared` 和文档等源代码
-
-> 把源码上传到 GitHub **不会自动生成一个任何人都能打开的在线网站**。其他人可以下载并按本 README 在自己的电脑上运行。若希望公开部署到互联网，还需要另外选择前端、后端和数据库托管服务。
-
----
-
-# 进阶说明
-
-下面内容供熟悉开发的人员使用。第一次体验项目时可以全部跳过。
-
-## 技术组成
-
-- 前端：React 19、TypeScript、Vite、Ant Design、React Router、TanStack Query
-- 后端：NestJS、TypeScript、Prisma、REST API、Swagger
-- 可选数据库：PostgreSQL 14 或更高版本
-- 代码目录：`frontend/`、`backend/`、`shared/`
-- 本项目不使用 Docker、Redis、MinIO、消息队列或微服务
-
-## 默认演示方式如何工作
-
-默认配置是：
-
-```env
-DEMO_MODE=true
-```
-
-后端使用进程内的虚构账号、部门和员工数据：
-
-- 登录、JWT、后端权限守卫仍正常工作。
-- 员工分页、搜索、筛选、详情、新增和编辑均可使用。
-- 管理员、HR管理员、普通员工的数据范围均由后端执行；普通员工不因前端菜单隐藏而获得额外权限。
-- 数据不会写入硬盘，后端重启后恢复。
-- 即使电脑未安装或未启动 PostgreSQL，后端也可以启动。
-
-## 可选：使用 PostgreSQL 保存数据
-
-只有需要让新增和修改在重启后继续保留时，才需要这部分。
-
-### 1. 准备 PostgreSQL
-
-安装 PostgreSQL 14 或更高版本，然后使用拥有创建角色和数据库权限的管理员账号，在 `psql` 中依次创建专用账号、开发库和测试库。请把示例密码换成本机密码：
-
-```sql
-CREATE ROLE hr_demo LOGIN PASSWORD 'change_this_local_password';
-CREATE DATABASE hr_personnel_demo OWNER hr_demo;
-CREATE DATABASE hr_personnel_demo_test OWNER hr_demo;
-```
-
-#### 使用 Docker 启动本地测试 PostgreSQL
-
-项目根目录提供独立的本地测试编排，不会修改已有的 `backend/.env`，并会在首次启动时同时创建开发库 `hr_personnel_demo` 和测试库 `hr_personnel_demo_test`：
-
-```powershell
-Copy-Item docker/postgres-test.env.example docker/postgres-test.env
-docker compose -f docker-compose.postgres-test.yml up -d
-```
-
-启动后，可将 `backend/.env` 中的数据库相关配置改为：
-
-```env
-DEMO_MODE=false
-DATABASE_URL="postgresql://hr_demo:change_this_local_password@localhost:5432/hr_personnel_demo?schema=public"
-DATABASE_URL_TEST="postgresql://hr_demo:change_this_local_password@localhost:5432/hr_personnel_demo_test?schema=public"
-```
-
-`docker/postgres-test.env` 已被忽略，请在启动前修改其中的测试密码，并同步更新以上两个连接串。查看服务状态使用 `docker compose -f docker-compose.postgres-test.yml ps`；需要删除测试数据时，先停止服务，再执行 `docker compose -f docker-compose.postgres-test.yml down -v`。
-
-> 云端已有空 PostgreSQL 数据库时，不要重复创建数据库；只需确保连接账号拥有目标 schema 的建表、建类型和建索引权限。首次部署会执行仓库内的 PostgreSQL 初始 migration；旧数据库版本的迁移已移至 `backend/prisma/mysql-migrations-archive/`，不会被部署命令读取。
->
-> 初始 migration 只建表，不自动写入 288 条唯一职位名称目录。云端或已有数据库首次需要导入人员或 Offer 前，可在确认目标库后执行安全的职位目录同步（只按职位名称创建/更新，不删除任职、Offer 或其他引用数据）：
->
-> ```bash
-> CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_288_UNIQUE_POSITION_NAMES npm run db:upsert-position-catalog
-> ```
->
-> 不要在已有业务数据的数据库执行 `db:replace-position-catalog`；该旧脚本会删除职位及其已确认的测试引用。
->
-> `20260914120000_drop_employee_detail_location_fields` 会按已确认决策直接删除 `employees.native_place`、`household_address`、`residential_address` 及其历史值，不做回填。云端执行前必须先备份数据库。
-
-### 2. 创建后端设置文件
-
-Windows PowerShell：
+### Windows PowerShell
 
 ```powershell
 Copy-Item backend/.env.example backend/.env
 ```
 
-macOS / Linux：
+### macOS / Linux
 
 ```bash
 cp backend/.env.example backend/.env
 ```
 
-编辑 `backend/.env`：
+编辑 `backend/.env`，至少配置：
 
 ```env
-DEMO_MODE=false
-DATABASE_URL="postgresql://hr_demo:你的密码@localhost:5432/hr_personnel_demo?schema=public"
-DATABASE_URL_TEST="postgresql://hr_demo:你的密码@localhost:5432/hr_personnel_demo_test?schema=public"
-JWT_SECRET="至少32个字符、仅本机使用的随机字符串"
+DATABASE_URL="postgresql://hr_demo:本地密码@localhost:5432/hr_personnel_demo?schema=public"
+DATABASE_URL_TEST="postgresql://hr_demo:本地密码@localhost:5432/hr_personnel_demo_test?schema=public"
+JWT_SECRET="至少 32 个字符的随机字符串"
+JWT_EXPIRES_IN="8h"
+FRONTEND_URL="http://localhost:5173"
+BOOTSTRAP_ADMIN_PASSWORD="首次初始化管理员密码"
 ```
 
-如果密码包含 `@`、`:`、`/` 等特殊字符，需要进行 URL 编码。真实的 `.env` 已被 `.gitignore` 排除，不要上传。
+数据库连接账号需要具备目标 schema 的建表、建类型、建索引及外键权限。生产环境使用独立数据库和最小权限账号，不要复用开发库或测试库。
 
-### 3. 建表并写入虚构数据
+### 初始化与迁移
 
 在项目根目录执行：
 
-```text
+```bash
 npm run db:generate
 npm run db:migrate
 npm run db:seed
 ```
 
-本地 `db:seed` 会写入组织、唯一的系统管理员、全日制公司和 288 个唯一职位名称目录，因此本地人员导入可直接按职位名称匹配。它不会创建 HR 或普通员工固定账号，也不会重置已有管理员密码。已有本地数据库如果只需要补齐或恢复职位目录，可安全执行：
+`db:migrate` 执行仓库中的历史 migration；`db:seed` 初始化权限、角色、组织目录、职位/公司目录及首次管理员。管理员创建后可从实际 `.env` 删除 `BOOTSTRAP_ADMIN_PASSWORD`。
+
+已有数据库同步权限策略时：
 
 ```bash
-CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_288_UNIQUE_POSITION_NAMES npm run db:upsert-position-catalog
+npm run db:sync-access-policy
 ```
 
-然后仍使用下面两条命令启动：
+生产部署只使用：
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+不要使用以下会破坏或绕过迁移历史的命令：
 
 ```text
+prisma migrate reset
+prisma db push --force-reset
+```
+
+所有可能影响历史数据的 schema 变更必须通过新的 Prisma migration 完成，并在执行前检查生成 SQL、备份目标数据库和确认外键影响。
+
+## 跨平台运行
+
+后端和前端分别运行，需要两个终端窗口。所有命令均在项目根目录执行。
+
+### Windows PowerShell
+
+窗口一：
+
+```powershell
 npm run dev:api
+```
+
+窗口二：
+
+```powershell
 npm run dev:web
 ```
 
-切回免数据库演示方式时，把 `backend/.env` 中的 `DEMO_MODE` 改回 `true`，或删除该文件。
-
-## API 地址
-
-启动后端后：
-
-- API 根地址：<http://localhost:3000/api/v1>
-- 接口说明页面（Swagger）：<http://localhost:3000/api/docs>
-- OpenAPI JSON：<http://localhost:3000/api/docs-json>
-
-除登录外，请求都需要发送 `Authorization: Bearer <token>`。
-
-| 方法 | 地址 | 用途 |
-| --- | --- | --- |
-| POST | `/auth/login` | 登录 |
-| GET | `/auth/me` | 当前用户、角色、权限和部门范围 |
-| GET | `/organizations` | 当前账号可以使用的部门 |
-| GET | `/employees` | 分页查询和筛选员工 |
-| GET | `/employees/:id` | 查看详情 |
-| POST | `/employees` | 新增员工 |
-| PATCH | `/employees/:id` | 编辑员工 |
-
-## 开发检查命令
+开发地址：
 
 ```text
+API       http://localhost:3000/api/v1
+Swagger   http://localhost:3000/api/docs
+Frontend  http://localhost:5173
+```
+
+停止进程：在对应窗口按 `Ctrl + C`。
+
+### macOS
+
+终端一：
+
+```bash
+npm run dev:api
+```
+
+终端二：
+
+```bash
+npm run dev:web
+```
+
+### Linux
+
+```bash
+npm run dev:api
+```
+
+另开终端：
+
+```bash
+npm run dev:web
+```
+
+macOS/Linux 的 PostgreSQL 服务、反向代理和进程管理由部署环境负责；开发时确保 `DATABASE_URL` 可从当前 shell 环境或 `backend/.env` 读取。
+
+## 构建、类型检查与测试
+
+```bash
+npm run build
 npm run typecheck
 npm run lint
 npm test
+```
+
+按 workspace 执行：
+
+```bash
+npm run build --workspace shared
+npm run typecheck --workspace backend
+npm run typecheck --workspace frontend
+npm run test --workspace backend -- --runInBand
+npm run test --workspace frontend -- --run
+```
+
+数据库型测试必须使用独立的 `DATABASE_URL_TEST`，禁止连接生产数据库。Prisma 静态校验可使用占位连接串而不建立数据库连接：
+
+```bash
+DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder npx prisma validate --schema backend/prisma/schema.prisma
+```
+
+## 人员信息域
+
+人员模型按业务对象拆分，不把页面宽表作为单一数据表：
+
+- `Employee`：自然人长期主档案；离职再入职沿用原人员 ID 和工号。
+- `EmploymentPeriod`：每次入职、离职、重新入职的任职周期。
+- `EmployeeAssignment`：部门、职位、职级、职务、地点和任职有效期；当前主要任职保持历史可追溯。
+- `Organization`：通过 `parentId` 表达可扩展组织树；数据范围为授权节点及全部下级。
+- `ReportingRelationship`：独立保存员工与上级关系及关系历史。
+- `EmployeeIdentityDocument`、教育、履历、家庭、合同等：一对多附属业务记录。
+
+人员接口统一位于 `/api/v1`，登录后使用 Bearer JWT：
+
+```text
+GET    /employees
+GET    /employees/:id
+POST   /employees
+PATCH  /employees/:id
+GET    /organizations
+GET    /employment/records
+GET    /contracts
+GET    /analytics/roster
+```
+
+后端服务强制执行组织范围、当前/历史任职口径和业务日期判断。前端隐藏按钮不构成安全边界。字段没有可靠来源时返回 `null`，前端显示 `--`，不使用相似字段填充。
+
+更多字段来源和权限口径见 [`docs/API.md`](docs/API.md) 与 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)。
+
+## 绩效管理域
+
+### 模板与执行模型
+
+绩效模板由 Markdown 导入或手动配置生成。Markdown 解析只产生可确认的结构，最终执行定义由 HR 在模板编辑器中确认并发布。模块类型：
+
+- `METRIC`：后端适配器计算，保存原始指标数据、计算明细和模块分数。
+- `EVALUATION`：执行人提交 0–100 模块总分及评语。
+- `ADJUSTMENT`：固定权重计算后的额外加分/扣分；工作失误扣减、超额奖励/贡献可配置为无调整时跳过。
+
+固定权重模块合计必须为 100%。最终结果使用已保存的模块分数、模块权重和调整项计算，并冻结：
+
+```text
+最终分数 = max(0, Σ(模块得分 × 模块权重 ÷ 100) + 调整项)
+最终金额 = 金额基数快照 × 最终分数 ÷ 100
+```
+
+考核完成后保存金额基数 ID、版本、金额、公式、最终分数和实际金额；后续审核、本人确认、审批和 HR 归档不重新计算结果。
+
+### 活动与任务
+
+主要接口：
+
+```text
+GET    /performance/templates
+POST   /performance/templates/parse
+POST   /performance/templates
+POST   /performance/templates/:id/versions
+POST   /performance/templates/:id/versions/:versionId/publish
+GET    /performance/cycles
+GET    /performance/cycles/:id
+POST   /performance/cycles
+POST   /performance/cycles/:id/start
+GET    /performance/my-tasks
+POST   /performance/tasks/:id/submit
+GET    /performance/my-workflow-tasks
+POST   /performance/workflow-tasks/:id/submit
+GET    /performance/results
+GET    /performance/results/:id
+```
+
+活动启动时按活动实例绑定被考核人创建任务。工作流中的 `CONFIRMATION`（本人确认）为系统固定执行人：任务打开时从 `PerformanceInstance.employee` 绑定被考核员工，不使用模板中可配置的员工、岗位或职务。
+
+### 快照与审计
+
+模板定义、模块、指标、执行人和流程步骤在活动/任务创建时保存快照。评分、金额基数、结果修改、流程动作、详情查看和通知投递分别保留审计或业务历史。已完成/归档结果展示冻结快照，不因详情查询自动重算。
+
+## 飞书集成
+
+飞书是个人通知和身份确认通道，不是业务数据源。系统只向个人 `open_id` 发送消息，不使用群聊 `chat_id`。
+
+### 配置
+
+在 `backend/.env` 配置，不要把真实值写入 Git：
+
+```env
+FEISHU_ENABLED=true
+FEISHU_APP_ID="飞书自建应用 App ID"
+FEISHU_APP_SECRET="飞书自建应用 App Secret"
+FEISHU_LONG_CONNECTION_ENABLED=true
+FEISHU_VERIFICATION_TOKEN="事件与回调中的 Verification Token"
+FEISHU_ENCRYPT_KEY="事件与回调中的 Encrypt Key"
+
+FEISHU_OAUTH_REDIRECT_URI="https://hr.example.com/performance/feishu-task-inbox"
+FEISHU_TASK_INBOX_URL="https://hr.example.com/performance/feishu-task-inbox"
+```
+
+变量来源：
+
+- App ID、App Secret：飞书开放平台 → 凭证与基础信息。
+- Verification Token、Encrypt Key：飞书开放平台 → 事件与回调 → 事件配置。
+- OAuth 回调地址：飞书开放平台安全设置/H5 网页授权相关配置，必须与 `FEISHU_OAUTH_REDIRECT_URI` 完全一致。
+
+### 通知和身份链路
+
+绩效活动按“活动 + 执行人”聚合发送一张个人汇总卡片。卡片只显示活动名称、待提交评价数、待审核/流程处理数和“查看详情”按钮。
+
+员工身份链路：
+
+```text
+Employee.workEmail / mobile
+  → 飞书通讯录解析唯一 open_id
+  → sendCardToOpenId
+  → 飞书 OAuth 返回真实 open_id
+  → 与任务执行人联系方式再次解析并比对
+  → 签发活动限定的绩效待办 JWT
+```
+
+员工可以没有项目内部 `User` 账号；只要 `Employee` 联系方式能唯一匹配飞书身份，就能完成自己的评价、审核、驳回、确认或归档。
+
+项目待办页面：
+
+```text
+/performance/feishu-task-inbox
+```
+
+专用接口：
+
+```text
+POST /performance/feishu-task-inbox/session
+GET  /performance/feishu-task-inbox
+POST /performance/feishu-task-inbox/assessment-tasks/:id/submit
+POST /performance/feishu-task-inbox/workflow-tasks/:id/submit
+```
+
+专用 token 保存在浏览器 `sessionStorage`，不覆盖普通 HR JWT。后端按会话绑定的 `employeeId + cycleId` 查询和提交，客户端不能通过 URL、请求参数或 body 扩大范围。
+
+### 回调模式
+
+支持两种卡片回调模式：
+
+- SDK 长连接：`FEISHU_LONG_CONNECTION_ENABLED=true`，适用于后端位于内网的部署。
+- HTTP 回调：保留 `/api/v1/performance/feishu/card-actions`，需要在飞书开放平台配置可访问的回调地址和校验参数。
+
+新的汇总卡主要通过网页授权进入项目待办；旧的卡片内直接评分/审核回调仍保留用于兼容历史卡片。
+
+## 云端部署要点
+
+生产部署需要三个可访问组件：
+
+```text
+浏览器 / 飞书 H5
+        ↓ HTTPS
+前端静态站点
+        ↓ /api/v1 反向代理
+NestJS API
+        ↓
+PostgreSQL
+```
+
+前端构建时配置：
+
+```env
+VITE_API_BASE_URL="https://hr.example.com/api/v1"
+```
+
+如果前后端同源并由反向代理转发，使用：
+
+```env
+VITE_API_BASE_URL="/api/v1"
+```
+
+飞书 OAuth 回调必须指向飞书客户端可访问的 HTTPS 前端地址。`localhost`、本机磁盘路径和仅当前电脑可访问的地址不能作为云端飞书 H5 回调地址。
+
+云端发布顺序：
+
+```bash
+npm ci
+npm run db:generate
+npm run db:migrate
 npm run build
 ```
 
-数据库型端到端测试应使用 `DATABASE_URL_TEST` 指向独立测试库，不要使用开发库或任何真实业务数据库。
+然后重启 API 进程并发布 `frontend/dist`。迁移只使用 `prisma migrate deploy`，不得使用 reset 或强制 db push。
 
-## 数据安全与权限
+## 安全约束
 
-- 前端隐藏按钮只是改善操作体验，真正的权限检查由后端完成。
-- 后端会再次检查员工是否属于当前账号可访问的部门。
-- 本系统仅供 HR 使用，不设置独立的敏感字段读取权限；授权组织范围内的人员字段按正常值返回。
-- 编辑页面直接回填手机号和身份证号，不使用星号掩码。
-- PostgreSQL 模式下，详情、新增和编辑会记录审计，但不会在审计记录中保存手机号、身份证号、密码或 JWT。
-- 默认 CORS 只允许 `http://localhost:5173`，可通过 `FRONTEND_URL` 调整。
+- 不在代码、测试、文档、日志、`.env.example` 或 Git 中写入真实 App Secret、Verification Token、Encrypt Key、数据库密码或 JWT Secret。
+- 真实环境变量只存放在部署平台 secret、服务器环境或被 `.gitignore` 排除的 `.env`。
+- 不记录 OAuth code、user access token、open_id、卡片 token 和员工联系方式到普通日志或审计 metadata。
+- 所有组织范围、任务归属、执行人身份和状态流转由后端验证。
+- 正式业务记录使用归档、停用或取消，不通过物理删除破坏历史。
+- migration、seed、生产启动、数据库写入和 schema 破坏性变更应在部署流程中显式审批。
+
+## 相关文档
+
+- [`docs/API.md`](docs/API.md)：接口、字段来源、错误和飞书接口说明。
+- [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)：当前菜单、已实现功能、迁移状态和已知限制。
+- [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma)：实际数据库模型。
+- [`backend/prisma/migrations/`](backend/prisma/migrations/)：数据库迁移历史。

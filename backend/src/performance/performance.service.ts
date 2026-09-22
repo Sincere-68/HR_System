@@ -1785,20 +1785,34 @@ export class PerformanceService {
   }
 
   private async completeWorkflowTask(task: PerformanceWorkflowTaskRecord, user: AuthenticatedUser | null) {
-    const definition = (await this.prisma.performanceInstance.findUniqueOrThrow({ where: { id: task.instanceId }, select: { definitionSnapshot: true } })).definitionSnapshot as unknown as PerformanceTemplateDefinition;
+    const instance = await this.prisma.performanceInstance.findUniqueOrThrow({
+      where: { id: task.instanceId },
+      select: { definitionSnapshot: true, cycleId: true },
+    });
+    const definition = instance.definitionSnapshot as unknown as PerformanceTemplateDefinition;
     const steps = this.workflowManualSteps(definition);
     const nextIndex = task.stepOrder + 1;
+    const completesInstance = nextIndex >= steps.length;
+    const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await tx.performanceWorkflowTask.update({ where: { id: task.id }, data: { status: TaskStatus.COMPLETED, completedAt: new Date() } });
+      await tx.performanceWorkflowTask.update({ where: { id: task.id }, data: { status: TaskStatus.COMPLETED, completedAt: now } });
       await tx.performanceInstance.update({
         where: { id: task.instanceId, currentWorkflowOrder: task.stepOrder },
-        data: nextIndex >= steps.length
-          ? { currentWorkflowOrder: null, workflowCompletedAt: new Date(), status: ProcessStatus.COMPLETED }
+        data: completesInstance
+          ? { currentWorkflowOrder: null, workflowCompletedAt: now, status: ProcessStatus.COMPLETED }
           : { currentWorkflowOrder: nextIndex, status: ProcessStatus.IN_PROGRESS },
       });
+      if (completesInstance) {
+        const remainingInstances = await tx.performanceInstance.count({
+          where: { cycleId: instance.cycleId, id: { not: task.instanceId }, status: { notIn: [ProcessStatus.COMPLETED, ProcessStatus.CANCELLED] } },
+        });
+        if (remainingInstances === 0) {
+          await tx.performanceCycle.update({ where: { id: instance.cycleId }, data: { status: ProcessStatus.COMPLETED, completedAt: now } });
+        }
+      }
       await this.audit.create(user?.id ? { userId: user.id } : {}, AuditAction.UPDATE, task.id, { resource: 'performance-workflow-task', action: 'complete' }, tx, 'performance_workflow_task');
     });
-    if (nextIndex < steps.length) await this.openWorkflowStep(task.instanceId, nextIndex);
+    if (!completesInstance) await this.openWorkflowStep(task.instanceId, nextIndex);
   }
 
   private async handleWorkflowRejection(task: PerformanceWorkflowTaskRecord, user: AuthenticatedUser | null) {
@@ -1888,6 +1902,14 @@ export class PerformanceService {
           ...resultUpdate,
         },
       });
+      if (manualSteps.length === 0) {
+        const remainingInstances = await tx.performanceInstance.count({
+          where: { cycleId: instance.cycleId, id: { not: instance.id }, status: { notIn: [ProcessStatus.COMPLETED, ProcessStatus.CANCELLED] } },
+        });
+        if (remainingInstances === 0) {
+          await tx.performanceCycle.update({ where: { id: instance.cycleId }, data: { status: ProcessStatus.COMPLETED, completedAt: new Date() } });
+        }
+      }
       await this.audit.create({ userId: user.id }, AuditAction.UPDATE, instance.id, { resource: 'performance-assessment', action: 'complete' }, tx, 'performance_instance');
     });
     if (manualSteps.length > 0) await this.openWorkflowStep(instance.id, 0);
