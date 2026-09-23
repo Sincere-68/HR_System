@@ -910,7 +910,7 @@ export class EmployeesService {
               startDate: entryDate,
               plannedEndDate: probationEndDate,
               probationMonths: dto.probationMonths,
-              status: ProcessStatus.IN_PROGRESS,
+              status: ProcessStatus.DRAFT,
             },
           });
         }

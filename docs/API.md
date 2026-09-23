@@ -265,6 +265,65 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 接口可同时保存已确认的候选人证件/教育快照和 Offer 薪资、兼职、任职、直线经理、全日制公司及合同快照字段。服务端固定 `Offer.employmentRelationship=INTERN`、`status=DRAFT`、`issueDate=null`，并以 `INTERN-YYYYMMDD-####` 规则生成编号，在 `offer_no` 唯一冲突时最多重试 3 次。事务仅创建 `Candidate`、可选 Candidate 快照、`Offer` 和可选 Offer 快照；不会创建 `Employee`、`EmploymentPeriod`、`EmployeeAssignment`、`ReportingRelationship`、`EmployeeAgreement`、`OnboardingCase`、`ApprovalRequest` 或 `ApprovalStep`。不提供审批预览或提交。
 
 
+## 任职管理：审批、转换与独立兼职职责
+
+以下接口仅支持数据库模式，并统一位于 `/api/v1`。完整状态机、日期和事务规则见 [`EMPLOYMENT_BUSINESS_RULES.md`](EMPLOYMENT_BUSINESS_RULES.md)。
+
+### 任职审批流程管理
+
+需要 `employment.approval-flow.manage`：
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `POST /employment-approval-flows` | 创建流程定义及首个草稿版本。 |
+| `PATCH /employment-approval-flows/:definitionId` | 修改未发布定义及其草稿节点。 |
+| `POST /employment-approval-flows/:definitionId/versions` | 在未归档定义下创建新草稿版本。 |
+| `PATCH /employment-approval-flows/versions/:versionId` | 修改草稿版本节点。 |
+| `POST /employment-approval-flows/versions/:versionId/publish` | 发布版本，并归档同业务类型旧发布定义/版本。 |
+| `POST /employment-approval-flows/:definitionId/archive` | 归档定义及其草稿/发布版本，保留历史。 |
+
+节点必须从 1 开始连续排序。`USER` 节点指定 `assigneeUserId`；`ROLE` 节点指定 `assigneeRoleId`；`DIRECTORY` 当前只支持 `{ "directory": "JOB_TITLE", "value": "<jobTitleId>" }`。当前没有流程查询列表、文件导入或导出接口。
+
+### 任职审批运行时
+
+| 方法与路径 | 说明 |
+| --- | --- |
+| `GET /employment-approvals/my` | 查询本人发起的申请。 |
+| `GET /employment-approvals/current` | 查询本人当前待处理节点。 |
+| `GET /employment-approvals/:id` | 查询本人参与、全量 HR 或业务组织范围内的审批详情。 |
+| `POST /employment-approvals/:id/approve` | 当前节点通过；最终节点使审批和业务进入待生效。 |
+| `POST /employment-approvals/:id/reject` | 当前节点驳回，业务同步为 `REJECTED`；意见必填。 |
+| `POST /employment-approvals/:id/return` | 退回修订，原申请关闭，业务恢复 `DRAFT`；意见必填。 |
+| `POST /employment-approvals/:id/withdraw` | 尚无节点决定时由申请人撤回，业务同步为 `WITHDRAWN`。 |
+
+审批严格串行；能够查看审批不代表能够处理节点。转换审批的部门范围由创建时源组织快照和目标组织共同决定；兼职审批同时校验员工当前组织与职责部门。
+
+### 任职转换
+
+`POST /employment/conversions` 需要 `employee.update`，仅接受：
+
+- `INTERN_TO_EMPLOYEE`
+- `LABOR_TO_EMPLOYEE`
+
+请求包含员工、源任职周期、目标组织、可选目标职位/职务/职级和 `plannedEffectiveDate`。源关系必须与转换类型匹配，源和目标组织均须在范围内；同一源周期不能存在第二笔开放转换。转换和审批在同一事务中创建，没有已发布流程时整笔回滚。
+
+`GET /employment/conversions` 与 `GET /employment/conversions/:id` 需要 `employee.read`；支持按状态、类型和姓名/工号查询，并强制组织范围。
+
+`POST /employment/conversions/:id/activate` 需要 `employee.update`。只有审批和转换均为 `PENDING_EFFECTIVE` 且计划日期已经到达时才能生效。原周期/任职/状态在生效日前一日结束，新正式周期/任职/状态从生效日开始；业务和审批在同一事务中完成。重复生效返回 `409`。
+
+### 独立兼职职责
+
+`POST /employment/part-time-records` 需要 `employee.update`，创建独立 `PartTimeRecord` 并发起 `PART_TIME_RECORD` 审批，不创建第二条主要 `EmployeeAssignment`。开始日不得早于上海业务日今天；同员工、机构、部门和职务的非终态日期不得重叠；兼职经理不能为本人。
+
+| 方法与路径 | 权限 | 说明 |
+| --- | --- | --- |
+| `GET /employment/part-time-records` | `employee.read` | 按状态、员工、关键词和职责部门分页查询。 |
+| `GET /employment/part-time-records/:id` | `employee.read` | 查询范围内详情；跨范围经理摘要会被裁剪。 |
+| `POST /employment/part-time-records/:id/activate` | `employee.update` | 最终审批通过且开始日已到时生效；重复调用 `ACTIVE` 记录保持幂等。 |
+| `POST /employment/part-time-records/:id/end` | `employee.update` | 结束 `ACTIVE` 记录并保留历史；重复结束保持幂等。 |
+
+该独立写入底座与 P0 页面 `GET /employment/part-time` 的 `EmployeeAssignment` 查询视图暂时并存，前端尚未接入新申请表单。
+
 ## 任职管理：人员页专属子表
 
 ### GET `/employment/personnel-labor-workers`
@@ -331,6 +390,13 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 - `employee.update`
 - `employee.data.all`
 - `organization.read`
+- `employment.movement.manage`
+- `employment.termination.force`
+- `employment.reporting.adjust`
+- `employment.approval-flow.manage`
+- `employment.export`
+
+任职审批、转换和兼职职责仍分别复用 `employee.read`、`employee.update`、`employee.data.all` 和组织树范围；角色名不能替代权限判断。
 
 ## 错误格式
 
@@ -348,8 +414,9 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 - `400`：请求字段或筛选参数非法
 - `401`：未登录、令牌无效或过期
 - `403`：缺少操作权限或目标部门不在范围内
-- `404`：员工不存在或不在数据范围内
-- `409`：工号或身份证号冲突
+- `404`：资源不存在或不在数据范围内
+- `409`：唯一键、当前状态、并发条件、日期重叠或重复生效冲突
+- `422`：没有唯一可用的已发布审批流程、审批节点无法解析或流程配置不完整
 - `429`：请求过于频繁
 
 ## 审计
@@ -360,4 +427,4 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 - `CREATE`
 - `UPDATE`
 
-`audit_logs.metadata` 只保存 `changedFields` 等变更元数据。手机号、身份证号、密码和 JWT 不写入审计。导出功能本期暂缓，因此虽然数据库枚举预留 `EXPORT`，当前没有导出接口或导出日志。
+`audit_logs.metadata` 保存资源对应的变更元数据，不保存密码或 JWT。人员变更记录 `changedFields` 等摘要；任职流程记录流程版本、业务类型/ID、动作、前后状态和节点序号；兼职职责记录创建、生效与结束。人员和试用模块已有受权限控制的导入/导出接口，但是否写 `EXPORT` 审计以各接口当前实现为准，不能仅凭枚举存在推断。

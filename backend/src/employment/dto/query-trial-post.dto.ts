@@ -1,9 +1,14 @@
 import { ProcessStatus } from '@prisma/client';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryTrialPostDto {
+  @ApiPropertyOptional({ enum: ['active', 'evaluating', 'failed', 'passed', 'all'] })
+  @IsOptional()
+  @IsIn(['active', 'evaluating', 'failed', 'passed', 'all'])
+  view?: 'active' | 'evaluating' | 'failed' | 'passed' | 'all';
+
   @ApiPropertyOptional({ description: '员工姓名或工号关键字' })
   @IsOptional()
   @IsString()

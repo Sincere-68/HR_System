@@ -38,6 +38,7 @@ describe('DemoDataService', () => {
 
   it('creates and updates in-memory employees', () => {
     const service = createService();
+    const initialEmployeeCount = service.getEmployees().length;
     const created = service.createEmployee({
       employeeNo: 'DEMO-4001',
       name: '演示新员工',
@@ -53,7 +54,7 @@ describe('DemoDataService', () => {
       employmentStatus: 'RESIGNED',
     });
 
-    expect(service.getEmployees()).toHaveLength(5);
+    expect(service.getEmployees()).toHaveLength(initialEmployeeCount + 1);
     expect(created.name).toBe('演示员工（已编辑）');
     expect(created.organization.name).toBe('财务部');
     expect(created.employmentRecords[0]?.status).toBe(EmploymentStatus.RESIGNED);

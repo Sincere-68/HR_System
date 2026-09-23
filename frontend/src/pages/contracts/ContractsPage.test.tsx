@@ -1,6 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { ContractsPage } from './ContractsPage';
 
 const useContracts = vi.fn();
@@ -43,7 +44,7 @@ describe('ContractsPage', () => {
 
   it('keeps the exact 14-column order and renders labels, placeholders, and disabled action', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '工号', '姓名', '部门', '入职日期', '全日制公司', '合同类型', '期限类型', '生效日期',
       '终止日期', '最新电子协议签署状态', '最新电子协议附件', '电子协议签署记录', '合同备注', '操作',

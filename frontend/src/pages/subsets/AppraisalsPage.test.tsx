@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { AppraisalsPage } from './AppraisalsPage';
 
 const useAppraisalList = vi.fn();
@@ -32,7 +33,7 @@ describe('AppraisalsPage', () => {
 
   it('renders the exact 12-column order and preserves a zero score', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '邮箱', '工号', '部门', '考核年度', '周期名称', '绩效活动', '考核部门',
       '最终得分', '起始日期', '截止日期', '操作',

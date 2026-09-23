@@ -1,6 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { TransferTypesPage } from './TransferTypesPage';
 
 const useTransferTypes = vi.fn();
@@ -35,7 +36,7 @@ describe('TransferTypesPage', () => {
   it('keeps the exact five-column order and renders only confirmed data', () => {
     renderPage();
 
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader')
       .map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '调动类型', '显示顺序', '生效日期', '状态', '操作',

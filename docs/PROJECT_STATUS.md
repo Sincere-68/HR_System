@@ -1,6 +1,6 @@
 # HR 系统项目进展快照
 
-> 快照日期：2026-08-28
+> 快照日期：2026-09-23
 >
 > 本文用于新对话接续，记录当前代码已经实现的页面、接口、字段来源、查询口径、验证结果和已知限制。若本文与当前代码不一致，以 [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma)、shared 契约和实际前后端代码为准；本文不替代业务约束、Prisma Migration 或 API 源码。
 
@@ -87,18 +87,18 @@
 
 | 页面 | 前端路由 | 后端接口 | 当前状态/口径 |
 |---|---|---|---|
-| 试用管理 | `/employment/probation` | `GET /employment/probation` | 已实现业务记录列表及分组视图。 |
+| 试用管理 | `/employment/probation` | 试用列表、审批人、导入模板/导入/导出、编辑试用期，以及 9 个试用流程操作接口 | 已对齐北森的五个列表视图、筛选字段和导出入口；支持编辑试用期、批量转正申请、发起试用中/转正考核、审批催办和转交。XLSX/CSV 导入及模板接口保留给数据迁移或后续受控入口，不在当前主界面展示。 |
 | 异动管理 | `/employment/changes` | `GET /employment/movements` | 已实现异动记录及进行中/已完成/全部视图。 |
 | 试岗期管理 | `/employment/trial-post` | `GET /employment/trial-posts` | 已实现试岗记录列表。 |
-| 实习生管理 | `/employment/interns` | `GET /employment/interns` | 已实现当前有效实习任职周期。 |
-| 劳务人员管理 | `/employment/labor` | `GET /employment/labor-workers` | 已实现当前有效劳务人员任职周期。 |
+| 实习生管理 | `/employment/interns` | `GET /employment/interns`、转换详情/申请底座 | 当前、已离职等可靠视图已实现；`POST /employment/conversions` 支持实习转正式申请，前端写入入口尚未接入。 |
+| 劳务人员管理 | `/employment/labor` | `GET /employment/labor-workers`、转换详情/申请底座 | 当前、已离职等可靠视图已实现；`POST /employment/conversions` 支持劳务转正式申请，前端写入入口尚未接入。 |
 | 离职管理 | `/employment/termination` | `GET /employment/terminations` | 已实现离职业务记录及进行中/已完成/全部视图。 |
-| 退休管理 | `/employment/retirement` | `GET /employment/retirements` | 已实现退休业务记录列表。 |
-| 兼职管理 | `/employment/part-time` | `GET /employment/part-time` | 已实现当前有效兼职任职关系。 |
-| 任职记录 | `/employment/records` | `GET /employment/records` | 已实现当前/历史两种口径。 |
-| 汇报关系 | `/employment/reporting-lines` | 无列表接口 | 待确认字段的占位页；必须保留“汇报关系”和“汇报关系图”两个页签。 |
+| 退休管理 | `/employment/retirement` | `GET /employment/retirements` | 已实现即将退休、办理中、逾期、完成和全部等可靠视图；意向申请因无来源保持 unsupported。 |
+| 兼职管理 | `/employment/part-time` | `GET /employment/part-time`；`/employment/part-time-records` 写入底座 | 页面仍以 `EmployeeAssignment` 查询视图为主；独立兼职职责已具备申请、审批、生效、结束后端链路，前端尚未接入。 |
+| 任职记录 | `/employment/records` | `GET /employment/records` | 已实现当前/历史两种口径及详情。 |
+| 汇报关系 | `/employment/reporting-lines` | `GET /employment/reporting-relationships` | 已实现显式员工 ID 关系的列表和完整授权图；不再以经理姓名或邮箱推断关系，调整写入仍未开放。 |
 
-九个已实现页面的操作列均按 `employeeId + canViewEmployeeDetail` 决定是否显示“查看”；不符合当前详情范围时禁用并显示“暂无详情”。
+九个已实现页面的操作列均按 `employeeId + canViewEmployeeDetail` 决定是否显示“查看”；不符合当前详情范围时禁用并显示“暂无详情”。试用管理额外依据 `canManage` 和流程状态展示维护操作。
 
 ### 4.4 人员子集
 
@@ -306,7 +306,14 @@
 | 工号、姓名 | `employeeNo`、`employeeName` | 关联 `Employee`。 |
 | 部门、职位 | `departmentName`、`positionName` | 同一任职周期中，在试用开始日期有效的任职关系。 |
 | 试用开始日期、预计试用结束日期 | `startDate`、`plannedEndDate` | `ProbationRecord.startDate/plannedEndDate`。 |
-| 操作 | — | 按当前详情范围查看人员。 |
+| 试用期、到期情况、流程状态 | `probationMonths`、`daysUntilPlannedEnd`、`status` | 全部试用员工视图展示；到期队列默认筛选 30 天内待发起考核的记录。 |
+| 考核评价、转正意见 | `evaluation`、`result` | 考核中和转正待确认队列展示；提交评价后记录进入待确认状态。 |
+| 实际结束、转正日期、延期次数 | `actualEndDate`、`confirmedDate`、`extensionCount` | 已转正或全部试用员工视图展示。 |
+| 操作 | `canManage`、`status` | `DRAFT -> IN_PROGRESS -> PENDING -> APPROVED -> COMPLETED`：可编辑日期、发起/批量发起考核、提交评价、发起转正审批、审批通过后生效转正。退回考核会撤回审批单并跳过当前待处理节点，避免留下悬挂审批；生效转正同步当前任职周期、任职记录和任职关系中的转正日期，并写入审计日志。 |
+
+试用管理导入支持 XLSX/CSV、单次最多 10MB/10000 条；支持北森导出字段 `JobNumber`、`parent_Name`、`OIdDepartment`、`OIdJobPosition`、`ProbationStartDate`、`ProbationStopDate`。导入以工号定位员工，并按试用开始日期校验有效任职；填写的姓名、部门和职位必须与该任职一致。导入仅新建或更新待发起/考核中的记录，不覆盖待确认或已转正记录；每行返回创建、更新或失败原因，并写入审计日志。导出支持当前筛选条件或当前已选记录，生成业务中文列 XLSX/CSV。
+
+试用管理使用 `ApprovalRequest + ApprovalStep` 保存转正审批：列表展示实际当前审批人，审批中记录支持催办与转交；审批通过后再执行转正生效。默认 Demo 模式不保存任职周期和试用记录，因此接口返回空分页；完整列表及维护流程需要数据库模式下的任职数据。
 
 #### 异动管理
 
@@ -523,18 +530,22 @@
 - 历史记录的可见性不自动授予人员当前详情权限；API 使用 `canViewEmployeeDetail` 明确控制操作列。
 - 当前人员、合同和名册按唯一的当前有效部门任职展示；员工不同时间的历史部门记录不得导致同一统计时点重复计数。
 
-## 七、已确认的审批业务规则
+## 七、已确认的任职审批与写入规则
 
-- 员工信息修改是否进入审批及具体适用范围由 HR 确定。
-- 审批支持多级流程；每个特定任务匹配特定流程。流程定义由 HR 导入、导出和修改，其中配置审批级数、审批节点、审批人及审批人变更。
-- 申请在最终审批通过后才写入正式业务数据；流程最终结果不通过时，整个申请视为不通过。
-- HR 可查看全部审批；部门负责人可查看本部门及全部下级组织的审批；实际参与过流程的人员可查看其参与的对应审批。
-- 历史审批永久保留。具备最大权限的人员可以修改审批记录，但修改必须留下审计记录，不能无痕覆盖。
-- 审批状态及退回、驳回、撤回等具体状态流转仍待用户确认。
+完整规则见 [`EMPLOYMENT_BUSINESS_RULES.md`](EMPLOYMENT_BUSINESS_RULES.md)。当前实现口径：
+
+- 任职审批流程按业务类型建立定义和版本；同一业务类型最多一个已发布定义，同一定义最多一个已发布版本，申请固定绑定提交时版本。
+- 支持 `USER`、`ROLE` 和职务目录三类审批节点；节点从 1 开始连续排列并严格串行处理。
+- 任职申请创建后为 `PENDING`；中间节点通过不改变正式业务数据；最终节点通过后审批和业务记录同事务进入 `PENDING_EFFECTIVE`。
+- 驳回同步为 `REJECTED`；未有节点决定前申请人可撤回并同步为 `WITHDRAWN`；退回修订关闭原审批、保留历史，并把业务记录恢复为 `DRAFT`。
+- 实习/劳务转换和独立兼职职责均显式生效；未到计划日期不得提前生效。正式业务写入与审批 `COMPLETED` 在同一事务中完成，任一步失败全部回滚。
+- 审批详情对申请人、任一审批参与者、拥有全量人员数据权限的 HR 可见；部门 HR 仅能查看关联业务的员工及目标组织都位于本部门和下级组织范围内的记录。
+- 审批历史和业务快照永久保留；当前没有并行会签、加签、代理、流程文件导入导出或已完成审批修改接口。
+- 员工信息修改是否进入上述任职审批底座仍由 HR 按具体业务决定，不能把所有人员 PATCH 自动纳入审批。
 
 ## 八、已完成的关键修复
 
-- 任职管理九个列表均已建立前端页面、shared 契约和后端只读接口。
+- 任职管理九个列表均已建立前端页面、shared 契约和后端查询接口；其中试用管理已扩展为可维护的转正流程。
 - 兼职关键词输入草稿与 URL 查询参数同步，搜索触发逻辑已修复。
 - 当前有效日期判断统一按日历日边界处理，减少日期时间分量导致的漏查。
 - 任职记录“是否最新主职记录”改为在授权全集中计算，不依赖当前分页。
@@ -551,15 +562,20 @@
 - 人员编辑页部门选择已启用：`PATCH /employees/:id` 接受有权限的有效 `organizationId`，仅从对应任职周期的 `EmploymentPeriod.entryDate` 已不晚于当前业务日的有效主要任职中选择记录，以 UTC 业务日结束旧主要任职并复制任职快照创建新主要任职，同时同步兼容 `employees.organization_id` 并记录目录值变更日志；部门变更不自动修改职位。对于先前仅创建主档案而没有任职记录的人员，编辑页要求一次性补齐部门、入职日期、雇佣关系、用工形式、人员状态，保存时创建首段任职周期、主要任职和人员状态记录。人员 PATCH 已移除旧 `idCardNo` 输入，只接受规范证件字段。证件类型已按用户确认扩展为 60 项；仅居民身份证 `NATIONAL_ID` 同步迁移期兼容字段，任一其他证件类型均令其为 `null`。切换证件类型、仅改号码及仅改截止日期都会在同一事务中同步规范记录与兼容字段；完整证件记录缺失时必须一并给出类型和号码。旧泛化 `RESIDENCE_PERMIT` 在未来迁移中保守转换为 `OTHER`，不得猜测为港澳或台湾居民居住证。
 - 人员字段变更日志已覆盖主档、单账户银行资料、当前紧急联系人、主要证件、最高教育以及当前任职字段；更新当前关联记录或按完整字段创建缺失的当前关联记录都会写日志。目录和已确认枚举字段记录稳定 code/ID 与修改当时中文标签快照。Demo 详情改为返回完整 `EmployeeDetail` 结构，不伪造 PostgreSQL 任职、银行、联系人或教育关系资料；仅将精简虚构主档已有的旧 `idCardNo` 兼容投影为 `NATIONAL_ID` 证件字段。
 - 新增人员表单的银行账号正则已修正为 1–19 位数字校验；新增与编辑共用完整 `EmployeeDetail` 回填契约。
+- 任职审批基础已实现流程定义/版本/节点、串行运行时以及审批历史；流程发布、节点解析、当前审批人、驳回、撤回、退回修订和业务状态同步均由后端强制执行。
+- 实习/劳务转正式已实现申请和显式生效：创建转换与审批、最终审批与待生效、周期/任职/状态切换与审批完成分别保持事务原子性；原记录在生效日前一日结束，新正式记录从生效日开始，且不能提前生效。
+- 独立兼职职责已实现申请、审批、待生效、生效和结束；不会创建第二条主要任职，重复生效/结束保持幂等，跨范围经理摘要会被裁剪。
+- 任职审批详情已按参与者、全量 HR 或业务组织范围授权；转换使用创建时源组织快照和目标组织，兼职同时校验员工当前组织与职责部门。
 
 ## 九、最近一次聚焦验证结果
 
-以下是已经实际执行过的聚焦结果，不代表当前工作区所有文件的全量测试：
+以下包含历史聚焦结果以及 2026-09-23 对当前工作区执行的最终全量回归：
 
 | 范围 | 结果 |
 |---|---|
 | 任职管理九页前端测试 | 9 个文件、34/34 测试通过。 |
-| `employment.service` 后端测试 | 49/49 测试通过。 |
+| 试用管理页面 | 9/9 测试通过。 |
+| 试用管理相关后端测试 | 3 个套件、92/92 测试通过。 |
 | 任职 presenters | 14/14 测试通过。 |
 | 调动类型后端 service | 2/2 测试通过。 |
 | 调动类型页面 | 3/3 测试通过。 |
@@ -581,12 +597,20 @@
 | 证件类型扩展 | 60 项用户确认的证件类型及统一中文标签已完成 shared/Prisma/前端接入；shared build/typecheck、frontend typecheck、人员/列表/身份证读取页 Vitest（18/18）、后端 employees 聚焦 Jest（25/25）、Prisma 静态验证和 `git diff --check` 通过。Prisma Client 重新生成被 Windows query engine 文件锁阻塞，尚未完成。 |
 | 组织目录替换 | 用户确认的四层、44 节点组织树已固化为 shared 目录，根为上海宜信电子商务有限公司，负责人分组为 CEO陈锐/董事长陈钢；Demo、seed、组织范围和组织列表已同步，旧组织属于测试数据，替换脚本会直接删除。组织 service、AccessControl、DemoData、employees 聚焦后端测试 33/33，shared 目录断言、shared build/typecheck、backend/frontend typecheck（前端通过）及 `git diff --check` 已执行；组织替换脚本未执行、未连接数据库。 |
 | 人员导入导出 | “全部在职”表格右上角已增加导入、导出按钮。导出弹窗可勾选字段并选择 XLSX/CSV；首列勾选人员时导出勾选项，未勾选时按当前姓名或工号关键词/部门/雇佣关系/人员状态筛选导出全部有权人员。导入按中文业务表头读取 XLSX/CSV、以工号创建或局部更新并返回逐行结果；人员资料在政治面貌与紧急联系人之间严格使用“籍贯、户口类别、户籍所在地、联系地址”四项，其中三项文本按导入原文保存且不要求地区编码或目录匹配；旧“全部在职”导出的 `parent_Birthplace`、`parent_RegistAddress`、`parent_HomeAddress` 分别兼容写入籍贯、户籍所在地、联系地址；导入不使用交互式新增、编辑或补建任职的必填规则，未填写字段不会覆盖已有值。新工号总会先创建可持久化的员工主档；同一行能安全匹配部门并提供用工形式时建立任职周期和部门任职，入职日期、雇佣关系及人员状态等缺失字段保留为空或采用已有安全默认值。无法构造的任职、证件、联系人、教育、全日制公司或经理关系只产生字段级提示，不阻塞同一行其他字段。证件、紧急联系人和教育经历均按文件中已提供的字段保存，其他字段可以为空；无有效经理、部门等关联对象时只产生字段级提示。工作地点、籍贯、户籍所在地和联系地址均按导入文件原文保存；累计工龄（年）保存为导入基数，后续工作履历按日期累计相加。全日制公司只匹配已有唯一目录，直线经理只匹配已有唯一有效员工；职位名称无法匹配时作为提示而不猜测写入。完整新增页面仍维持其必填任职/合同规则。后端 `POST /employees/export`、`POST /employees/import-template`、`POST /employees/import` 使用共享 `PERSONNEL_FIELDS` 注册表。 |
+| 任职审批/转换/兼职聚焦回归 | 5 个套件、69/69 测试通过；另一次核心服务回归为 3 个套件、55/55。 |
+| 任职 Foundation 隔离库 | `hr_personnel_demo_test` 中 16 个 migration 均为最新；真实 HTTP 完成 3 个两级流程、10 个申请、20 个步骤、5 个转换、5 个兼职和 39 条相关审计，数据库事务断言通过。 |
+| 2026-09-23 backend 全量 Jest | 53 个套件、553/553 测试通过。 |
+| 2026-09-23 frontend 全量 Vitest | 串行执行 50 个文件、238/238 测试通过。 |
+| 2026-09-23 shared 契约 | `employment-business-contracts.test.ts` 自执行断言通过；shared 本身没有 Jest/Vitest `test` script。 |
+| 2026-09-23 全 workspace typecheck | shared、backend、frontend 全部通过。 |
+| 2026-09-23 全 workspace build | shared CJS/ESM、Nest backend、Vite frontend 全部通过；Vite 仅提示 `antd` chunk 超过 1000 kB。 |
+| 2026-09-23 Prisma 与 diff | schema validate 通过，隔离库 migration status 为最新；`git diff --check` 无错误，仅有 Windows LF/CRLF 提示。 |
 
-本次文档整理没有启动应用、连接 PostgreSQL、运行 migration/seed，也没有写入业务数据库。
+2026-09-23 的数据库验证只连接本机 Docker `hr_personnel_demo_test`，使用 `MOCK-HR-STAGE2-*` 虚构数据；主库 `hr_personnel_demo` 未应用 Foundation migration，也未写入该命名空间。
 
 ## 十、已知限制与后续事项
 
-1. 汇报关系页面字段和关系图规则尚未确认，目前是占位页，但“汇报关系/汇报关系图”页签不得删除。
+1. 汇报关系页面已使用显式员工 ID 关系实现列表和授权关系图，但调整/转交写入、其他关系类型配置和历史编辑仍未开放；“汇报关系/汇报关系图”两个页签必须保留。
 2. 材料管理、其余数据分析页面和设置仍是占位实现。
 3. 职责转交只有前端静态交互，没有后端 controller 或可用接收人数据，不是完整业务流程。
 4. Offer 管理支持新增人员与实习生转正两条直接创建路径；其余录用入职页面、合同和调动类型目前均为只读列表，操作按钮禁用；不要在文档中推断不存在的维护能力。
@@ -594,12 +618,11 @@
 6. 枚举对齐 migration 仅做了静态审查和文件修改，尚未在真实 PostgreSQL 上执行或验证；实际执行前必须备份。旧 `FULL_TIME` 测试值将在人员字段 migration 中转换为 `CONTRACT_EMPLOYMENT` 后收窄，不进入 Prisma、shared 或应用 API。
 7. PATCH 当前只支持“省略 = 保持不变”；显式 `null` 清空范围、空字符串规范化与 `expectedVersion` 并发控制尚未确定或实现，不能自行扩展清空语义。
 8. 编辑仍不支持直接经理变更；经理关系循环校验、结束旧关系并新建历史关系，以及跨部门经理候选人在不泄露范围外人员资料前提下的展示方案仍待实现或确认。
-9. [`docs/DATA_MODEL.md`](DATA_MODEL.md) 的“当前实现状态”表已经滞后，仍写着新模块 API 尚未实现、前端仍为占位；当前进展以本文和代码为准，后续如要同步该文档应单独处理。
+9. 任职审批流程管理尚无查询列表、文件导入或导出接口；转换与独立兼职职责的写入底座已完成，但前端仍使用 P0 查询页面，尚未接入申请/审批/生效表单。
 10. 项目仅供 HR 使用，现有列表和详情不再设置独立的敏感字段读取权限或脱敏分支；人员字段仍受员工读取权限和组织数据范围约束。
 11. 职位目录已按名称去重为 288 条唯一名称，业务不再使用职位编号。`20260904110000_deduplicate_positions_by_name` 会按稳定 ID 合并同名 Position、重定向任职/Offer/异动/试岗/编制/绩效职位引用，并在编制唯一键冲突时阻断。迁移后可使用 `CONFIRM_POSITION_CATALOG_UPSERT=UPSERT_288_UNIQUE_POSITION_NAMES npm run db:upsert-position-catalog` 按名称安全创建或更新目录；导入职位仅填写名称。旧 `npm run db:replace-position-catalog` 只供确认的测试库使用。
 12. 当前测试组织目录可通过 `npm run db:replace-organization-catalog` 的显式确认变量替换：设置 `CONFIRM_TEST_ORGANIZATION_CATALOG_RESET=REPLACE_44_TEST_ORGANIZATIONS` 后，脚本直接删除不在 44 节点目录中的旧测试组织，再恢复新目录；不应对包含正式历史数据的数据库运行。
 13. 当前工作区包含大量尚未提交的增量功能，继续开发前必须先查看 `git status` 和相关 diff，不得覆盖或回退已有改动。
-12. 当前工作区包含大量尚未提交的增量功能，继续开发前必须先查看 `git status` 和相关 diff，不得覆盖或回退已有改动。
 
 ## 十一、新对话接续建议
 

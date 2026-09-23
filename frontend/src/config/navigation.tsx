@@ -116,6 +116,7 @@ const implementedRoutes = new Set([
   '/employment/labor',
   '/employment/part-time',
   '/employment/records',
+  '/employment/reporting-lines',
   '/employment/termination',
   '/employment/retirement',
   '/handover',

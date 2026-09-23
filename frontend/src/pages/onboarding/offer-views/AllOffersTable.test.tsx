@@ -1,6 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import type { OfferListItem, PaginatedOfferList } from '@hr-demo/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../../test/ant-table';
 import { AllOffersTable } from './AllOffersTable';
 
 const offer: OfferListItem = {
@@ -64,7 +65,7 @@ describe('AllOffersTable', () => {
   it('renders the required columns, source values, placeholders, Offer status, and disabled action', () => {
     renderTable([offer]);
 
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     const columnHeaders = within(table).getAllByRole('columnheader');
     expect(columnHeaders.map((heading) => heading.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '录用部门', '应聘职位', '入职日期', '审批状态', 'offer状态', '个人邮箱', '手机号码', '操作',

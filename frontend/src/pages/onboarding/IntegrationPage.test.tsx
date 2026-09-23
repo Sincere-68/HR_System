@@ -1,6 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { IntegrationPage } from './IntegrationPage';
 
 const useOnboardingIntegration = vi.fn();
@@ -43,7 +44,7 @@ describe('IntegrationPage', () => {
 
   it('renders exactly eight integration columns in order with mapped and nullable values', () => {
     renderPage('/onboarding/integration?page=2&pageSize=20');
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     const columnHeaders = within(table).getAllByRole('columnheader');
 
     expect(columnHeaders.map((heading) => heading.textContent?.trim()).filter(Boolean)).toEqual([

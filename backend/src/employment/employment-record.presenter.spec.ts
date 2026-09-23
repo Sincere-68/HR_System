@@ -53,6 +53,42 @@ describe('presentEmploymentRecord', () => {
     });
   });
 
+  it('uses current personnel status after regularization without rewriting the original assignment', () => {
+    const probationThenRegular = {
+      ...row,
+      employmentPeriod: {
+        ...row.employmentPeriod,
+        employmentRecords: [
+          {
+            status: EmploymentStatus.REGULAR,
+            effectiveAt: new Date('2026-09-18T00:00:00.000Z'),
+            endedAt: null,
+          },
+          {
+            status: EmploymentStatus.PROBATION,
+            effectiveAt: new Date('2026-07-15T00:00:00.000Z'),
+            endedAt: new Date('2026-09-18T00:00:00.000Z'),
+          },
+        ],
+      },
+      employee: {
+        ...row.employee,
+        employmentRecords: [{ status: EmploymentStatus.REGULAR }],
+      },
+    };
+
+    expect(presentEmploymentRecord(probationThenRegular, {
+      isLatestPrimaryRecord: true,
+      canViewEmployeeDetail: true,
+      view: 'current',
+    }).personnelStatus).toBe(EmploymentStatus.REGULAR);
+    expect(presentEmploymentRecord(probationThenRegular, {
+      isLatestPrimaryRecord: true,
+      canViewEmployeeDetail: true,
+      view: 'history',
+    }).personnelStatus).toBe(EmploymentStatus.PROBATION);
+  });
+
   it('keeps resume availability independent from detail access', () => {
     expect(presentEmploymentRecord(row, {
       isLatestPrimaryRecord: false,

@@ -8,7 +8,7 @@
 
 - 已建立第一版 Prisma/PostgreSQL 表、字段、索引和外键。
 - 已为旧员工数据设计任职周期、主要任职和主要身份证件的迁移回填。
-- 尚未为所有新表开发后端 API 和前端功能页。
+- 任职十入口查询、详情、显式汇报关系、审批流程、实习/劳务转换及独立兼职职责的后端 API 已实现；部分写入底座尚未接入前端。
 - 现有免数据库 Demo 继续使用原来的精简字段，不要求承载本文件中的全部新字段。
 - 只有 PostgreSQL 迁移实际执行后，新结构才会出现在数据库中；仅修改 Prisma 文件不会自动修改数据库。
 
@@ -199,7 +199,7 @@ erDiagram
 | 劳务人员管理 | `employment_periods` 筛选 `employment_relationship=LABOR_WORKER` | 是筛选视图，不复制员工表 |
 | 离职管理 | `termination_records` | 申请、计划/实际最后工作日、原因、交接和审批 |
 | 退休管理 | `retirement_records` | 计划/实际退休日期和办理状态 |
-| 兼职管理 | `employee_assignments.work_arrangement` | 通过兼职/兼任关系筛选，不复制员工表 |
+| 兼职管理 | `employee_assignments.work_arrangement` + `part_time_records` | P0 页面从任职关系读取历史视图；新增独立兼职职责表承载申请、审批、生效和结束，不创建第二条主要任职 |
 | 任职记录 | `employment_periods` + `employee_assignments` + `employment_records` | 组合展示完整历史 |
 | 汇报关系 | `reporting_relationships` | 多上级及历史关系 |
 
@@ -254,7 +254,10 @@ erDiagram
 继续使用 `users`、`roles`、`permissions`、`role_permissions`、`user_data_scopes` 和 `audit_logs`。新增：
 
 - `users.employee_id`：登录账号可选择关联员工档案。
-- `approval_requests` / `approval_steps`：承载多级审批实例。每个特定任务匹配由 HR 导入、导出和修改的特定流程定义；审批级数、节点、审批人及审批人变更均取流程配置。申请最终通过后才写入正式业务数据，最终不通过则整个申请不通过；历史永久保留，最大权限修改审批记录时必须留下审计痕迹。具体审批状态流转仍待确认。
+- `approval_flow_definitions` / `approval_flow_versions` / `approval_flow_nodes`：保存按业务类型版本化的审批配置；同一业务类型最多一个已发布定义，同一定义最多一个已发布版本。节点连续串行，支持指定用户、角色和唯一职务目录解析。
+- `approval_requests` / `approval_steps`：承载不可变审批实例。中间节点通过保持 `PENDING`；最终通过进入 `PENDING_EFFECTIVE`；驳回、撤回、退回分别同步关联业务记录为 `REJECTED`、`WITHDRAWN`、`DRAFT`；显式业务生效后审批进入 `COMPLETED`。原步骤和决定永久保留。
+- `employment_conversions`：保存实习/劳务转正式的源/目标快照、计划生效日和审批引用。生效时在一个事务中以前一日结束源周期/任职/状态，并从生效日创建正式周期/任职/状态。
+- `part_time_records`：保存独立兼职职责及审批历史；状态为 `DRAFT/PENDING/REJECTED/WITHDRAWN/PENDING_EFFECTIVE/ACTIVE/ENDED/CANCELLED`，不替代主要部门任职。
 - `dictionary_types` / `dictionary_items`：学历、民族、婚姻、离职原因等可配置选项。
 - `RecordStatus` 与归档字段：停用或归档，不物理删除。
 
@@ -282,13 +285,14 @@ erDiagram
 
 | 层级 | 当前状态 |
 | --- | --- |
-| Prisma 字段与关系 | 已建立第一版结构；人员类别、雇佣关系、用工形式、八项人员状态、两项任职状态和三项性别已统一 |
-| PostgreSQL migration SQL | 已生成；尚未对用户数据库执行 |
-| PostgreSQL seed | 将同步核心任职周期、主要任职和证件 |
+| Prisma 字段与关系 | 已建立第一版结构；人员类别、雇佣关系、用工形式、八项人员状态、两项任职状态和三项性别已统一；任职审批、转换和独立兼职职责模型已加入 |
+| PostgreSQL migration SQL | 16 个 PostgreSQL migration；Foundation migration 已在本机 `hr_personnel_demo_test` 验证，未应用到主库 `hr_personnel_demo` |
+| PostgreSQL 测试夹具 | 受保护的 `MOCK-HR-*` 脚本仅允许本机隔离测试库；不使用清理型正式 seed |
 | 人员 API | 46 列人员列表、完整详情、新增和当前值编辑已接入；当前任职、主档、单账户银行、主要证件、紧急联系人和最高教育由单事务写入 |
 | 人员字段日志 | 主档、银行、主要证件、紧急联系人、最高教育及当前任职字段在更新或补建当前记录时保存前后值；目录与确认枚举保存稳定 ID/code 与中文标签快照 |
-| 已实现只读 API | 录用入职、人员子集、合同协议、当前在职员工名册；均以 PostgreSQL 数据库模式为准 |
-| 已实现前端页面 | 人员 46 列列表/详情/新增编辑、录用入职五页、人员子集前十页、合同协议、当前在职员工名册 |
+| 任职 API | 十入口查询/详情/计数、显式汇报关系、试用流程、流程定义、串行审批、实习/劳务转换和独立兼职职责后端已实现 |
+| 已实现前端页面 | 人员 46 列列表/详情/新增编辑、录用入职五页、人员子集前十页、合同协议、当前在职员工名册、任职十入口 P0 查询体验 |
+| 待接入前端 | 任职审批流程管理、转换申请/生效及独立兼职职责写入底座尚无正式前端表单 |
 | 待实现页面 | 材料管理及其他未进入本轮范围的分析页面 |
 | 免数据库 Demo | 保留原精简数据；人员列表和详情返回完整契约但关系型字段为 `null`，不伪造 PostgreSQL 关系数据 |
 

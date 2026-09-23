@@ -29,6 +29,7 @@ import { InternManagementPage } from '../pages/employment/InternManagementPage';
 import { LaborWorkerManagementPage } from '../pages/employment/LaborWorkerManagementPage';
 import { PartTimeManagementPage } from '../pages/employment/PartTimeManagementPage';
 import { ProbationPage } from '../pages/employment/ProbationPage';
+import { ReportingLinesPage } from '../pages/employment/ReportingLinesPage';
 import { RetirementManagementPage } from '../pages/employment/RetirementManagementPage';
 import { TrialPostManagementPage } from '../pages/employment/TrialPostManagementPage';
 import { TerminationManagementPage } from '../pages/employment/TerminationManagementPage';
@@ -96,6 +97,7 @@ export function AppRouter() {
           <Route path="employment/labor" element={<LaborWorkerManagementPage />} />
           <Route path="employment/part-time" element={<PartTimeManagementPage />} />
           <Route path="employment/records" element={<EmploymentRecordsPage />} />
+          <Route path="employment/reporting-lines" element={<ReportingLinesPage />} />
           <Route path="employment/termination" element={<TerminationManagementPage />} />
           <Route path="employment/retirement" element={<RetirementManagementPage />} />
           <Route path="onboarding/offers" element={<OffersPage />} />
@@ -126,7 +128,6 @@ export function AppRouter() {
                   title={route.label}
                   routePath={route.key}
                   headingTabs={placeholderHeadingTabs[route.key]}
-                  pendingFields={route.key === '/employment/reporting-lines'}
                 />
               )}
             />

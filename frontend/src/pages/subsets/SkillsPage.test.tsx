@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { SkillsPage } from './SkillsPage';
 
 const useSkillList = vi.fn();
@@ -32,7 +33,7 @@ describe('SkillsPage', () => {
 
   it('renders the exact 9-column order, work email, values, and nullable fields', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '邮箱', '工号', '部门', '技能名称', '掌握程度', '种类', '审批状态', '操作',
     ]);

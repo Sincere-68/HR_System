@@ -16,6 +16,10 @@ import { EmployeesModule } from './employees/employees.module';
 import { EmployeeInfoApprovalModule } from './employee-info-approval/employee-info-approval.module';
 import { EmployeeSubsetsModule } from './employee-subsets/employee-subsets.module';
 import { EmploymentModule } from './employment/employment.module';
+import { EmploymentApprovalFlowManagementModule } from './employment-approvals/employment-approval-flow-management.module';
+import { EmploymentApprovalsModule } from './employment-approvals/employment-approvals.module';
+import { EmploymentConversionsModule } from './employment-conversions/employment-conversions.module';
+import { PartTimeRecordsModule } from './part-time-records/part-time-records.module';
 import { FeishuModule } from './feishu/feishu.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
@@ -45,6 +49,10 @@ import { PerformanceModule } from './performance/performance.module';
     EmployeeInfoApprovalModule,
     EmployeeSubsetsModule,
     EmploymentModule,
+    EmploymentApprovalFlowManagementModule,
+    EmploymentApprovalsModule,
+    EmploymentConversionsModule,
+    PartTimeRecordsModule,
     FeishuModule,
     StaffingModule,
     OnboardingModule,

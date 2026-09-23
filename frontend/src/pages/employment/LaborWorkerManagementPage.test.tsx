@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LaborWorkerManagementPage } from './LaborWorkerManagementPage';
 
 const useLaborWorkers = vi.fn();
@@ -28,6 +28,8 @@ function renderPage(entry = '/employment/labor') {
 }
 
 describe('LaborWorkerManagementPage', () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     cleanup();
     useLaborWorkers.mockReset();
@@ -41,7 +43,7 @@ describe('LaborWorkerManagementPage', () => {
 
   it('keeps the exact required column order and renders the company email', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = screen.getAllByRole('table')[0]!;
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '电子邮箱', '工号', '入职日期', '部门', '职务', '用工形式', '直线经理', '工作地点', '操作',
     ]);
@@ -56,6 +58,78 @@ describe('LaborWorkerManagementPage', () => {
     expect(screen.queryByText(/电子邮箱取同一员工主档案/)).not.toBeInTheDocument();
     expect(screen.queryByText(/电子邮箱尚未确认/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /查看/ }).closest('a')).toHaveAttribute('href', '/personnel/employees/employee-labor-1');
+  });
+
+  it('renders the Beisen dashboard, compact filters, and unavailable management actions', () => {
+    renderPage();
+
+    expect(screen.getByText('在岗劳务人员')).toBeInTheDocument();
+    expect(screen.getByText('转正式中')).toBeInTheDocument();
+    expect(screen.getByText('已转正式')).toBeInTheDocument();
+    expect(screen.getByText('已离职')).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: '筛选人员' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '筛选电子邮箱' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: '筛选部门' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /新增劳务人员/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /导入/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /导出/ })).toBeDisabled();
+  });
+
+  it('shows unsupported labor views without reusing the current collection', () => {
+    renderPage();
+    const callsBeforeSwitch = useLaborWorkers.mock.calls.length;
+
+    fireEvent.click(screen.getByRole('button', { name: '转正式中' }));
+
+    expect(screen.getByText('该视图暂不可用')).toBeInTheDocument();
+    expect(screen.getByText(/劳务转换事件来源待确认/)).toBeInTheDocument();
+    expect(screen.queryByText('虚构劳务人员')).not.toBeInTheDocument();
+    expect(useLaborWorkers).toHaveBeenCalledTimes(callsBeforeSwitch);
+  });
+
+  it('queries the authoritative resigned view for terminated labor workers', () => {
+    renderPage('/employment/labor?view=terminated&keyword=L-002&entryDateFrom=2026-08-01&entryDateTo=2026-08-31&page=2&pageSize=20');
+
+    expect(useLaborWorkers).toHaveBeenLastCalledWith({
+      view: 'resigned',
+      keyword: 'L-002',
+      entryDateFrom: '2026-08-01',
+      entryDateTo: '2026-08-31',
+      page: 2,
+      pageSize: 20,
+    });
+    expect(screen.getByText('虚构劳务人员')).toBeInTheDocument();
+    expect(screen.queryByText('该视图暂不可用')).not.toBeInTheDocument();
+  });
+
+  it('does not show an unsupported count as zero', () => {
+    renderPage();
+
+    expect(screen.getByRole('button', { name: /转正式中/ })).toHaveTextContent('--');
+    expect(screen.getByRole('button', { name: /已转正式/ })).toHaveTextContent('--');
+    expect(screen.getByRole('button', { name: /已离职/ })).toHaveTextContent('—');
+  });
+
+  it('keeps the current total when the terminated history query returns its own total', async () => {
+    useLaborWorkers.mockImplementation((query: { view?: string }) => {
+      const total = query.view === 'resigned' ? 7 : 2;
+      return {
+        data: { data: [row], meta: { page: 1, pageSize: 10, total, totalPages: 1 } },
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      };
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: '在岗劳务人员' })).toHaveTextContent('2'));
+
+    fireEvent.click(screen.getByRole('button', { name: '已离职' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '在岗劳务人员' })).toHaveTextContent('2');
+      expect(screen.getByRole('button', { name: '已离职' })).toHaveTextContent('7');
+    });
   });
 
   it('does not expose the detail link when current employee scope denies it', () => {
@@ -88,7 +162,7 @@ describe('LaborWorkerManagementPage', () => {
 
     renderPage();
 
-    expect(within(screen.getByRole('table')).getAllByText('--')).toHaveLength(1);
+    expect(within(document.querySelector('.labor-worker-table') as HTMLElement).getAllByText('--')).toHaveLength(1);
   });
 
   it('preserves URL filters and pagination in the API query', () => {
@@ -104,7 +178,7 @@ describe('LaborWorkerManagementPage', () => {
 
   it('writes a submitted keyword to URL-backed API state and resets the page', async () => {
     renderPage('/employment/labor?page=3&pageSize=20');
-    const searchbox = screen.getByRole('searchbox', { name: '搜索劳务人员' });
+    const searchbox = screen.getByRole('searchbox', { name: '筛选人员' });
     fireEvent.input(searchbox, { target: { value: '虚构姓名' } });
     await waitFor(() => expect(searchbox).toHaveValue('虚构姓名'));
     fireEvent.click(screen.getByRole('button', { name: 'search' }));

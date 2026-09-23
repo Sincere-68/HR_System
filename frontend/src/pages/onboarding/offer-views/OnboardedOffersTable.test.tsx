@@ -2,6 +2,7 @@ import type { OfferListItem } from '@hr-demo/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { OfferViewTableProps } from './OfferViewTable';
+import { getAntTable } from '../../../test/ant-table';
 import { OnboardedOffersTable } from './OnboardedOffersTable';
 
 const firstOffer = {
@@ -74,7 +75,7 @@ describe('OnboardedOffersTable', () => {
   it('renders the required columns, values, placeholders, gender label, and disabled action', () => {
     renderTable();
 
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '部门', '录用职位', '入职日期', '工作地点', '推荐人', '邮箱', '性别', '操作',
     ]);

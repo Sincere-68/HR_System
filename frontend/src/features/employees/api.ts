@@ -25,11 +25,16 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_BASE_URL, apiRequest, tokenStorage } from '../../lib/api';
 
+export type EmployeeDirectoryQuery = Omit<EmployeeListQuery, 'page' | 'pageSize'>;
+
+const EMPLOYEE_LIST_MAX_PAGE_SIZE = 100;
+
 export const employeeKeys = {
   all: ['employees'] as const,
   blacklist: (query: BlacklistListQuery) => ['blacklist', 'list', query] as const,
   infoApprovals: (query: EmployeeInfoApprovalListQuery) => ['employee-info-approvals', 'list', query] as const,
   list: (query: EmployeeListQuery) => ['employees', 'list', query] as const,
+  directory: (query: EmployeeDirectoryQuery) => ['employees', 'directory', query] as const,
   regular: (query: RegularEmployeeListQuery) => ['employees', 'regular', query] as const,
   personnelLaborWorkers: (query: PersonnelLaborWorkerListQuery) => ['employees', 'personnel-labor-workers', query] as const,
   personnelResigned: (query: PersonnelResignedListQuery) => ['employees', 'personnel-resigned', query] as const,
@@ -126,6 +131,40 @@ export function useEmployees(query: EmployeeListQuery) {
   return useQuery({
     queryKey: employeeKeys.list(query),
     queryFn: () => apiRequest<Paginated<EmployeeListItem>>(`/employees?${toSearchParams(query)}`),
+  });
+}
+
+export async function fetchAllEmployees(query: EmployeeDirectoryQuery) {
+  const firstPage = await apiRequest<Paginated<EmployeeListItem>>(
+    `/employees?${toSearchParams({ ...query, page: 1, pageSize: EMPLOYEE_LIST_MAX_PAGE_SIZE })}`,
+  );
+  const totalPages = Math.max(1, firstPage.meta.totalPages);
+
+  if (totalPages === 1) return firstPage;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => apiRequest<Paginated<EmployeeListItem>>(
+      `/employees?${toSearchParams({
+        ...query,
+        page: index + 2,
+        pageSize: EMPLOYEE_LIST_MAX_PAGE_SIZE,
+      })}`,
+    )),
+  );
+
+  return {
+    ...firstPage,
+    data: [
+      ...firstPage.data,
+      ...remainingPages.flatMap((page) => page.data),
+    ],
+  };
+}
+
+export function useAllEmployees(query: EmployeeDirectoryQuery) {
+  return useQuery({
+    queryKey: employeeKeys.directory(query),
+    queryFn: () => fetchAllEmployees(query),
   });
 }
 

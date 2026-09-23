@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -11,6 +12,11 @@ import {
 } from 'class-validator';
 
 export class QueryInternsDto {
+  @ApiPropertyOptional({ enum: ['intern', 'conversion_pending', 'converted', 'resigned'] })
+  @IsOptional()
+  @IsIn(['intern', 'conversion_pending', 'converted', 'resigned'])
+  view?: 'intern' | 'conversion_pending' | 'converted' | 'resigned';
+
   @ApiPropertyOptional({ description: '实习生姓名或工号关键字' })
   @IsOptional()
   @IsString()

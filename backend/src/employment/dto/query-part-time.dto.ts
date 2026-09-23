@@ -4,6 +4,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -13,6 +14,11 @@ import {
 } from 'class-validator';
 
 export class QueryPartTimeDto {
+  @ApiPropertyOptional({ enum: ['active', 'expiring', 'not_started', 'ended', 'all', 'approval_pending'] })
+  @IsOptional()
+  @IsIn(['active', 'expiring', 'not_started', 'ended', 'all', 'approval_pending'])
+  view?: 'active' | 'expiring' | 'not_started' | 'ended' | 'all' | 'approval_pending';
+
   @ApiPropertyOptional({ description: '兼职员工姓名或工号关键字' })
   @IsOptional()
   @IsString()

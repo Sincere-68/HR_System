@@ -1,6 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditAction, EmploymentStatus } from '@prisma/client';
+import { AuditAction, EmploymentStatus, ProcessStatus } from '@prisma/client';
 import {
   PERMISSIONS,
   ORGANIZATION_CATALOG,
@@ -20,6 +20,36 @@ export interface DemoEmployeeRecord {
   organizationId: string;
   organization: { name: string };
   employmentRecords: { status: EmploymentStatus }[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type DemoProbationEvaluationType = 'IN_PROBATION' | 'REGULARIZATION';
+
+export interface DemoProbationApproval {
+  status: ProcessStatus;
+  approverUserId: string;
+  submittedAt: Date;
+  lastRemindedAt?: Date;
+}
+
+export interface DemoProbationRecord {
+  id: string;
+  employeeId: string;
+  organizationId: string;
+  positionName: string | null;
+  jobTitleName: string | null;
+  startDate: Date;
+  plannedEndDate: Date;
+  probationMonths: number | null;
+  actualEndDate: Date | null;
+  evaluationType: DemoProbationEvaluationType | null;
+  evaluation: string | null;
+  result: string | null;
+  confirmedDate: Date | null;
+  extensionCount: number;
+  status: ProcessStatus;
+  approval: DemoProbationApproval | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -97,7 +127,7 @@ const initialEmployees = [
     mobile: '13800001001',
     idCardNo: '110101199203181021',
     organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
-    status: EmploymentStatus.REGULAR,
+    status: EmploymentStatus.PROBATION,
   },
   {
     id: 'demo-employee-1002',
@@ -106,7 +136,7 @@ const initialEmployees = [
     mobile: '13800001002',
     idCardNo: '310101199507092036',
     organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
-    status: EmploymentStatus.REGULAR,
+    status: EmploymentStatus.PROBATION,
   },
   {
     id: 'demo-employee-2001',
@@ -124,9 +154,27 @@ const initialEmployees = [
     mobile: '13800003001',
     idCardNo: '510101199604112527',
     organizationId: organizationId('CHAIRMAN_CUSTOMER_SERVICE'),
+    status: EmploymentStatus.PROBATION,
+  },
+  {
+    id: 'demo-employee-1003',
+    employeeNo: 'DEMO-1003',
+    name: '沈星河',
+    mobile: '13800001003',
+    idCardNo: '110101199809122318',
+    organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
     status: EmploymentStatus.REGULAR,
   },
 ] as const;
+
+function calendarDate(offsetDays = 0) {
+  const now = new Date();
+  return new Date(Date.UTC(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + offsetDays,
+  ));
+}
 
 function toAuthUser(account: DemoAccount): AuthUser {
   const { password: _password, ...user } = account;
@@ -141,12 +189,14 @@ function toAuthUser(account: DemoAccount): AuthUser {
 export class DemoDataService {
   readonly enabled: boolean;
   private employees: DemoEmployeeRecord[];
+  private probationRecords: DemoProbationRecord[];
   private audits: DemoAuditRecord[] = [];
   private nextEmployeeNumber = 4001;
 
   constructor(config: ConfigService) {
     this.enabled = config.get<boolean>('DEMO_MODE', true);
     this.employees = this.createInitialEmployees();
+    this.probationRecords = this.createInitialProbationRecords();
   }
 
   authenticate(username: string, password: string) {
@@ -179,6 +229,36 @@ export class DemoDataService {
 
   getEmployee(id: string) {
     return this.employees.find((employee) => employee.id === id);
+  }
+
+  setEmployeeEmploymentStatus(employeeId: string, status: EmploymentStatus) {
+    const employee = this.getEmployee(employeeId);
+    if (!employee) throw new ConflictException('员工不存在');
+    employee.employmentRecords = [{ status }];
+    employee.updatedAt = new Date();
+    return employee;
+  }
+
+  getProbationRecords() {
+    return this.probationRecords;
+  }
+
+  getProbationRecord(id: string) {
+    return this.probationRecords.find((record) => record.id === id);
+  }
+
+  getProbationApprovers() {
+    return accounts
+      .filter((account) => account.permissions.includes(PERMISSIONS.EMPLOYEE_UPDATE))
+      .map((account) => ({
+        id: account.id,
+        displayName: account.displayName,
+        workEmail: null,
+      }));
+  }
+
+  getProbationApprover(userId: string) {
+    return this.getProbationApprovers().find((approver) => approver.id === userId);
   }
 
   createEmployee(input: {
@@ -248,6 +328,100 @@ export class DemoDataService {
       createdAt: new Date(createdAt),
       updatedAt: new Date(createdAt),
     }));
+  }
+
+  private createInitialProbationRecords(): DemoProbationRecord[] {
+    const createdAt = calendarDate(-90);
+    return [
+      {
+        id: 'demo-probation-1001',
+        employeeId: 'demo-employee-1001',
+        organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
+        positionName: '运营专员',
+        jobTitleName: '运营专员',
+        startDate: calendarDate(-80),
+        plannedEndDate: calendarDate(10),
+        probationMonths: 3,
+        actualEndDate: null,
+        evaluationType: null,
+        evaluation: null,
+        result: null,
+        confirmedDate: null,
+        extensionCount: 0,
+        status: ProcessStatus.DRAFT,
+        approval: null,
+        createdAt: new Date(createdAt),
+        updatedAt: new Date(createdAt),
+      },
+      {
+        id: 'demo-probation-1002',
+        employeeId: 'demo-employee-1002',
+        organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
+        positionName: '运营主管',
+        jobTitleName: '运营主管',
+        startDate: calendarDate(-70),
+        plannedEndDate: calendarDate(20),
+        probationMonths: 3,
+        actualEndDate: null,
+        evaluationType: 'REGULARIZATION',
+        evaluation: '待完成直属经理评价',
+        result: null,
+        confirmedDate: null,
+        extensionCount: 0,
+        status: ProcessStatus.IN_PROGRESS,
+        approval: null,
+        createdAt: new Date(createdAt),
+        updatedAt: new Date(createdAt),
+      },
+      {
+        id: 'demo-probation-3001',
+        employeeId: 'demo-employee-3001',
+        organizationId: organizationId('CHAIRMAN_CUSTOMER_SERVICE'),
+        positionName: '售后客服',
+        jobTitleName: '客服专员',
+        startDate: calendarDate(-85),
+        plannedEndDate: calendarDate(5),
+        probationMonths: 3,
+        actualEndDate: null,
+        evaluationType: 'REGULARIZATION',
+        evaluation: '试用期考核已完成，建议转正。',
+        result: '建议转正',
+        confirmedDate: null,
+        extensionCount: 0,
+        status: ProcessStatus.PENDING,
+        approval: {
+          status: ProcessStatus.PENDING,
+          approverUserId: 'demo-user-deptadmin',
+          submittedAt: calendarDate(-1),
+        },
+        createdAt: new Date(createdAt),
+        updatedAt: new Date(createdAt),
+      },
+      {
+        id: 'demo-probation-1003',
+        employeeId: 'demo-employee-1003',
+        organizationId: organizationId('CEO_SECOND_TMALL_SUPERMARKET'),
+        positionName: '运营专员',
+        jobTitleName: '运营专员',
+        startDate: calendarDate(-95),
+        plannedEndDate: calendarDate(-5),
+        probationMonths: 3,
+        actualEndDate: calendarDate(-2),
+        evaluationType: 'REGULARIZATION',
+        evaluation: '试用期考核通过。',
+        result: '已转正',
+        confirmedDate: calendarDate(-2),
+        extensionCount: 0,
+        status: ProcessStatus.COMPLETED,
+        approval: {
+          status: ProcessStatus.APPROVED,
+          approverUserId: 'demo-user-admin',
+          submittedAt: calendarDate(-10),
+        },
+        createdAt: new Date(createdAt),
+        updatedAt: new Date(createdAt),
+      },
+    ];
   }
 
   private getOrganizationName(organizationId: string) {

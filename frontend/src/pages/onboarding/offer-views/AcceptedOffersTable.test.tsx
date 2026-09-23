@@ -2,6 +2,7 @@ import type { OfferListItem, PaginatedOfferList } from '@hr-demo/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../../test/ant-table';
 import { AcceptedOffersTable } from './AcceptedOffersTable';
 
 const acceptedOffer: OfferListItem = {
@@ -65,7 +66,7 @@ describe('AcceptedOffersTable', () => {
   it('renders the exact columns with reliable values and placeholders for unavailable fields', () => {
     renderTable([acceptedOffer]);
 
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '录用部门', '应聘职位', '录用职位', '工作地点', '拟入职日期', '试用期(月)', '推荐人',
       '接受offer日期', '个人邮箱', '性别', 'Offer发送人', 'Offer发送日期', '同步状态', '操作',

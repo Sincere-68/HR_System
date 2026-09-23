@@ -271,12 +271,25 @@ export const AGREEMENT_TYPES = [
 ] as const;
 export type AgreementType = (typeof AGREEMENT_TYPES)[number];
 
+export const EMPLOYMENT_BUSINESS_PERMISSIONS = [
+  'employment.movement.manage',
+  'employment.termination.force',
+  'employment.reporting.adjust',
+  'employment.approval-flow.manage',
+  'employment.export',
+] as const;
+
 export const PERMISSIONS = {
   EMPLOYEE_READ: 'employee.read',
   EMPLOYEE_CREATE: 'employee.create',
   EMPLOYEE_UPDATE: 'employee.update',
   EMPLOYEE_DATA_ALL: 'employee.data.all',
   ORGANIZATION_READ: 'organization.read',
+  EMPLOYMENT_MOVEMENT_MANAGE: 'employment.movement.manage',
+  EMPLOYMENT_TERMINATION_FORCE: 'employment.termination.force',
+  EMPLOYMENT_REPORTING_ADJUST: 'employment.reporting.adjust',
+  EMPLOYMENT_APPROVAL_FLOW_MANAGE: 'employment.approval-flow.manage',
+  EMPLOYMENT_EXPORT: 'employment.export',
   PERFORMANCE_READ: 'performance.read',
   PERFORMANCE_TEMPLATE_MANAGE: 'performance.template.manage',
   PERFORMANCE_CYCLE_MANAGE: 'performance.cycle.manage',
@@ -285,6 +298,74 @@ export const PERMISSIONS = {
   PERFORMANCE_AMOUNT_BASE_MANAGE: 'performance.amount-base.manage',
 } as const;
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+
+export const APPROVAL_FLOW_DEFINITION_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const;
+export type ApprovalFlowDefinitionStatus = (typeof APPROVAL_FLOW_DEFINITION_STATUSES)[number];
+
+export const APPROVAL_FLOW_VERSION_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const;
+export type ApprovalFlowVersionStatus = (typeof APPROVAL_FLOW_VERSION_STATUSES)[number];
+
+export const APPROVAL_FLOW_NODE_ASSIGNEE_KINDS = ['USER', 'ROLE', 'DIRECTORY'] as const;
+export type ApprovalFlowNodeAssigneeKind = (typeof APPROVAL_FLOW_NODE_ASSIGNEE_KINDS)[number];
+
+export const EMPLOYMENT_CONVERSION_TYPES = ['INTERN_TO_EMPLOYEE', 'LABOR_TO_EMPLOYEE'] as const;
+export type EmploymentConversionType = (typeof EMPLOYMENT_CONVERSION_TYPES)[number];
+
+export const EMPLOYMENT_APPLICATION_STATUSES = [
+  'DRAFT',
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'WITHDRAWN',
+  'PENDING_EFFECTIVE',
+  'COMPLETED',
+  'CANCELLED',
+] as const;
+export type EmploymentApplicationStatus = (typeof EMPLOYMENT_APPLICATION_STATUSES)[number];
+
+export const EMPLOYMENT_CONVERSION_STATUSES = EMPLOYMENT_APPLICATION_STATUSES;
+export type EmploymentConversionStatus = EmploymentApplicationStatus;
+
+export const PART_TIME_RECORD_STATUSES = [
+  'DRAFT',
+  'PENDING',
+  'REJECTED',
+  'WITHDRAWN',
+  'PENDING_EFFECTIVE',
+  'ACTIVE',
+  'ENDED',
+  'CANCELLED',
+] as const;
+export type PartTimeRecordStatus = (typeof PART_TIME_RECORD_STATUSES)[number];
+
+export interface ApprovalFlowNode {
+  id: string;
+  versionId: string;
+  stepOrder: number;
+  assigneeKind: ApprovalFlowNodeAssigneeKind;
+  assigneeUserId: string | null;
+  assigneeRoleId: string | null;
+  assigneeRule: Record<string, unknown> | null;
+}
+
+export interface ApprovalFlowVersion {
+  id: string;
+  definitionId: string;
+  versionNumber: number;
+  status: ApprovalFlowVersionStatus;
+  publishedAt: string | null;
+  nodes: ApprovalFlowNode[];
+}
+
+export interface ApprovalFlowDefinition {
+  id: string;
+  businessType: string;
+  code: string;
+  name: string;
+  status: ApprovalFlowDefinitionStatus;
+  currentPublishedVersionId: string | null;
+  versions: ApprovalFlowVersion[];
+}
 
 export const PERFORMANCE_MODULE_TYPES = ['METRIC', 'EVALUATION', 'ADJUSTMENT'] as const;
 export type PerformanceModuleType = (typeof PERFORMANCE_MODULE_TYPES)[number];
@@ -1012,10 +1093,15 @@ export interface OfferViewCounts {
 }
 
 export type ProbationListView = 'expiring' | 'reviewing' | 'approval' | 'all' | 'completed';
+export type ProbationEvaluationType = 'IN_PROBATION' | 'REGULARIZATION';
 
 export interface ProbationListQuery {
   view?: ProbationListView;
   keyword?: string;
+  organizationId?: string;
+  probationMonths?: number;
+  /** Used by the expiring view; defaults to 30 days on the API. */
+  expiresWithinDays?: number;
   status?: ProcessStatus;
   startDateFrom?: string;
   startDateTo?: string;
@@ -1026,23 +1112,142 @@ export interface ProbationListQuery {
 }
 
 /**
- * Read-only probation row sourced from ProbationRecord. Department and
- * position are the authorized assignment effective on the probation start
- * date; detail availability reflects the employee's current data scope.
+ * Probation row sourced from ProbationRecord. Department and position are the
+ * authorized assignment effective on the probation start date; management and
+ * detail availability reflect the employee's current data scope.
  */
 export interface ProbationListItem {
   id: string;
   employeeId: string;
   employeeNo: string;
   employeeName: string;
+  organizationName: string | null;
   departmentName: string | null;
   positionName: string | null;
+  jobTitleName: string | null;
   startDate: string;
   plannedEndDate: string;
+  probationMonths: number | null;
+  actualEndDate: string | null;
+  evaluationType: ProbationEvaluationType | null;
+  evaluationName: string | null;
+  result: string | null;
+  evaluation: string | null;
+  evaluationApprovalStatus: ProcessStatus | null;
+  approvalStatus: ProcessStatus | null;
+  currentApproverName: string | null;
+  confirmedDate: string | null;
+  extensionCount: number;
+  status: ProcessStatus;
+  daysUntilPlannedEnd: number;
   canViewEmployeeDetail: boolean;
+  canManage: boolean;
+  canRemindApproval: boolean;
+  canTransferApproval: boolean;
+}
+
+export interface UpdateProbationInput {
+  startDate?: string;
+  plannedEndDate?: string;
+}
+
+export interface SubmitProbationConfirmationInput {
+  evaluation: string;
+  approverUserId: string;
+}
+
+export interface ConfirmProbationInput {
+  confirmedDate: string;
+}
+
+export interface StartProbationEvaluationsInput {
+  probationIds: string[];
+  evaluationType?: ProbationEvaluationType;
+}
+
+export interface StartProbationConfirmationsInput {
+  probationIds: string[];
+  approverUserId: string;
+}
+
+export interface TransferProbationApprovalInput {
+  approverUserId: string;
+}
+
+export interface ProbationApproverOption {
+  id: string;
+  displayName: string;
+  workEmail: string | null;
+}
+
+export interface ProbationActionResult {
+  id: string;
+}
+
+export interface ProbationBatchActionResult {
+  updated: number;
+}
+
+export const PROBATION_IMPORT_FIELDS = [
+  { key: 'employeeNo', title: '工号', required: true },
+  { key: 'employeeName', title: '姓名', required: false },
+  { key: 'departmentName', title: '部门', required: false },
+  { key: 'positionName', title: '职位', required: false },
+  { key: 'startDate', title: '试用开始日期', required: true },
+  { key: 'plannedEndDate', title: '预计试用结束日期', required: true },
+  { key: 'probationMonths', title: '试用期(月)', required: false },
+] as const;
+
+export type ProbationImportFieldKey = (typeof PROBATION_IMPORT_FIELDS)[number]['key'];
+
+export const PROBATION_EXPORT_FIELDS = [
+  { key: 'employeeNo', title: '工号' },
+  { key: 'employeeName', title: '姓名' },
+  { key: 'organizationName', title: '机构' },
+  { key: 'departmentName', title: '部门' },
+  { key: 'positionName', title: '职位' },
+  { key: 'jobTitleName', title: '职务' },
+  { key: 'startDate', title: '试用开始日期' },
+  { key: 'plannedEndDate', title: '预计试用结束日期' },
+  { key: 'probationMonths', title: '试用期(月)' },
+  { key: 'status', title: '试用状态' },
+  { key: 'evaluationName', title: '考核名称' },
+  { key: 'evaluation', title: '考核评价' },
+  { key: 'result', title: '转正意见' },
+  { key: 'approvalStatus', title: '转正审批状态' },
+  { key: 'currentApproverName', title: '当前审批人' },
+  { key: 'actualEndDate', title: '实际试用结束日期' },
+  { key: 'confirmedDate', title: '转正日期' },
+  { key: 'extensionCount', title: '延期次数' },
+] as const;
+
+export type ProbationExportFieldKey = (typeof PROBATION_EXPORT_FIELDS)[number]['key'];
+
+export interface ProbationExportInput {
+  format: PersonnelTransferFormat;
+  fields: ProbationExportFieldKey[];
+  probationIds?: string[];
+  query?: Omit<ProbationListQuery, 'page' | 'pageSize'>;
+}
+
+export interface ProbationImportRowResult {
+  rowNumber: number;
+  employeeNo: string | null;
+  action: 'CREATED' | 'UPDATED' | 'SKIPPED' | 'FAILED';
+  errors: string[];
+  warnings?: string[];
+}
+
+export interface ProbationImportResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  rows: ProbationImportRowResult[];
 }
 
 export interface InternListQuery {
+  view?: 'intern' | 'conversion_pending' | 'converted' | 'resigned';
   keyword?: string;
   startDateFrom?: string;
   startDateTo?: string;
@@ -1072,6 +1277,7 @@ export interface InternListItem {
 }
 
 export interface LaborWorkerListQuery {
+  view?: 'on_duty' | 'conversion_pending' | 'converted' | 'resigned';
   keyword?: string;
   entryDateFrom?: string;
   entryDateTo?: string;
@@ -1176,6 +1382,7 @@ export interface EmploymentRecordListItem {
 }
 
 export interface PartTimeListQuery {
+  view?: 'active' | 'expiring' | 'not_started' | 'ended' | 'all' | 'approval_pending';
   keyword?: string;
   assignmentType?: AssignmentType;
   startDateFrom?: string;
@@ -1208,6 +1415,7 @@ export interface PartTimeListItem {
 }
 
 export interface TrialPostListQuery {
+  view?: 'active' | 'evaluating' | 'failed' | 'passed' | 'all';
   keyword?: string;
   status?: ProcessStatus;
   startDateFrom?: string;
@@ -1355,6 +1563,7 @@ export interface PersonnelResignedListItem {
 }
 
 export interface RetirementListQuery {
+  view?: 'upcoming' | 'in_progress' | 'overdue' | 'completed' | 'all' | 'intention_application';
   keyword?: string;
   status?: ProcessStatus;
   plannedRetirementDateFrom?: string;

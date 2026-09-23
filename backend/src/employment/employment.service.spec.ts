@@ -1,4 +1,19 @@
-import { AssignmentStatus, EmploymentRelationship, EmploymentStatus, ProcessStatus, RecordStatus } from '@prisma/client';
+import {
+  ApprovalDecision,
+  AssignmentStatus,
+  AuditAction,
+  EmploymentRelationship,
+  EmploymentStatus,
+  ProcessStatus,
+  RecordStatus,
+} from '@prisma/client';
+import { PERMISSIONS } from '@hr-demo/shared';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { EmploymentService } from './employment.service';
 
 const user = {
@@ -23,6 +38,7 @@ function createService(demoEnabled = false, rows: unknown[] = []) {
     hasAllEmployeeData: jest.fn(() => false),
     hasPermission: jest.fn(() => false),
     getAccessibleOrganizationIds: jest.fn().mockResolvedValue(['org-a', 'org-child']),
+    getOrganizationSubtreeIds: jest.fn().mockResolvedValue(['org-a', 'org-child']),
     getEmployeeWhere: jest.fn().mockResolvedValue({}),
   };
   return {
@@ -375,6 +391,77 @@ describe('EmploymentService interns', () => {
 
     expect(result.data[0]).toEqual(expect.objectContaining({ workEmail: 'fictional.intern@example.invalid' }));
   });
+
+  it('queries a resigned internship period and its assignment effective on the exit date', async () => {
+    const findMany = jest.fn().mockResolvedValue([{
+      id: 'period-intern-resigned',
+      employeeId: 'employee-intern-resigned',
+      entryDate: new Date('2025-08-01T00:00:00.000Z'),
+      actualExitDate: new Date('2026-01-15T00:00:00.000Z'),
+      employee: { name: '虚构历史实习生', workEmail: null },
+      assignments: [{
+        organization: { id: 'org-a', name: '历史实习部门' },
+        position: { name: '历史实习职位' },
+      }],
+    }]);
+    const queryRaw = jest.fn().mockResolvedValue([{ id: 'period-intern-resigned' }]);
+    const prisma = {
+      employmentPeriod: { findMany, count: jest.fn().mockResolvedValue(1) },
+      employee: { findMany: jest.fn().mockResolvedValue([{ id: 'employee-intern-resigned' }]) },
+      $queryRaw: queryRaw,
+      $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn(() => false),
+      getAccessibleOrganizationIds: jest.fn().mockResolvedValue(['org-a']),
+      getEmployeeWhere: jest.fn().mockResolvedValue({}),
+    };
+    const service = new EmploymentService(prisma as never, access as never, { enabled: false } as never);
+
+    const result = await service.findInterns(user, { view: 'resigned', page: 1, pageSize: 10 } as never);
+
+    expect(queryRaw).toHaveBeenCalled();
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: expect.arrayContaining([
+        { id: { in: ['period-intern-resigned'] } },
+        { actualExitDate: { not: null } },
+      ]) },
+      select: expect.objectContaining({
+        actualExitDate: true,
+        assignments: expect.objectContaining({
+          where: expect.objectContaining({
+            status: { in: [AssignmentStatus.ACTIVE, AssignmentStatus.ENDED] },
+            organizationId: { in: ['org-a'] },
+          }),
+        }),
+      }),
+    }));
+    expect(result.data[0]).toEqual(expect.objectContaining({
+      employeeId: 'employee-intern-resigned',
+      departmentName: '历史实习部门',
+      positionName: '历史实习职位',
+      startDate: '2025-08-01',
+    }));
+  });
+
+  it('rejects internship conversion views instead of returning the current internship page', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      employmentPeriod: { findMany, count: jest.fn().mockResolvedValue(0) },
+      $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn(() => false),
+      getAccessibleOrganizationIds: jest.fn().mockResolvedValue(['org-a']),
+    };
+    const service = new EmploymentService(prisma as never, access as never, { enabled: false } as never);
+
+    await expect(service.findInterns(user, { view: 'conversion_pending', page: 1, pageSize: 10 } as never))
+      .rejects.toMatchObject({
+        constructor: ConflictException,
+        message: '实习转正中视图暂不可用：尚未确认转换事件来源',
+      });
+  });
 });
 
 describe('EmploymentService labor workers', () => {
@@ -493,6 +580,79 @@ describe('EmploymentService labor workers', () => {
       workplaceName: '虚构工作地点',
       canViewEmployeeDetail: true,
     });
+  });
+
+  it('hides a historical manager outside the viewer organization scope while keeping the labor row visible', async () => {
+    const row = {
+      id: 'period-labor-resigned',
+      employeeId: 'employee-labor-resigned',
+      entryDate: new Date('2025-08-01T00:00:00.000Z'),
+      actualExitDate: new Date('2026-01-15T00:00:00.000Z'),
+      employee: {
+        employeeNo: 'L-RESIGNED',
+        name: '虚构历史劳务人员',
+        workEmail: 'fictional.resigned@example.invalid',
+      },
+      assignments: [{
+        startDate: new Date('2025-08-01T00:00:00.000Z'),
+        endDate: new Date('2026-01-15T00:00:00.000Z'),
+        organization: { name: 'A部门' },
+        jobTitle: { name: '历史劳务职务' },
+        workplaceName: 'A地点',
+        workArrangement: 'LABOR_EMPLOYMENT',
+      }],
+    };
+    const findMany = jest.fn().mockResolvedValue([row]);
+    const count = jest.fn().mockResolvedValue(1);
+    const queryRaw = jest.fn().mockResolvedValue([{ id: row.id }]);
+    const reportingFindFirst = jest.fn().mockResolvedValue({
+      managerEmployeeId: 'manager-b-only',
+      manager: { name: 'B部门经理' },
+    });
+    const employeeFindMany = jest.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      employmentPeriod: { findMany, count },
+      reportingRelationship: { findFirst: reportingFindFirst },
+      employee: { findMany: employeeFindMany },
+      $queryRaw: queryRaw,
+      $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn(() => false),
+      getAccessibleOrganizationIds: jest.fn().mockResolvedValue(['org-a']),
+      getEmployeeWhere: jest.fn().mockResolvedValue({
+        assignments: { some: { organizationId: { in: ['org-a'] } } },
+      }),
+    };
+    const service = new EmploymentService(prisma as never, access as never, { enabled: false } as never);
+
+    const result = await service.findLaborWorkers(user, {
+      view: 'resigned', page: 1, pageSize: 10,
+    } as never);
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toEqual(expect.objectContaining({
+      employeeId: 'employee-labor-resigned',
+      departmentName: 'A部门',
+      managerName: null,
+      canViewEmployeeDetail: false,
+    }));
+    expect(employeeFindMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        AND: [
+          { id: { in: ['manager-b-only'] } },
+          { assignments: { some: { organizationId: { in: ['org-a'] } } } },
+        ],
+      },
+      select: { id: true },
+    });
+    expect(access.getEmployeeWhere).toHaveBeenLastCalledWith(
+      user,
+      ['org-a'],
+      new Date('2026-01-15T00:00:00.000Z'),
+    );
   });
 
   it('returns the company email without a separate field permission', async () => {
@@ -666,46 +826,201 @@ describe('EmploymentService part-time assignments', () => {
     });
     expect(result.data[0]?.canViewEmployeeDetail).toBe(false);
   });
-});
 
-describe('EmploymentService probation', () => {
-  it('returns an empty page in demo mode without touching Prisma', async () => {
-    const { service, prisma } = createService(true);
-    await expect(service.findProbation(user, query)).resolves.toEqual({ data: [], meta: { page: 2, pageSize: 20, total: 0, totalPages: 0 } });
-    expect(prisma.probationRecord.findMany).not.toHaveBeenCalled();
+  it('queries ended part-time assignments without copying the active date window', async () => {
+    const row = {
+      id: 'assignment-part-time-ended', employeeId: 'employee-ended',
+      startDate: new Date('2025-01-01T00:00:00.000Z'), endDate: new Date('2025-12-31T00:00:00.000Z'),
+      status: AssignmentStatus.ENDED,
+      employee: { employeeNo: 'F-100', name: '虚构历史兼职员工' },
+      organization: { name: '历史兼职部门' }, jobTitle: null,
+    };
+    const { service, findMany } = createPartTimeService([row]);
+
+    const result = await service.findPartTime(user, { view: 'ended', page: 1, pageSize: 10 } as never);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: expect.arrayContaining([
+        { workArrangement: 'PART_TIME' },
+        { status: AssignmentStatus.ENDED },
+        { endDate: { lt: expect.any(Date) } },
+      ]) },
+    }));
+    expect(findMany.mock.calls[0][0].where.AND).not.toContainEqual({ startDate: { lte: expect.any(Date) } });
+    expect(result.data[0]).toEqual(expect.objectContaining({ assignmentStatus: AssignmentStatus.ENDED }));
   });
 
-  it('queries unarchived probation records with expanded organization scope and maps assignment date', async () => {
-    const row = {
-      id: 'probation-1', employeeId: 'employee-1', employmentPeriodId: 'period-1',
-      startDate: new Date('2026-08-01T00:00:00.000Z'), plannedEndDate: new Date('2026-11-01T00:00:00.000Z'),
-      employee: { employeeNo: 'F-001', name: '虚构员工' },
+  it('rejects the part-time approval view without an application source', async () => {
+    const { service } = createPartTimeService();
+    await expect(service.findPartTime(user, { view: 'approval_pending', page: 1, pageSize: 10 } as never))
+      .rejects.toMatchObject({
+        constructor: ConflictException,
+        message: '兼职审批中视图暂不可用：尚未确认兼职申请与审批来源',
+      });
+  });
+});
+
+function createProbationWorkflowService(status: ProcessStatus = ProcessStatus.DRAFT) {
+  const record = {
+    id: 'probation-workflow-1',
+    employeeId: 'employee-workflow-1',
+    employmentPeriodId: 'period-workflow-1',
+    startDate: new Date('2026-06-01T00:00:00.000Z'),
+    plannedEndDate: new Date('2026-09-01T00:00:00.000Z'),
+    status,
+  };
+  const tx = {
+    probationRecord: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    employmentPeriod: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    employmentRecord: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      create: jest.fn().mockResolvedValue({ id: 'employment-record-regular-1' }),
+    },
+    employeeAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+  };
+  const prisma = {
+    probationRecord: {
+      findFirst: jest.fn().mockResolvedValue(record),
+      findMany: jest.fn().mockResolvedValue([record]),
+    },
+    $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+  };
+  const access = {
+    hasAllEmployeeData: jest.fn(() => true),
+    getEmployeeWhere: jest.fn().mockResolvedValue({}),
+  };
+  const audit = { create: jest.fn().mockResolvedValue(undefined) };
+  return {
+    service: new EmploymentService(prisma as never, access as never, { enabled: false } as never, audit as never),
+    prisma,
+    tx,
+    audit,
+    record,
+  };
+}
+
+describe('EmploymentService probation', () => {
+  it('returns the demo probation list without querying Prisma', async () => {
+    const record = {
+      id: 'demo-probation-1',
+      employeeId: 'employee-1',
+      organizationId: 'org-a',
+      positionName: '虚构职位',
+      jobTitleName: '虚构职务',
+      startDate: new Date('2026-08-01T00:00:00.000Z'),
+      plannedEndDate: new Date('2026-11-01T00:00:00.000Z'),
+      probationMonths: 3,
+      actualEndDate: null,
+      evaluationType: 'IN_PROBATION' as const,
+      evaluation: '试用表现良好',
+      result: null,
+      confirmedDate: null,
+      extensionCount: 0,
+      status: ProcessStatus.IN_PROGRESS,
+      approval: null,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-15T00:00:00.000Z'),
     };
-    const { service, prisma, assignmentFindFirst } = createService(false, [row]);
-    assignmentFindFirst.mockResolvedValue({ organization: { name: '虚构部门' }, position: { name: '虚构岗位' } });
-    const result = await service.findProbation(user, query);
+    const demo = {
+      enabled: true,
+      getProbationRecords: jest.fn(() => [record]),
+      getEmployee: jest.fn(() => ({
+        employeeNo: 'F-001',
+        name: '虚构员工',
+        organization: { name: '虚构部门' },
+        employmentRecords: [{ status: EmploymentStatus.PROBATION }],
+      })),
+      getProbationApprover: jest.fn(),
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn(() => true),
+      hasPermission: jest.fn(() => true),
+      canAccessOrganization: jest.fn(() => true),
+    };
+    const service = new EmploymentService({} as never, access as never, demo as never);
+
+    await expect(service.findProbation(user, {
+      view: 'reviewing',
+      page: 1,
+      pageSize: 10,
+    })).resolves.toEqual({
+      data: [expect.objectContaining({
+        id: 'demo-probation-1',
+        employeeNo: 'F-001',
+        organizationName: null,
+        departmentName: '虚构部门',
+        positionName: '虚构职位',
+        jobTitleName: '虚构职务',
+        evaluationName: '试用中考核',
+        evaluationApprovalStatus: ProcessStatus.IN_PROGRESS,
+        canManage: true,
+      })],
+      meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+    });
+  });
+
+  it('applies organization scope, list filters, and pagination before querying probation rows', async () => {
+    const { service, prisma, access } = createService(false, []);
+    prisma.$queryRaw.mockResolvedValue([{ id: 'probation-visible-1' }]);
+    access.getOrganizationSubtreeIds = jest.fn().mockResolvedValue(['org-child']);
+
+    await expect(service.findProbation(user, {
+      view: 'reviewing',
+      organizationId: 'org-parent',
+      keyword: 'F-001',
+      probationMonths: 3,
+      status: ProcessStatus.IN_PROGRESS,
+      startDateFrom: '2026-08-01',
+      startDateTo: '2026-08-31',
+      plannedEndDateFrom: '2026-10-01',
+      plannedEndDateTo: '2026-10-31',
+      page: 2,
+      pageSize: 20,
+    })).resolves.toEqual({
+      data: [],
+      meta: { page: 2, pageSize: 20, total: 0, totalPages: 0 },
+    });
+
+    expect(access.getOrganizationSubtreeIds).toHaveBeenCalledWith(
+      'org-parent',
+      ['org-a', 'org-child'],
+    );
     expect(prisma.probationRecord.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { AND: expect.arrayContaining([
-        { archivedAt: null },
-        { employee: { is: { archivedAt: null, recordStatus: RecordStatus.ACTIVE } } },
-        { id: { in: ['probation-1'] } },
-      ]) },
-      skip: 20, take: 20,
-    }));
-    expect(assignmentFindFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        status: { in: [AssignmentStatus.ACTIVE, AssignmentStatus.ENDED] },
-        startDate: { lte: row.startDate },
-        OR: [{ endDate: null }, { endDate: { gte: row.startDate } }],
-        organizationId: { in: ['org-a', 'org-child'] },
-      }),
-    }));
-    expect(result.data[0]).toEqual(expect.objectContaining({
-      employeeNo: 'F-001',
-      departmentName: '虚构部门',
-      positionName: '虚构岗位',
-      startDate: '2026-08-01',
-      canViewEmployeeDetail: true,
+      where: {
+        AND: expect.arrayContaining([
+          { archivedAt: null },
+          { employee: { is: { archivedAt: null, recordStatus: RecordStatus.ACTIVE } } },
+          { id: { in: ['probation-visible-1'] } },
+          {
+            employee: {
+              is: {
+                OR: [
+                  { employeeNo: { contains: 'F-001' } },
+                  { name: { contains: 'F-001' } },
+                ],
+              },
+            },
+          },
+          { probationMonths: 3 },
+          { status: ProcessStatus.IN_PROGRESS },
+          { status: ProcessStatus.IN_PROGRESS },
+          {
+            startDate: {
+              gte: new Date('2026-08-01T00:00:00.000Z'),
+              lte: new Date('2026-08-31T00:00:00.000Z'),
+            },
+          },
+          {
+            plannedEndDate: {
+              gte: new Date('2026-10-01T00:00:00.000Z'),
+              lte: new Date('2026-10-31T00:00:00.000Z'),
+            },
+          },
+        ]),
+      },
+      orderBy: [{ plannedEndDate: 'asc' }, { id: 'asc' }],
+      skip: 20,
+      take: 20,
     }));
   });
 
@@ -744,7 +1059,7 @@ describe('EmploymentService probation', () => {
       expect(prisma.probationRecord.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: {
           AND: expect.arrayContaining([{
-            status: { notIn: [ProcessStatus.COMPLETED, ProcessStatus.CANCELLED] },
+            status: ProcessStatus.DRAFT,
             plannedEndDate: {
               gte: new Date('2026-08-26T00:00:00.000Z'),
               lte: new Date('2026-09-25T00:00:00.000Z'),
@@ -757,76 +1072,614 @@ describe('EmploymentService probation', () => {
     }
   });
 
-  it('keeps an INACTIVE assignment visible when its dates covered the probation start', async () => {
-    const row = {
-      id: 'probation-history', employeeId: 'employee-history', employmentPeriodId: 'period-history',
-      startDate: new Date('2026-02-01T00:00:00.000Z'), plannedEndDate: new Date('2026-05-01T00:00:00.000Z'),
-      employee: { employeeNo: 'F-002', name: '虚构历史员工' },
-    };
-    const { service, prisma, assignmentFindFirst } = createService(false, [row]);
-    assignmentFindFirst.mockResolvedValue({
-      organization: { name: '历史授权部门' },
-      position: { name: '历史岗位' },
+  it('returns an empty page before Prisma list queries when no organization is accessible', async () => {
+    const { service, prisma, access } = createService(false, []);
+    access.getAccessibleOrganizationIds.mockResolvedValue([]);
+
+    await expect(service.findProbation(user, {
+      view: 'all',
+      page: 3,
+      pageSize: 20,
+    })).resolves.toEqual({
+      data: [],
+      meta: { page: 3, pageSize: 20, total: 0, totalPages: 0 },
     });
 
-    const result = await service.findProbation(user, { view: 'all', page: 1, pageSize: 10 });
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(prisma.probationRecord.findMany).not.toHaveBeenCalled();
+  });
 
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(assignmentFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+  it('maps a non-empty probation row with its effective assignment and current approver', async () => {
+    const row = {
+      id: 'probation-mapped-1',
+      employeeId: 'employee-mapped-1',
+      employmentPeriodId: 'period-mapped-1',
+      startDate: new Date('2026-08-01T00:00:00.000Z'),
+      plannedEndDate: new Date('2026-11-01T00:00:00.000Z'),
+      probationMonths: 3,
+      actualEndDate: null,
+      evaluationType: 'IN_PROBATION',
+      result: '建议转正',
+      evaluation: '表现符合预期',
+      confirmedDate: null,
+      extensionCount: 1,
+      status: ProcessStatus.PENDING,
+      employee: { employeeNo: 'F-001', name: '虚构员工' },
+      employmentPeriod: {
+        agreements: [{
+          startDate: new Date('2026-08-01T00:00:00.000Z'),
+          endDate: null,
+          terminationDate: null,
+          employingCompany: { name: '虚构机构' },
+        }],
+      },
+    };
+    const probationRecord = {
+      findMany: jest.fn().mockResolvedValue([row]),
+      count: jest.fn().mockResolvedValue(1),
+    };
+    const assignmentFindMany = jest.fn().mockResolvedValue([{
+      id: 'assignment-mapped-1',
+      employeeId: row.employeeId,
+      employmentPeriodId: row.employmentPeriodId,
+      startDate: new Date('2026-08-01T00:00:00.000Z'),
+      endDate: null,
+      isPrimary: true,
+      organization: { name: '虚构部门' },
+      position: { name: '虚构职位' },
+      jobTitle: { name: '虚构职务' },
+    }]);
+    const approvalRequest = {
+      findMany: jest.fn().mockResolvedValue([{
+        businessId: row.id,
+        status: ProcessStatus.PENDING,
+        currentStep: 1,
+        updatedAt: new Date('2026-09-17T00:00:00.000Z'),
+        steps: [{
+          stepOrder: 1,
+          approverUserId: user.id,
+          approver: {
+            displayName: '虚构审批人',
+            employee: { workEmail: 'approver@example.com' },
+          },
+        }],
+      }]),
+    };
+    const prisma = {
+      probationRecord,
+      employeeAssignment: { findMany: assignmentFindMany },
+      approvalRequest,
+      $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn(() => true),
+      hasPermission: jest.fn(() => true),
+    };
+    const service = new EmploymentService(prisma as never, access as never, { enabled: false } as never);
+
+    const result = await service.findProbation(user, {
+      view: 'approval',
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(assignmentFindMany).toHaveBeenCalledTimes(1);
+    expect(assignmentFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        employeeId: 'employee-history',
-        employmentPeriodId: 'period-history',
-        status: { in: [AssignmentStatus.ACTIVE, AssignmentStatus.ENDED] },
+        employmentPeriodId: { in: [row.employmentPeriodId] },
+        archivedAt: null,
         startDate: { lte: row.startDate },
         OR: [{ endDate: null }, { endDate: { gte: row.startDate } }],
       }),
+      orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
     }));
-    expect(result.data[0]).toEqual(expect.objectContaining({
-      departmentName: '历史授权部门',
-      positionName: '历史岗位',
-    }));
+    expect(result).toEqual({
+      data: [expect.objectContaining({
+        id: row.id,
+        employeeNo: 'F-001',
+        employeeName: '虚构员工',
+        organizationName: '虚构机构',
+        departmentName: '虚构部门',
+        positionName: '虚构职位',
+        jobTitleName: '虚构职务',
+        startDate: '2026-08-01',
+        plannedEndDate: '2026-11-01',
+        evaluationName: '试用中考核',
+        evaluation: '表现符合预期',
+        result: '建议转正',
+        approvalStatus: ProcessStatus.PENDING,
+        currentApproverName: '虚构审批人(approver@example.com)',
+        canManage: true,
+        canRemindApproval: true,
+        canTransferApproval: true,
+      })],
+      meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+    });
   });
 
-  it('lists historically visible probation but disables detail for archived-only current scope', async () => {
-    const row = {
-      id: 'probation-1', employeeId: 'employee-1', employmentPeriodId: 'period-1',
-      startDate: new Date('2026-08-01T00:00:00.000Z'), plannedEndDate: new Date('2026-11-01T00:00:00.000Z'),
-      employee: { employeeNo: 'F-001', name: '虚构员工' },
+  it('extends an editable probation period and records the extension in the audit trail', async () => {
+    const { service, tx, audit, record } = createProbationWorkflowService();
+
+    await expect(service.updateProbation(user, record.id, {
+      plannedEndDate: '2026-09-30',
+    })).resolves.toEqual({ id: record.id });
+
+    expect(tx.probationRecord.updateMany).toHaveBeenCalledWith({
+      where: { id: record.id, status: ProcessStatus.DRAFT, archivedAt: null },
+      data: {
+        plannedEndDate: new Date('2026-09-30T00:00:00.000Z'),
+        extensionCount: { increment: 1 },
+      },
+    });
+    expect(audit.create).toHaveBeenCalledWith(
+      { userId: user.id },
+      AuditAction.UPDATE,
+      record.id,
+      expect.objectContaining({ action: 'update-dates', isExtension: true }),
+      tx,
+      'probation_record',
+    );
+  });
+
+  it.each([
+    ['update dates', ProcessStatus.COMPLETED, (service: EmploymentService) => (
+      service.updateProbation(user, 'probation-workflow-1', { plannedEndDate: '2026-09-30' })
+    )],
+    ['start evaluation', ProcessStatus.PENDING, (service: EmploymentService) => (
+      service.startProbationEvaluation(user, 'probation-workflow-1')
+    )],
+    ['submit confirmation', ProcessStatus.PENDING, (service: EmploymentService) => (
+      service.submitProbationConfirmation(user, 'probation-workflow-1', {
+        evaluation: '建议转正',
+        approverUserId: 'approver-1',
+      })
+    )],
+    ['approve confirmation', ProcessStatus.DRAFT, (service: EmploymentService) => (
+      service.approveProbation(user, 'probation-workflow-1')
+    )],
+    ['remind approval', ProcessStatus.DRAFT, (service: EmploymentService) => (
+      service.remindProbationApproval(user, 'probation-workflow-1')
+    )],
+    ['transfer approval', ProcessStatus.DRAFT, (service: EmploymentService) => (
+      service.transferProbationApproval(user, 'probation-workflow-1', { approverUserId: 'approver-2' })
+    )],
+    ['confirm regular employment', ProcessStatus.PENDING, (service: EmploymentService) => (
+      service.confirmProbation(user, 'probation-workflow-1', { confirmedDate: '2026-09-02' })
+    )],
+    ['return to evaluation', ProcessStatus.DRAFT, (service: EmploymentService) => (
+      service.returnProbationToEvaluation(user, 'probation-workflow-1')
+    )],
+  ])('rejects illegal status transitions before mutating data: %s', async (_action, status, invoke) => {
+    const { service, tx } = createProbationWorkflowService(status);
+
+    await expect(invoke(service)).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.probationRecord.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid probation date edits before opening a transaction', async () => {
+    const { service, prisma } = createProbationWorkflowService();
+
+    await expect(service.updateProbation(user, 'probation-workflow-1', {
+      startDate: '2026-10-01',
+      plannedEndDate: '2026-09-30',
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('starts a single probation evaluation only from DRAFT and writes the audit record', async () => {
+    const { service, tx, audit, record } = createProbationWorkflowService();
+
+    await expect(service.startProbationEvaluation(user, record.id, {
+      evaluationType: 'IN_PROBATION',
+    })).resolves.toEqual({ id: record.id });
+
+    expect(tx.probationRecord.updateMany).toHaveBeenCalledWith({
+      where: { id: record.id, status: ProcessStatus.DRAFT, archivedAt: null },
+      data: { status: ProcessStatus.IN_PROGRESS, evaluationType: 'IN_PROBATION' },
+    });
+    expect(audit.create).toHaveBeenCalledWith(
+      { userId: user.id },
+      AuditAction.UPDATE,
+      record.id,
+      expect.objectContaining({
+        action: 'start-evaluation',
+        evaluationType: 'IN_PROBATION',
+      }),
+      tx,
+      'probation_record',
+    );
+  });
+
+  it('deduplicates batch evaluation IDs, applies the employee scope, and fails inaccessible records', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const findMany = jest.fn().mockResolvedValue([
+      { id: 'probation-1', status: ProcessStatus.DRAFT },
+      { id: 'probation-2', status: ProcessStatus.DRAFT },
+    ]);
+    const tx = { probationRecord: { updateMany } };
+    const prisma = {
+      probationRecord: { findMany },
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
     };
-    const { service, access, employeeFindMany } = createService(false, [row]);
-    access.getEmployeeWhere.mockResolvedValue({
-      assignments: {
-        some: {
-          status: AssignmentStatus.ACTIVE,
-          archivedAt: null,
-          organizationId: { in: ['org-a', 'org-child'] },
+    const access = {
+      hasAllEmployeeData: jest.fn(() => false),
+      getEmployeeWhere: jest.fn().mockResolvedValue({ organizationIds: { has: 'org-a' } }),
+    };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const service = new EmploymentService(
+      prisma as never,
+      access as never,
+      { enabled: false } as never,
+      audit as never,
+    );
+
+    await expect(service.startProbationEvaluations(user, {
+      probationIds: ['probation-1', 'probation-1', 'probation-2'],
+      evaluationType: 'REGULARIZATION',
+    })).resolves.toEqual({ updated: 2 });
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['probation-1', 'probation-2'] },
+        archivedAt: null,
+        employee: {
+          is: {
+            archivedAt: null,
+            recordStatus: RecordStatus.ACTIVE,
+            organizationIds: { has: 'org-a' },
+          },
         },
       },
+      select: { id: true, status: true },
     });
-    employeeFindMany.mockResolvedValue([]);
-
-    const result = await service.findProbation(user, { view: 'all', page: 1, pageSize: 10 });
-
-    expect(result.data).toHaveLength(1);
-    expect(employeeFindMany).toHaveBeenCalledWith({
+    expect(updateMany).toHaveBeenCalledWith({
       where: {
-        AND: [
-          { id: { in: ['employee-1'] } },
-          {
-            assignments: {
-              some: {
-                status: AssignmentStatus.ACTIVE,
-                archivedAt: null,
-                organizationId: { in: ['org-a', 'org-child'] },
-              },
-            },
-          },
-        ],
+        id: { in: ['probation-1', 'probation-2'] },
+        status: ProcessStatus.DRAFT,
+        archivedAt: null,
       },
-      select: { id: true },
+      data: { status: ProcessStatus.IN_PROGRESS, evaluationType: 'REGULARIZATION' },
     });
-    expect(result.data[0]?.canViewEmployeeDetail).toBe(false);
+
+    findMany.mockResolvedValueOnce([{ id: 'probation-1', status: ProcessStatus.DRAFT }]);
+    await expect(service.startProbationEvaluations(user, {
+      probationIds: ['probation-1', 'probation-outside-scope'],
+    })).rejects.toBeInstanceOf(NotFoundException);
+
+    findMany.mockResolvedValueOnce([{ id: 'probation-1', status: ProcessStatus.PENDING }]);
+    await expect(service.startProbationEvaluations(user, {
+      probationIds: ['probation-1'],
+    })).rejects.toBeInstanceOf(ConflictException);
   });
+
+  it('requires update permission before loading selectable probation approvers', async () => {
+    const prisma = { user: { findMany: jest.fn() } };
+    const access = { hasPermission: jest.fn(() => false) };
+    const service = new EmploymentService(prisma as never, access as never, { enabled: false } as never);
+
+    await expect(service.findProbationApprovers(user)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns only active users eligible to approve probation confirmation', async () => {
+    const prisma = {
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'approver-1',
+            displayName: '审批人',
+            employee: { workEmail: 'approver@example.com' },
+          },
+        ]),
+      },
+    };
+    const access = { hasPermission: jest.fn(() => true) };
+    const service = new EmploymentService(prisma as never, access as never, { enabled: false } as never);
+
+    await expect(service.findProbationApprovers(user)).resolves.toEqual([{
+      id: 'approver-1',
+      displayName: '审批人',
+      workEmail: 'approver@example.com',
+    }]);
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        status: RecordStatus.ACTIVE,
+        archivedAt: null,
+      }),
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+    }));
+  });
+
+  it('starts batch confirmation and creates one approval request for every selected record', async () => {
+    const records = [
+      {
+        id: 'probation-1',
+        employeeId: 'employee-1',
+        status: ProcessStatus.DRAFT,
+        employee: { name: '虚构员工一' },
+      },
+      {
+        id: 'probation-2',
+        employeeId: 'employee-2',
+        status: ProcessStatus.IN_PROGRESS,
+        employee: { name: '虚构员工二' },
+      },
+    ];
+    const approvalRequest = {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockResolvedValue({ id: 'approval-1' }),
+    };
+    const tx = {
+      approvalRequest,
+      probationRecord: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+    };
+    const prisma = {
+      user: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'approver-1',
+          username: 'admin',
+          displayName: '系统管理员',
+          role: {
+            code: 'ADMIN',
+            name: '系统管理员',
+            permissions: [
+              { permission: { code: PERMISSIONS.EMPLOYEE_UPDATE } },
+              { permission: { code: PERMISSIONS.EMPLOYEE_DATA_ALL } },
+            ],
+          },
+          dataScopes: [],
+        }),
+      },
+      employee: { count: jest.fn().mockResolvedValue(2) },
+      probationRecord: { findMany: jest.fn().mockResolvedValue(records) },
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn(() => true),
+      getEmployeeWhere: jest.fn(),
+    };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const service = new EmploymentService(
+      prisma as never,
+      access as never,
+      { enabled: false } as never,
+      audit as never,
+    );
+
+    await expect(service.startProbationConfirmations(user, {
+      probationIds: ['probation-1', 'probation-1', 'probation-2'],
+      approverUserId: 'approver-1',
+    })).resolves.toEqual({ updated: 2 });
+
+    expect(tx.probationRecord.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['probation-1', 'probation-2'] },
+        status: { in: [ProcessStatus.DRAFT, ProcessStatus.IN_PROGRESS] },
+        archivedAt: null,
+      },
+      data: {
+        result: '建议转正',
+        status: ProcessStatus.PENDING,
+      },
+    });
+    expect(approvalRequest.create).toHaveBeenCalledTimes(2);
+    expect(approvalRequest.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({
+        businessType: 'PROBATION_REGULARIZATION',
+        businessId: 'probation-1',
+        applicantUserId: user.id,
+        title: '虚构员工一转正申请',
+        currentStep: 1,
+        status: ProcessStatus.PENDING,
+        steps: {
+          create: {
+            stepOrder: 1,
+            approverUserId: 'approver-1',
+          },
+        },
+      }),
+    });
+    expect(audit.create).toHaveBeenCalledWith(
+      { userId: user.id },
+      AuditAction.UPDATE,
+      undefined,
+      expect.objectContaining({
+        action: 'batch-start-confirmation',
+        probationIds: ['probation-1', 'probation-2'],
+      }),
+      tx,
+      'probation_record',
+    );
+  });
+
+  it('rejects assigning a probation approver who cannot access every selected employee', async () => {
+    const records = [{
+      id: 'probation-out-of-scope-1',
+      employeeId: 'employee-out-of-scope-1',
+      status: ProcessStatus.DRAFT,
+      employee: { name: '虚构员工' },
+    }];
+    const tx = {
+      approvalRequest: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
+      probationRecord: { updateMany: jest.fn() },
+    };
+    const employeeCount = jest.fn().mockResolvedValue(0);
+    const prisma = {
+      user: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'approver-out-of-scope',
+          username: 'dept-admin',
+          displayName: '部门管理员',
+          role: {
+            code: 'DEPT_ADMIN',
+            name: '部门管理员',
+            permissions: [{ permission: { code: PERMISSIONS.EMPLOYEE_UPDATE } }],
+          },
+          dataScopes: [{ organizationId: 'org-other' }],
+        }),
+      },
+      employee: { count: employeeCount },
+      probationRecord: { findMany: jest.fn().mockResolvedValue(records) },
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const access = {
+      hasAllEmployeeData: jest.fn((candidate: { id: string }) => candidate.id === user.id),
+      getEmployeeWhere: jest.fn().mockResolvedValue({
+        assignments: { some: { organizationId: { in: ['org-other'] } } },
+      }),
+    };
+    const service = new EmploymentService(prisma as never, access as never, { enabled: false } as never);
+
+    await expect(service.startProbationConfirmations(user, {
+      probationIds: ['probation-out-of-scope-1'],
+      approverUserId: 'approver-out-of-scope',
+    })).rejects.toMatchObject({
+      message: '所选转正审批人不具备全部相关员工的数据权限',
+    });
+
+    expect(employeeCount).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: { in: ['employee-out-of-scope-1'] },
+      }),
+    });
+    expect(tx.probationRecord.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('closes the pending approval node before returning a regularization request to evaluation', async () => {
+    const record = {
+      id: 'probation-return-1',
+      employeeId: 'employee-return-1',
+      employmentPeriodId: 'period-return-1',
+      startDate: new Date('2026-06-01T00:00:00.000Z'),
+      plannedEndDate: new Date('2026-09-01T00:00:00.000Z'),
+      status: ProcessStatus.PENDING,
+      employee: { name: '虚构员工' },
+    };
+    const approvalStep = { updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const approvalRequest = {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'approval-return-1',
+        currentStep: 1,
+        steps: [{ id: 'approval-step-return-1', stepOrder: 1, approverUserId: user.id }],
+      }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    const probationRecord = {
+      findFirst: jest.fn().mockResolvedValue(record),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    const tx = { approvalStep, approvalRequest, probationRecord };
+    const prisma = {
+      probationRecord,
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const access = { hasAllEmployeeData: jest.fn(() => true) };
+    const audit = { create: jest.fn().mockResolvedValue(undefined) };
+    const service = new EmploymentService(
+      prisma as never,
+      access as never,
+      { enabled: false } as never,
+      audit as never,
+    );
+
+    await expect(service.returnProbationToEvaluation(user, record.id)).resolves.toEqual({ id: record.id });
+
+    expect(approvalStep.updateMany).toHaveBeenCalledWith({
+      where: { id: 'approval-step-return-1', decision: ApprovalDecision.PENDING },
+      data: { decision: ApprovalDecision.SKIPPED, operatedAt: expect.any(Date) },
+    });
+    expect(approvalRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: 'approval-return-1', status: ProcessStatus.PENDING, archivedAt: null },
+      data: { status: ProcessStatus.WITHDRAWN, completedAt: expect.any(Date) },
+    });
+    expect(probationRecord.updateMany).toHaveBeenCalledWith({
+      where: { id: record.id, status: ProcessStatus.PENDING, archivedAt: null },
+      data: { status: ProcessStatus.IN_PROGRESS, result: null },
+    });
+    expect(audit.create).toHaveBeenCalledWith(
+      { userId: user.id },
+      AuditAction.UPDATE,
+      record.id,
+      expect.objectContaining({
+        action: 'return-to-evaluation',
+        approvalRequestId: 'approval-return-1',
+      }),
+      tx,
+      'probation_record',
+    );
+  });
+
+  it.each(['transferring', 'returning'] as const)(
+    'prevents a non-current approver from %s a probation approval',
+    async (action) => {
+      const record = {
+        id: 'probation-authorization-1',
+        employeeId: 'employee-authorization-1',
+        employmentPeriodId: 'period-authorization-1',
+        startDate: new Date('2026-06-01T00:00:00.000Z'),
+        plannedEndDate: new Date('2026-09-01T00:00:00.000Z'),
+        status: ProcessStatus.PENDING,
+        employee: { name: '虚构员工' },
+      };
+      const approvalStep = { updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+      const approvalRequest = {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'approval-authorization-1',
+          currentStep: 1,
+          steps: [{
+            id: 'approval-step-authorization-1',
+            stepOrder: 1,
+            approverUserId: 'current-approver',
+          }],
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      };
+      const probationRecord = {
+        findFirst: jest.fn().mockResolvedValue(record),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      };
+      const tx = { approvalStep, approvalRequest, probationRecord };
+      const prisma = {
+        user: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'approver-2',
+            username: 'approver-2',
+            displayName: '虚构审批人',
+            role: {
+              code: 'ADMIN',
+              name: '系统管理员',
+              permissions: [
+                { permission: { code: PERMISSIONS.EMPLOYEE_UPDATE } },
+                { permission: { code: PERMISSIONS.EMPLOYEE_DATA_ALL } },
+              ],
+            },
+            dataScopes: [],
+          }),
+        },
+        employee: { count: jest.fn().mockResolvedValue(1) },
+        probationRecord,
+        $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+      };
+      const access = { hasAllEmployeeData: jest.fn(() => true) };
+      const service = new EmploymentService(
+        prisma as never,
+        access as never,
+        { enabled: false } as never,
+      );
+      const otherMaintainer = { ...user, id: 'other-maintainer' };
+
+      const operation = action === 'transferring'
+        ? service.transferProbationApproval(otherMaintainer, record.id, { approverUserId: 'approver-2' })
+        : service.returnProbationToEvaluation(otherMaintainer, record.id);
+
+      await expect(operation).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(approvalStep.updateMany).not.toHaveBeenCalled();
+      expect(approvalRequest.updateMany).not.toHaveBeenCalled();
+      expect(probationRecord.updateMany).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('EmploymentService trial posts', () => {
@@ -894,6 +1747,27 @@ describe('EmploymentService trial posts', () => {
       departmentName: '虚构部门', result: '通过', jobTitleName: null, movementTypeName: null,
       canViewEmployeeDetail: true,
     }));
+  });
+
+  it('filters failed trial posts by the explicit result without rewriting process status', async () => {
+    const row = {
+      id: 'trial-failed', employeeId: 'employee-failed',
+      startDate: new Date('2026-08-01T00:00:00.000Z'), endDate: new Date('2026-08-31T00:00:00.000Z'),
+      result: '不通过', status: ProcessStatus.COMPLETED,
+      employee: { employeeNo: 'F-FAILED', name: '虚构未通过员工' },
+      targetPosition: { organization: { id: 'org-a', name: '虚构部门' } },
+    };
+    const { service, findMany } = createTrialService([row]);
+
+    const result = await service.findTrialPosts(user, {
+      view: 'failed', page: 1, pageSize: 10,
+    } as never);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: expect.arrayContaining([{ result: '不通过' }]) },
+    }));
+    expect(findMany.mock.calls[0][0].where.AND).not.toContainEqual({ status: ProcessStatus.REJECTED });
+    expect(result.data[0]).toEqual(expect.objectContaining({ result: '不通过', status: ProcessStatus.COMPLETED }));
   });
 
   it('keeps a historically visible trial post but disables detail outside current scope', async () => {
@@ -1148,11 +2022,12 @@ describe('EmploymentService retirements', () => {
     const employeeFindMany = jest.fn().mockResolvedValue(
       rows.map((row: any) => ({ id: row.employeeId })),
     );
+    const queryRaw = jest.fn().mockResolvedValue(rows.map((row: any) => ({ id: row.id })));
     const prisma = {
       retirementRecord: { findMany, count },
       employeeAssignment: { findFirst: assignmentFindFirst },
       employee: { findMany: employeeFindMany },
-      $queryRaw: jest.fn().mockResolvedValue(rows.map((row: any) => ({ id: row.id }))),
+      $queryRaw: queryRaw,
       $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
     };
     const access = {
@@ -1169,6 +2044,7 @@ describe('EmploymentService retirements', () => {
       employeeFindMany,
       employeeWhere,
       access,
+      queryRaw,
     };
   }
 
@@ -1269,6 +2145,39 @@ describe('EmploymentService retirements', () => {
     }));
   });
 
+  it('filters upcoming retirements by the persisted planned date and open status', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-26T15:30:00.000Z'));
+    try {
+      const row = {
+        id: 'retirement-upcoming', employeeId: 'employee-upcoming',
+        plannedRetirementDate: new Date('2026-09-10T00:00:00.000Z'),
+        actualRetirementDate: null,
+        employee: { employeeNo: 'F-UPCOMING', name: '虚构即将退休员工', gender: null, birthDate: null },
+      };
+      const { service, findMany, queryRaw } = createRetirementService([row]);
+
+      await service.findRetirements(user, { view: 'upcoming', page: 1, pageSize: 10 } as never);
+
+      expect(queryRaw).toHaveBeenCalled();
+      const authorizationSql = queryRaw.mock.calls[0][0] as { strings: string[]; values: unknown[] };
+      const authorizationText = authorizationSql.strings.join('?');
+      expect(authorizationText).toContain('COALESCE(rr.actual_retirement_date, rr.planned_retirement_date)');
+      expect(authorizationSql.values).toEqual(expect.arrayContaining([
+        'org-a', 'org-child', AssignmentStatus.ACTIVE, AssignmentStatus.ENDED,
+      ]));
+      expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { AND: expect.arrayContaining([{ id: { in: ['retirement-upcoming'] } }]) },
+      }));
+      expect(findMany.mock.calls[0][0].where.AND).toEqual(expect.arrayContaining([
+        { plannedRetirementDate: { gte: new Date('2026-08-26T00:00:00.000Z'), lte: new Date('2026-09-25T00:00:00.000Z') } },
+        { actualRetirementDate: null },
+        { status: { notIn: [ProcessStatus.COMPLETED, ProcessStatus.CANCELLED] } },
+      ]));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('returns retirement fields without a separate field permission', async () => {
     const row = {
       id: 'retirement-2', employeeId: 'employee-2', employmentPeriodId: null,
@@ -1345,6 +2254,16 @@ describe('EmploymentService retirements', () => {
       data: [], meta: { page: 3, pageSize: 20, total: 0, totalPages: 0 },
     });
     expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects retirement intention applications without an independent source', async () => {
+    const { service } = createRetirementService();
+    await expect(service.findRetirements(user, {
+      view: 'intention_application', page: 1, pageSize: 10,
+    } as never)).rejects.toMatchObject({
+      constructor: ConflictException,
+      message: '意向退休日期申请视图暂不可用：尚未接入独立申请来源',
+    });
   });
 
   it('returns an empty page for a department outside the authorized tree', async () => {

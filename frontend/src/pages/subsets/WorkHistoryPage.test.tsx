@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { WorkHistoryPage } from './WorkHistoryPage';
 
 const useWorkHistoryList = vi.fn();
@@ -29,7 +30,7 @@ describe('WorkHistoryPage', () => {
 
   it('renders the exact 11-column order and work-history values', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '邮箱', '工号', '当前任职部门', '单位名称', '职务', '开始日期', '结束日期', '证明人', '审批状态', '操作',
     ]);

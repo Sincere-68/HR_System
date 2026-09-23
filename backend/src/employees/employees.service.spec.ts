@@ -31,7 +31,7 @@ describe('EmployeesService in demo mode', () => {
     const resigned = await employees.findAll(departmentAdmin, query({ status: EmploymentStatus.RESIGNED }));
     const byKeyword = await employees.findAll(departmentAdmin, query({ keyword: 'DEMO-2001' }));
 
-    expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 3, totalPages: 2 });
+    expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 4, totalPages: 2 });
     expect(firstPage.data[0]?.mobile).toBe('13800001001');
     expect(resigned.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
     expect(byKeyword.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
@@ -1084,7 +1084,7 @@ describe('EmployeesService database creation', () => {
         startDate: new Date('2026-01-01T00:00:00.000Z'),
         plannedEndDate: new Date('2026-04-01T00:00:00.000Z'),
         probationMonths: 3,
-        status: 'IN_PROGRESS',
+        status: 'DRAFT',
       },
     });
     expect(agreementCreate).toHaveBeenCalledWith({
