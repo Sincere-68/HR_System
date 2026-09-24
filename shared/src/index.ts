@@ -308,6 +308,9 @@ export type ApprovalFlowVersionStatus = (typeof APPROVAL_FLOW_VERSION_STATUSES)[
 export const APPROVAL_FLOW_NODE_ASSIGNEE_KINDS = ['USER', 'ROLE', 'DIRECTORY'] as const;
 export type ApprovalFlowNodeAssigneeKind = (typeof APPROVAL_FLOW_NODE_ASSIGNEE_KINDS)[number];
 
+export const APPROVAL_DECISIONS = ['PENDING', 'APPROVED', 'REJECTED', 'SKIPPED'] as const;
+export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
+
 export const EMPLOYMENT_CONVERSION_TYPES = ['INTERN_TO_EMPLOYEE', 'LABOR_TO_EMPLOYEE'] as const;
 export type EmploymentConversionType = (typeof EMPLOYMENT_CONVERSION_TYPES)[number];
 
@@ -325,6 +328,8 @@ export type EmploymentApplicationStatus = (typeof EMPLOYMENT_APPLICATION_STATUSE
 
 export const EMPLOYMENT_CONVERSION_STATUSES = EMPLOYMENT_APPLICATION_STATUSES;
 export type EmploymentConversionStatus = EmploymentApplicationStatus;
+export const EMPLOYMENT_CONVERSION_VIEWS = ['in_progress', 'completed', 'all'] as const;
+export type EmploymentConversionView = (typeof EMPLOYMENT_CONVERSION_VIEWS)[number];
 
 export const PART_TIME_RECORD_STATUSES = [
   'DRAFT',
@@ -337,6 +342,16 @@ export const PART_TIME_RECORD_STATUSES = [
   'CANCELLED',
 ] as const;
 export type PartTimeRecordStatus = (typeof PART_TIME_RECORD_STATUSES)[number];
+export const PART_TIME_RECORD_VIEWS = ['active', 'expiring', 'not_started', 'ended', 'approval', 'all'] as const;
+export type PartTimeRecordView = (typeof PART_TIME_RECORD_VIEWS)[number];
+
+export interface EmploymentApprovalFlowNodeInput {
+  stepOrder: number;
+  assigneeKind: ApprovalFlowNodeAssigneeKind;
+  assigneeUserId?: string | null;
+  assigneeRoleId?: string | null;
+  assigneeRule?: Record<string, unknown> | null;
+}
 
 export interface ApprovalFlowNode {
   id: string;
@@ -354,6 +369,8 @@ export interface ApprovalFlowVersion {
   versionNumber: number;
   status: ApprovalFlowVersionStatus;
   publishedAt: string | null;
+  createdAt?: string;
+  updatedAt?: string;
   nodes: ApprovalFlowNode[];
 }
 
@@ -364,7 +381,273 @@ export interface ApprovalFlowDefinition {
   name: string;
   status: ApprovalFlowDefinitionStatus;
   currentPublishedVersionId: string | null;
+  createdAt?: string;
+  updatedAt?: string;
   versions: ApprovalFlowVersion[];
+}
+
+export interface EmploymentApprovalFlowListQuery {
+  keyword?: string;
+  businessType?: string;
+  status?: ApprovalFlowDefinitionStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateEmploymentApprovalFlowDefinitionInput {
+  businessType: string;
+  code: string;
+  name: string;
+  nodes: EmploymentApprovalFlowNodeInput[];
+}
+
+export interface CreateEmploymentApprovalFlowVersionInput {
+  nodes: EmploymentApprovalFlowNodeInput[];
+}
+
+export interface UpdateEmploymentApprovalFlowDefinitionInput {
+  name?: string;
+  nodes?: EmploymentApprovalFlowNodeInput[];
+}
+
+export interface UpdateEmploymentApprovalFlowVersionInput {
+  nodes: EmploymentApprovalFlowNodeInput[];
+}
+
+export interface EmploymentApprovalFlowOptions {
+  users: Array<{ id: string; username: string; displayName: string }>;
+  roles: EmployeeDirectoryOption[];
+  jobTitles: EmployeeDirectoryOption[];
+}
+
+export interface EmploymentApprovalSummary {
+  id: string;
+  status: ProcessStatus;
+  employmentStatus: EmploymentApplicationStatus;
+  currentStep: number;
+  currentApproverName: string | null;
+  submittedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface EmploymentApprovalStepItem {
+  id: string;
+  stepOrder: number;
+  approver: { id: string; displayName: string };
+  decision: ApprovalDecision;
+  comment: string | null;
+  operatedAt: string | null;
+}
+
+export interface EmploymentApprovalListQuery {
+  page?: number;
+  pageSize?: number;
+}
+
+export interface EmploymentApprovalListItem {
+  id: string;
+  businessType: string;
+  businessId: string;
+  title: string;
+  applicant: { id: string; displayName: string };
+  currentStep: number;
+  status: ProcessStatus;
+  employmentStatus: EmploymentApplicationStatus;
+  submittedAt: string | null;
+  completedAt: string | null;
+  steps: EmploymentApprovalStepItem[];
+}
+
+export type EmploymentApprovalBusinessSummary =
+  | {
+      kind: 'CONVERSION';
+      conversionId: string;
+      employee: { id: string; employeeNo: string; name: string | null };
+      sourceOrganizationName: string | null;
+      targetOrganizationName: string;
+      plannedEffectiveDate: string;
+      status: EmploymentApplicationStatus;
+    }
+  | {
+      kind: 'PART_TIME';
+      partTimeRecordId: string;
+      employee: { id: string; employeeNo: string; name: string | null };
+      organizationName: string;
+      type: string;
+      institution: string | null;
+      startDate: string;
+      endDate: string | null;
+      status: PartTimeRecordStatus;
+    };
+
+export interface EmploymentApprovalDetail extends EmploymentApprovalListItem {
+  flowVersion: {
+    id: string;
+    versionNumber: number;
+    definition: EmployeeDirectoryOption;
+  };
+  businessSummary: EmploymentApprovalBusinessSummary | null;
+}
+
+export interface ApprovalCommentInput {
+  comment?: string;
+}
+
+export interface RequiredApprovalCommentInput {
+  comment: string;
+}
+
+export interface EmploymentConversionListQuery {
+  view?: EmploymentConversionView;
+  status?: EmploymentApplicationStatus;
+  type?: EmploymentConversionType;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateEmploymentConversionInput {
+  type: EmploymentConversionType;
+  employeeId: string;
+  sourceEmploymentPeriodId: string;
+  targetOrganizationId: string;
+  targetPositionId?: string;
+  targetJobTitleId?: string;
+  targetJobLevel?: JobLevel;
+  plannedEffectiveDate: string;
+}
+
+export interface EmploymentConversionListItem {
+  id: string;
+  type: EmploymentConversionType;
+  status: EmploymentApplicationStatus;
+  plannedEffectiveDate: string;
+  approvalRequestId: string | null;
+  employee: { id: string; employeeNo: string; name: string | null };
+  source: {
+    employmentPeriodId: string;
+    sequenceNo: number;
+    employmentRelationship: EmploymentRelationship;
+    entryDate: string | null;
+    organization: EmployeeFormOption | null;
+    position: EmployeeFormOption | null;
+    jobTitle: EmployeeDirectoryOption | null;
+    jobLevel: JobLevel | null;
+  };
+  target: {
+    organization: EmployeeDirectoryOption;
+    position: EmployeeFormOption | null;
+    jobTitle: EmployeeDirectoryOption | null;
+    jobLevel: JobLevel | null;
+  };
+  approval: EmploymentApprovalSummary | null;
+  canActivate: boolean;
+  canViewEmployeeDetail: boolean;
+}
+
+export interface EmploymentConversionDetail extends EmploymentConversionListItem {
+  approvalSteps: EmploymentApprovalStepItem[];
+}
+
+export interface PartTimeRecordListQuery {
+  view?: PartTimeRecordView;
+  status?: PartTimeRecordStatus;
+  employeeId?: string;
+  keyword?: string;
+  organizationId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreatePartTimeRecordInput {
+  employeeId: string;
+  type: string;
+  institution?: string | null;
+  organizationId: string;
+  jobTitleId?: string | null;
+  managerEmployeeId?: string | null;
+  startDate: string;
+  endDate?: string | null;
+}
+
+export interface EndPartTimeRecordInput {
+  endDate: string;
+}
+
+export interface PartTimeRecordItem {
+  id: string;
+  employee: { id: string; employeeNo: string; name: string | null };
+  type: string;
+  institution: string | null;
+  organization: EmployeeFormOption;
+  jobTitle: EmployeeDirectoryOption | null;
+  managerEmployee: { id: string; employeeNo: string; name: string | null } | null;
+  startDate: string;
+  endDate: string | null;
+  status: PartTimeRecordStatus;
+  approval: EmploymentApprovalSummary | null;
+  canActivate: boolean;
+  canEnd: boolean;
+}
+
+export type EmploymentViewCountKey =
+  | 'probation.expiring'
+  | 'probation.reviewing'
+  | 'probation.approval'
+  | 'probation.all'
+  | 'probation.completed'
+  | 'records.current'
+  | 'records.history'
+  | 'interns.intern'
+  | 'interns.conversion_pending'
+  | 'interns.converted'
+  | 'interns.resigned'
+  | 'labor.on_duty'
+  | 'labor.conversion_pending'
+  | 'labor.converted'
+  | 'labor.resigned'
+  | 'movements.active'
+  | 'movements.completed'
+  | 'movements.all'
+  | 'trial-posts.in_progress'
+  | 'trial-posts.reviewing'
+  | 'trial-posts.failed'
+  | 'trial-posts.passed'
+  | 'trial-posts.all'
+  | 'terminations.in_progress'
+  | 'terminations.completed'
+  | 'terminations.all'
+  | 'retirements.upcoming'
+  | 'retirements.in_progress'
+  | 'retirements.overdue'
+  | 'retirements.completed'
+  | 'retirements.all'
+  | 'retirements.intention_pending'
+  | 'part-time.active'
+  | 'part-time.expiring'
+  | 'part-time.not_started'
+  | 'part-time.ended'
+  | 'part-time.all'
+  | 'part-time.approval';
+
+export interface EmploymentViewCountsQuery {
+  businessDate?: string;
+  organizationId?: string;
+}
+
+export interface EmploymentViewCountsResponse {
+  businessDate: string;
+  scope: {
+    organizationId: string | null;
+    organizationMode: 'ALL_DATA' | 'AUTHORIZED_SUBTREE';
+  };
+  items: Array<{
+    key: EmploymentViewCountKey;
+    label: string;
+    supported: boolean;
+    count: number | null;
+    reason: string | null;
+  }>;
 }
 
 export const PERFORMANCE_MODULE_TYPES = ['METRIC', 'EVALUATION', 'ADJUSTMENT'] as const;
@@ -1770,6 +2053,7 @@ export interface EmployeeDirectoryOption extends EmployeeFormOption {
 export interface EmployeeFormOptions {
   positions: EmployeePositionOption[];
   managers: EmployeeManagerOption[];
+  jobTitles?: EmployeeDirectoryOption[];
   employingCompanies?: EmployeeDirectoryOption[];
   movementTypes?: EmployeeDirectoryOption[];
 }

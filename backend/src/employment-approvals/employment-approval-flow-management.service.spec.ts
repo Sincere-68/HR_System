@@ -39,6 +39,8 @@ function createHarness() {
           status: ApprovalFlowDefinitionStatus.DRAFT,
           archivedAt: null,
           versions: [],
+          createdAt: new Date('2026-09-18T00:00:00.000Z'),
+          updatedAt: new Date('2026-09-18T00:00:00.000Z'),
         };
         definitions.push(row);
         calls.push('definition.create');
@@ -77,6 +79,8 @@ function createHarness() {
           status: ApprovalFlowVersionStatus.DRAFT,
           publishedAt: null,
           nodes: [],
+          createdAt: new Date('2026-09-18T00:00:00.000Z'),
+          updatedAt: new Date('2026-09-18T00:00:00.000Z'),
         };
         versions.push(row);
         const definition = definitions.find((candidate) => candidate.id === data.definitionId);
@@ -114,7 +118,13 @@ function createHarness() {
       )),
       createMany: jest.fn().mockImplementation(({ data }: any) => {
         data.forEach((input: any) => {
-          const row = { id: `node-${++nodeSequence}`, ...input, assigneeRule: input.assigneeRule === null || input.assigneeRule === Prisma.JsonNull ? null : input.assigneeRule };
+          const row = {
+            id: `node-${++nodeSequence}`,
+            ...input,
+            assigneeRule: input.assigneeRule === null || input.assigneeRule === Prisma.JsonNull ? null : input.assigneeRule,
+            createdAt: new Date('2026-09-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-09-18T00:00:00.000Z'),
+          };
           nodes.push(row);
           const version = versions.find((candidate) => candidate.id === input.flowVersionId);
           version.nodes.push(row);
@@ -327,5 +337,169 @@ describe('EmploymentApprovalFlowManagementService', () => {
       name: '无权限流程',
       nodes: [userNode(1)],
     })).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('EmploymentApprovalFlowManagementService reads', () => {
+  const publishedDefinition = {
+    id: 'definition-1',
+    businessType: 'INTERN_TO_EMPLOYEE',
+    code: 'intern-conversion',
+    name: '实习转正式审批',
+    status: ApprovalFlowDefinitionStatus.PUBLISHED,
+    archivedAt: null,
+    createdAt: new Date('2026-09-20T00:00:00.000Z'),
+    updatedAt: new Date('2026-09-22T00:00:00.000Z'),
+    versions: [{
+      id: 'version-1',
+      definitionId: 'definition-1',
+      versionNumber: 1,
+      status: ApprovalFlowVersionStatus.PUBLISHED,
+      publishedAt: new Date('2026-09-21T00:00:00.000Z'),
+      createdAt: new Date('2026-09-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-21T00:00:00.000Z'),
+      nodes: [{
+        id: 'node-1',
+        flowVersionId: 'version-1',
+        stepOrder: 1,
+        assigneeKind: ApprovalFlowNodeAssigneeKind.USER,
+        assigneeUserId: 'approver-1',
+        assigneeRoleId: null,
+        assigneeRule: null,
+        createdAt: new Date('2026-09-20T00:00:00.000Z'),
+        updatedAt: new Date('2026-09-20T00:00:00.000Z'),
+      }],
+    }],
+  };
+
+  function createReadSubject() {
+    const prisma = {
+      approvalFlowDefinition: {
+        findMany: jest.fn().mockResolvedValue([publishedDefinition]),
+        count: jest.fn().mockResolvedValue(1),
+        findUnique: jest.fn().mockResolvedValue(publishedDefinition),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'approver-1', username: 'mock-approver', displayName: '虚构审批人' },
+        ]),
+      },
+      role: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'role-1', code: 'DEPT_ADMIN', name: '部门管理员' },
+        ]),
+      },
+      jobTitle: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'job-title-1', code: 'HRBP', name: 'HRBP' },
+        ]),
+      },
+      $transaction: jest.fn((queries: unknown[]) => Promise.all(queries)),
+    };
+    return {
+      prisma,
+      service: new EmploymentApprovalFlowManagementService(
+        prisma as never,
+        { create: jest.fn() } as never,
+      ),
+    };
+  }
+
+  it('filters and paginates definitions with stable ordering and public node fields', async () => {
+    const { service, prisma } = createReadSubject();
+
+    const result = await service.findAll(manager, {
+      keyword: '转正式',
+      businessType: 'INTERN_TO_EMPLOYEE',
+      status: ApprovalFlowDefinitionStatus.PUBLISHED,
+      page: 2,
+      pageSize: 10,
+    });
+
+    expect(prisma.approvalFlowDefinition.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        businessType: 'INTERN_TO_EMPLOYEE',
+        status: ApprovalFlowDefinitionStatus.PUBLISHED,
+        OR: [
+          { code: { contains: '转正式' } },
+          { name: { contains: '转正式' } },
+        ],
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      skip: 10,
+      take: 10,
+    }));
+    expect(result.meta).toEqual({ page: 2, pageSize: 10, total: 1, totalPages: 1 });
+    expect(result.data[0]).toEqual(expect.objectContaining({
+      id: 'definition-1',
+      currentPublishedVersionId: 'version-1',
+      createdAt: '2026-09-20T00:00:00.000Z',
+      updatedAt: '2026-09-22T00:00:00.000Z',
+      versions: [expect.objectContaining({
+        id: 'version-1',
+        nodes: [expect.objectContaining({ id: 'node-1', versionId: 'version-1' })],
+      })],
+    }));
+    expect(result.data[0]!.versions[0]!.nodes[0]).not.toHaveProperty('flowVersionId');
+  });
+
+  it('reads archived definitions with all versions and nodes for history', async () => {
+    const { service, prisma } = createReadSubject();
+    prisma.approvalFlowDefinition.findUnique.mockResolvedValue({
+      ...publishedDefinition,
+      status: ApprovalFlowDefinitionStatus.ARCHIVED,
+      archivedAt: new Date('2026-09-23T00:00:00.000Z'),
+    });
+
+    const result = await service.findOne(manager, 'definition-1');
+
+    expect(prisma.approvalFlowDefinition.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'definition-1' },
+    }));
+    expect(result).toEqual(expect.objectContaining({
+      id: 'definition-1',
+      status: ApprovalFlowDefinitionStatus.ARCHIVED,
+      versions: [expect.objectContaining({ nodes: [expect.objectContaining({ stepOrder: 1 })] })],
+    }));
+  });
+
+  it('returns minimal active user, role, and job-title configuration options', async () => {
+    const { service, prisma } = createReadSubject();
+
+    const result = await service.findOptions(manager);
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith({
+      where: { status: 'ACTIVE', archivedAt: null },
+      select: { id: true, username: true, displayName: true },
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+    });
+    expect(prisma.role.findMany).toHaveBeenCalledWith({
+      select: { id: true, code: true, name: true },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+    });
+    expect(prisma.jobTitle.findMany).toHaveBeenCalledWith({
+      where: { status: 'ACTIVE', archivedAt: null },
+      select: { id: true, code: true, name: true },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }, { id: 'asc' }],
+    });
+    expect(result).toEqual({
+      users: [{ id: 'approver-1', username: 'mock-approver', displayName: '虚构审批人' }],
+      roles: [{ id: 'role-1', code: 'DEPT_ADMIN', name: '部门管理员' }],
+      jobTitles: [{ id: 'job-title-1', code: 'HRBP', name: 'HRBP' }],
+    });
+  });
+
+  it('rejects every read without the flow-management permission', async () => {
+    const { service, prisma } = createReadSubject();
+    const unauthorized = { id: 'viewer', permissions: [] } as never;
+
+    await expect(service.findAll(unauthorized, { page: 1, pageSize: 10 }))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.findOne(unauthorized, 'definition-1'))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.findOptions(unauthorized))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.approvalFlowDefinition.findMany).not.toHaveBeenCalled();
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 });

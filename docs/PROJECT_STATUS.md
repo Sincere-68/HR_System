@@ -1,6 +1,6 @@
 # HR 系统项目进展快照
 
-> 快照日期：2026-09-23
+> 快照日期：2026-09-24
 >
 > 本文用于新对话接续，记录当前代码已经实现的页面、接口、字段来源、查询口径、验证结果和已知限制。若本文与当前代码不一致，以 [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma)、shared 契约和实际前后端代码为准；本文不替代业务约束、Prisma Migration 或 API 源码。
 
@@ -57,7 +57,7 @@
 
 ## 四、菜单、路由与 API 状态
 
-除登录外，下面 API 均位于 `/api/v1` 且需要 Bearer JWT。列表接口均为分页 GET；除人员新增/编辑外，本快照中的新业务列表未宣称具有写入能力。
+除登录外，下面 API 均位于 `/api/v1` 且需要 Bearer JWT。列表接口均为分页 GET；任职审批、转换和独立兼职职责页面同时接入了本快照明确列出的申请、审批、生效和结束写入动作，其余页面的写入能力以各行“当前状态”为准。
 
 ### 4.1 人员信息、合同与职责转交
 
@@ -90,17 +90,24 @@
 | 试用管理 | `/employment/probation` | 试用列表、审批人、导入模板/导入/导出、编辑试用期，以及 9 个试用流程操作接口 | 已对齐北森的五个列表视图、筛选字段和导出入口；支持编辑试用期、批量转正申请、发起试用中/转正考核、审批催办和转交。XLSX/CSV 导入及模板接口保留给数据迁移或后续受控入口，不在当前主界面展示。 |
 | 异动管理 | `/employment/changes` | `GET /employment/movements` | 已实现异动记录及进行中/已完成/全部视图。 |
 | 试岗期管理 | `/employment/trial-post` | `GET /employment/trial-posts` | 已实现试岗记录列表。 |
-| 实习生管理 | `/employment/interns` | `GET /employment/interns`、转换详情/申请底座 | 当前、已离职等可靠视图已实现；`POST /employment/conversions` 支持实习转正式申请，前端写入入口尚未接入。 |
-| 劳务人员管理 | `/employment/labor` | `GET /employment/labor-workers`、转换详情/申请底座 | 当前、已离职等可靠视图已实现；`POST /employment/conversions` 支持劳务转正式申请，前端写入入口尚未接入。 |
+| 实习生管理 | `/employment/interns` | `GET /employment/interns`、`GET /employment/conversions`、`POST /employment/conversions`、`POST /employment/conversions/:id/activate` | 当前、已离职及转换中/已转正视图已实现；单人转正式申请、生效和审批摘要已接入。 |
+| 劳务人员管理 | `/employment/labor` | `GET /employment/labor-workers`、`GET /employment/conversions`、`POST /employment/conversions`、`POST /employment/conversions/:id/activate` | 当前、已离职及转换中/已转正式视图已实现；单人转正式申请、生效和审批摘要已接入。 |
 | 离职管理 | `/employment/termination` | `GET /employment/terminations` | 已实现离职业务记录及进行中/已完成/全部视图。 |
 | 退休管理 | `/employment/retirement` | `GET /employment/retirements` | 已实现即将退休、办理中、逾期、完成和全部等可靠视图；意向申请因无来源保持 unsupported。 |
-| 兼职管理 | `/employment/part-time` | `GET /employment/part-time`；`/employment/part-time-records` 写入底座 | 页面仍以 `EmployeeAssignment` 查询视图为主；独立兼职职责已具备申请、审批、生效、结束后端链路，前端尚未接入。 |
+| 兼职管理 | `/employment/part-time` | `GET/POST /employment/part-time-records`、`POST /employment/part-time-records/:id/activate`、`POST /employment/part-time-records/:id/end` | 六个视图以 `PartTimeRecord` 为权威来源；申请、审批摘要、生效和单条结束已接入。旧 `GET /employment/part-time` 仅保留兼容。 |
 | 任职记录 | `/employment/records` | `GET /employment/records` | 已实现当前/历史两种口径及详情。 |
 | 汇报关系 | `/employment/reporting-lines` | `GET /employment/reporting-relationships` | 已实现显式员工 ID 关系的列表和完整授权图；不再以经理姓名或邮箱推断关系，调整写入仍未开放。 |
 
 九个已实现页面的操作列均按 `employeeId + canViewEmployeeDetail` 决定是否显示“查看”；不符合当前详情范围时禁用并显示“暂无详情”。试用管理额外依据 `canManage` 和流程状态展示维护操作。
 
-### 4.4 人员子集
+### 4.4 任职审批辅助页与流程设置
+
+| 页面 | 前端路由 | 后端接口 | 当前状态 |
+|---|---|---|---|
+| 任职审批工作台 | `/employment/approvals` | `GET /employment-approvals/my`、`GET /employment-approvals/current`、详情及审批动作 | 已实现“待我审批/我发起的”页签、详情时间线、意见校验和撤回/通过/驳回/退回动作；不新增侧栏任职入口。 |
+| 任职审批流程 | `/settings/employment-approval-flows` | 流程列表、详情、选项、创建、草稿版本、发布、归档 | 仅 `employment.approval-flow.manage` 权限账号显示；节点支持 USER/ROLE/DIRECTORY(JOB_TITLE)。 |
+
+### 4.5 人员子集
 
 | 页面 | 前端路由 | 后端接口 | 当前状态 |
 |---|---|---|---|
@@ -118,7 +125,7 @@
 
 十个已实现子集页的操作列按当前人员详情范围显示“查看”或禁用的“暂无详情”。
 
-### 4.5 编制管理与数据分析
+### 4.6 编制管理与数据分析
 
 | 页面 | 前端路由 | 后端接口 | 当前状态 |
 |---|---|---|---|

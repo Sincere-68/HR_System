@@ -196,7 +196,10 @@ export class EmploymentApprovalRuntimeService {
     if (!isParticipant && !canReadAsHr) {
       throw new ForbiddenException('无权查看该审批申请');
     }
-    return request;
+    return {
+      ...request,
+      businessSummary: await this.presentBusinessSummary(request),
+    };
   }
 
   async approveCurrentStep(user: AuthenticatedUser, id: string, comment?: string) {
@@ -476,6 +479,72 @@ export class EmploymentApprovalRuntimeService {
       status: ProcessStatus.COMPLETED,
       employmentStatus: EmploymentApplicationStatus.COMPLETED,
     };
+  }
+
+  private async presentBusinessSummary(
+    request: Pick<RuntimeRequest, 'businessType' | 'businessId'>,
+  ) {
+    if (!request.businessId) return null;
+    if (EMPLOYMENT_CONVERSION_BUSINESS_TYPES.has(request.businessType)) {
+      const conversion = await this.prisma.employmentConversion.findUnique({
+        where: { id: request.businessId },
+        select: {
+          id: true,
+          status: true,
+          plannedEffectiveDate: true,
+          targetOrganization: { select: { name: true } },
+          sourceSnapshot: true,
+          employee: { select: { id: true, employeeNo: true, name: true } },
+        },
+      });
+      if (!conversion) return null;
+      return {
+        kind: 'CONVERSION' as const,
+        conversionId: conversion.id,
+        employee: conversion.employee,
+        sourceOrganizationName: this.readSnapshotOrganizationName(conversion.sourceSnapshot),
+        targetOrganizationName: conversion.targetOrganization.name,
+        plannedEffectiveDate: conversion.plannedEffectiveDate.toISOString().slice(0, 10),
+        status: conversion.status,
+      };
+    }
+    if (request.businessType === PART_TIME_RECORD_BUSINESS_TYPE) {
+      const record = await this.prisma.partTimeRecord.findUnique({
+        where: { id: request.businessId },
+        select: {
+          id: true,
+          type: true,
+          institution: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          organization: { select: { name: true } },
+          employee: { select: { id: true, employeeNo: true, name: true } },
+        },
+      });
+      if (!record) return null;
+      return {
+        kind: 'PART_TIME' as const,
+        partTimeRecordId: record.id,
+        employee: record.employee,
+        organizationName: record.organization.name,
+        type: record.type,
+        institution: record.institution,
+        startDate: record.startDate.toISOString().slice(0, 10),
+        endDate: record.endDate?.toISOString().slice(0, 10) ?? null,
+        status: record.status,
+      };
+    }
+    return null;
+  }
+
+  private readSnapshotOrganizationName(snapshot: Prisma.JsonValue) {
+    if (!snapshot || Array.isArray(snapshot) || typeof snapshot !== 'object') return null;
+    const assignment = snapshot.assignment;
+    if (!assignment || Array.isArray(assignment) || typeof assignment !== 'object') return null;
+    const organization = assignment.organization;
+    if (!organization || Array.isArray(organization) || typeof organization !== 'object') return null;
+    return typeof organization.name === 'string' ? organization.name : null;
   }
 
   private async canReadBusinessRequestInScope(

@@ -26,6 +26,8 @@ function createService() {
     probationRecord: { count: count(11) },
     employeeAssignment: { count: count(7) },
     employmentPeriod: { count: count(5) },
+    employmentConversion: { count: count(13) },
+    partTimeRecord: { count: count(17) },
     employeeMovement: { count: count(3) },
     trialPostRecord: { count: count(2) },
     terminationRecord: { count: count(4) },
@@ -63,6 +65,8 @@ function createCrossDepartmentProbationService(
     probationRecord: { count: probationCount },
     employeeAssignment: { count: jest.fn().mockResolvedValue(0) },
     employmentPeriod: { count: jest.fn().mockResolvedValue(0) },
+    employmentConversion: { count: jest.fn().mockResolvedValue(0) },
+    partTimeRecord: { count: jest.fn().mockResolvedValue(0) },
     $queryRaw: rawQuery,
   };
   const access = {
@@ -122,15 +126,15 @@ describe('EmploymentViewCountsService', () => {
     }));
     expect(result.items.find(({ key }) => key === 'interns.conversion_pending')).toEqual(expect.objectContaining({
       key: 'interns.conversion_pending',
-      supported: false,
-      count: null,
-      reason: expect.any(String),
+      supported: true,
+      count: 13,
+      reason: null,
     }));
     expect(result.items.find(({ key }) => key === 'part-time.approval')).toEqual(expect.objectContaining({
       key: 'part-time.approval',
-      supported: false,
-      count: null,
-      reason: expect.any(String),
+      supported: true,
+      count: 17,
+      reason: null,
     }));
   });
 
@@ -241,6 +245,60 @@ describe('EmploymentViewCountsService', () => {
     await expect(service.getViewCounts(user, new QueryEmploymentViewCountsDto()))
       .rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('counts conversion queues and all six part-time views from authoritative records', async () => {
+    const { service, prisma, access } = createService();
+    access.hasAllEmployeeData.mockReturnValue(false);
+    (prisma as any).employmentConversion = {
+      count: jest.fn().mockResolvedValue(13),
+    };
+    (prisma as any).partTimeRecord = {
+      count: jest.fn().mockResolvedValue(17),
+    };
+
+    const result = await service.getViewCounts(user, {
+      businessDate: '2026-09-18',
+      organizationId: 'org-child',
+    } as QueryEmploymentViewCountsDto);
+
+    for (const key of [
+      'interns.conversion_pending',
+      'interns.converted',
+      'labor.conversion_pending',
+      'labor.converted',
+      'part-time.active',
+      'part-time.expiring',
+      'part-time.not_started',
+      'part-time.ended',
+      'part-time.all',
+      'part-time.approval',
+    ] as const) {
+      expect(result.items.find((item) => item.key === key)).toEqual(expect.objectContaining({
+        key,
+        supported: true,
+        count: expect.any(Number),
+        reason: null,
+      }));
+    }
+
+    expect((prisma as any).employmentConversion.count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        targetOrganizationId: { in: ['org-child'] },
+        OR: [{
+          sourceSnapshot: {
+            path: ['assignment', 'organizationId'],
+            equals: 'org-child',
+          },
+        }],
+      }),
+    }));
+    expect((prisma as any).partTimeRecord.count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        organizationId: { in: ['org-child'] },
+        employee: expect.objectContaining({ is: expect.any(Object) }),
+      }),
+    }));
   });
 
   it('exposes the documented route and read permission', async () => {

@@ -4,8 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InternManagementPage } from './InternManagementPage';
 
 const useInterns = vi.fn();
+const useEmploymentConversions = vi.fn();
+const useEmploymentConversion = vi.fn();
+const useEmploymentViewCounts = vi.fn();
+const createConversion = vi.fn();
+const useOrganizations = vi.fn();
+const useEmployeeFormOptions = vi.fn();
 vi.mock('../../features/employment/api', () => ({
   useInterns: (query: unknown) => useInterns(query),
+}));
+vi.mock('../../features/employment-foundation/api', () => ({
+  useEmploymentConversions: (query: unknown) => useEmploymentConversions(query),
+  useEmploymentConversion: (id: string, enabled?: boolean) => useEmploymentConversion(id, enabled),
+  useEmploymentViewCounts: (query: unknown) => useEmploymentViewCounts(query),
+  useCreateEmploymentConversion: () => ({ mutateAsync: createConversion, isPending: false }),
+  useActivateEmploymentConversion: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+vi.mock('../../features/employees/api', () => ({
+  useOrganizations: () => useOrganizations(),
+  useEmployeeFormOptions: (excludeEmployeeId?: string, enabled?: boolean) => useEmployeeFormOptions(excludeEmployeeId, enabled),
 }));
 
 const row = {
@@ -35,12 +52,23 @@ describe('InternManagementPage', () => {
   beforeEach(() => {
     cleanup();
     useInterns.mockReset();
+    useEmploymentConversions.mockReset();
+    useEmploymentConversion.mockReset();
+    useEmploymentViewCounts.mockReset();
+    createConversion.mockReset();
+    useOrganizations.mockReset();
+    useEmployeeFormOptions.mockReset();
     useInterns.mockReturnValue({
       data: { data: [row], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
     });
+    useEmploymentConversions.mockReturnValue({ data: { data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } }, isLoading: false, isError: false, refetch: vi.fn() });
+    useEmploymentConversion.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    useEmploymentViewCounts.mockReturnValue({ data: { items: [] }, isLoading: false, isError: false, refetch: vi.fn() });
+    useOrganizations.mockReturnValue({ data: [{ id: 'org-1', code: 'ORG-1', name: '目标组织', parentId: null }], isLoading: false, isError: false, refetch: vi.fn() });
+    useEmployeeFormOptions.mockReturnValue({ data: { positions: [{ id: 'position-1', name: '目标岗位' }], managers: [], jobTitles: [{ id: 'title-1', name: '目标职务', code: 'TITLE-1' }] }, isLoading: false, isError: false });
   });
 
   it('keeps the exact required column order and renders real fields and placeholders', () => {
@@ -67,27 +95,26 @@ describe('InternManagementPage', () => {
 
     expect(screen.getByRole('navigation', { name: '实习生管理视图' }))
       .toHaveTextContent('实习生实习转正中已转正已离职');
-    expect(screen.getByText(/当前页面仅展示当前有效实习任职记录/)).toBeInTheDocument();
+    expect(screen.getByText(/当前页面展示有效实习任职记录及转换申请/)).toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: '筛选人员' })).toHaveAttribute('placeholder', '人员');
     expect(screen.getByRole('textbox', { name: '筛选邮箱' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: '筛选实习部门' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: '筛选实习职位' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /批量实习转正/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /申请实习转正/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /新增实习生/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /批量编辑/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /批量结束实习/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /更多操作/ })).toBeDisabled();
   });
 
-  it('shows unsupported views without querying the current internship collection', () => {
-    renderPage();
+  it('loads conversion rows with the authoritative in-progress view and exact type', () => {
+    useEmploymentConversions.mockReturnValue({
+      data: { data: [{ id: 'conversion-1', type: 'INTERN_TO_EMPLOYEE', status: 'PENDING', plannedEffectiveDate: '2026-10-01', employee: { id: 'employee-1', employeeNo: 'I-001', name: '待转正式实习生' }, source: { employmentPeriodId: 'period-1', sequenceNo: 1, employmentRelationship: 'INTERN', entryDate: '2026-08-01', organization: { id: 'org-source', name: '实习部门' }, position: { id: 'position-source', name: '实习岗位' }, jobTitle: null, jobLevel: null }, target: { organization: { id: 'org-target', name: '正式部门', code: 'ORG-TARGET' }, position: null, jobTitle: null, jobLevel: null }, approval: null, canActivate: false, canViewEmployeeDetail: true }], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } }, isLoading: false, isError: false, refetch: vi.fn() });
+    renderPage('/employment/interns?view=converting');
 
-    fireEvent.click(screen.getByRole('button', { name: '实习转正中' }));
-
-    expect(screen.getByText('该视图暂不可用')).toBeInTheDocument();
-    expect(screen.getByText(/转换事件来源待确认/)).toBeInTheDocument();
-    expect(screen.queryByText('虚构实习生')).not.toBeInTheDocument();
-    expect(useInterns).toHaveBeenCalledTimes(1);
+    expect(useEmploymentConversions).toHaveBeenCalledWith(expect.objectContaining({ view: 'in_progress', type: 'INTERN_TO_EMPLOYEE' }));
+    expect(screen.getByText('待转正式实习生')).toBeInTheDocument();
+    expect(screen.queryByText('该视图暂不可用')).not.toBeInTheDocument();
   });
 
   it('queries the authoritative resigned view for exited interns', () => {

@@ -1,6 +1,6 @@
 # 任职管理业务规则与实现说明
 
-> 更新日期：2026-09-23
+> 更新日期：2026-09-24
 >
 > 适用范围：任职审批流程、实习/劳务转正式、独立兼职职责，以及十个任职管理只读页面的共同权限和日期口径。
 >
@@ -22,7 +22,7 @@
 - 并行会签、加签、代理、条件分支和自动跳级；
 - 原审批实例内直接修改后重新提交；
 - 审批流程导入/导出文件；
-- 转换和独立兼职职责的前端写入表单；
+- 转换和独立兼职职责的批量写入、自动调度；当前已支持单人转换申请及单条兼职申请/生效/结束前端闭环；
 - 自动定时生效任务；
 - 修改已完成审批历史的管理接口。
 
@@ -352,12 +352,19 @@ backend/prisma/migrations/20260918190000_employment_business_foundation
 
 脚本只允许本机 `hr_personnel_demo_test`，使用 `MOCK-HR-STAGE2-*` 虚构命名空间，不运行 `backend/prisma/seed.ts`。
 
-## 11. 已知限制与后续决策
+## 11. 前端页面与六视图口径
+
+- `/employment/approvals` 提供“待我审批”和“我发起的”两个工作台视图；审批详情按节点顺序展示历史，驳回和退回必须填写非空意见，生效动作仍回到实习、劳务或兼职业务页执行。
+- `/settings/employment-approval-flows` 仅在 `employment.approval-flow.manage` 权限存在时出现在导航；直接访问仍由后端权限保护。流程节点的职务目录规则固定为 `{ directory: 'JOB_TITLE', value: jobTitleId }`。
+- 实习和劳务页面的“转正中/已转正”视图分别查询 `EmploymentConversion.view=in_progress/completed`；不从员工当前状态反推转换历史。单人申请成功显示“申请已提交”，最终审批后只有计划日期到达才能显示“生效”。
+- 兼职页面六个视图为 `active`、`expiring`、`not_started`、`ended`、`approval`、`all`，均以 `PartTimeRecord` 查询；“即将到期”按上海业务日向后 30 个自然日（含边界）计算。直接新增、批量结束、导入和导出因无对应后端能力继续禁用并说明原因。
+
+## 12. 已知限制与后续决策
 
 1. 转换列表服务目前按源周期任职关系查询范围；审批详情已改用创建时源组织快照。若未来允许源周期内多次跨部门转换，列表也应改为快照授权。
-2. 独立兼职职责与原 P0 `GET /employment/part-time`（基于 `EmployeeAssignment.workArrangement=PART_TIME`）是两套来源；前端尚未切换到新写入底座。
+2. 独立兼职职责与原 P0 `GET /employment/part-time`（基于 `EmployeeAssignment.workArrangement=PART_TIME`）是两套来源；新兼职页面只使用 `PartTimeRecord` 六视图，旧接口保留兼容且不与新记录混合。
 3. 退回修订后没有原记录重新提交接口；当前只保留 `DRAFT` 业务记录和关闭的原审批。
-4. 流程管理目前提供创建、修改、发布、归档 API，但没有查询列表、导入或导出 API。
+4. 流程管理目前提供列表、详情、选项、创建、修改、发布、归档 API，但没有文件导入或导出 API。
 5. 没有自动到期生效任务，HR 必须显式调用生效接口。
 6. 转换生效会结束源周期全部有效任职；这符合当前“同一时间仅一个部门”的项目规则。若未来允许源周期内额外任职，需重新定义结束范围。
 7. `CANCELLED` 和兼容状态 `APPROVED` 已预留，但当前 Controller 没有直接进入这些状态的动作。

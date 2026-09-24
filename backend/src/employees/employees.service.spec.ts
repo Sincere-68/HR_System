@@ -183,16 +183,19 @@ describe('EmployeesService database form options', () => {
   it('returns only directory-backed options and excludes fixed enum directories', async () => {
     const positions = [{ id: 'position-1', name: 'web前端工程师', organizationId: null }];
     const managers = [{ id: 'manager-1', name: '虚构经理', employeeNo: 'FAKE-M001' }];
+    const jobTitles = [{ id: 'job-title-1', code: 'FRONTEND', name: '前端工程师' }];
     const employingCompanies = [{ id: 'company-1', code: 'COMPANY_001', name: '虚构全日制公司' }];
     const movementTypes = [{ id: 'movement-type-1', code: 'TRANSFER', name: '虚构调动' }];
     const prisma = {
       position: { findMany: jest.fn().mockReturnValue(undefined) },
       employee: { findMany: jest.fn().mockReturnValue(undefined) },
+      jobTitle: { findMany: jest.fn().mockReturnValue(undefined) },
       employingCompany: { findMany: jest.fn().mockReturnValue(undefined) },
       movementType: { findMany: jest.fn().mockReturnValue(undefined) },
       $transaction: jest.fn().mockResolvedValue([
         positions,
         managers,
+        jobTitles,
         employingCompanies,
         movementTypes,
       ]),
@@ -217,6 +220,7 @@ describe('EmployeesService database form options', () => {
     expect(result).toEqual({
       positions,
       managers,
+      jobTitles,
       employingCompanies,
       movementTypes,
     });
@@ -227,6 +231,11 @@ describe('EmployeesService database form options', () => {
       where: { status: 'ACTIVE', archivedAt: null },
       select: { id: true, name: true, organizationId: true },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+    expect(prisma.jobTitle.findMany).toHaveBeenCalledWith({
+      where: { status: 'ACTIVE', archivedAt: null },
+      select: { id: true, code: true, name: true },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }, { id: 'asc' }],
     });
   });
 });

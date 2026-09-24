@@ -1,3 +1,5 @@
+import type { PermissionCode } from '@hr-demo/shared';
+import type { MenuProps } from 'antd';
 import type { ReactNode } from 'react';
 import {
   BarChartOutlined,
@@ -14,6 +16,7 @@ export interface NavigationItem {
   key: string;
   label: string;
   icon?: ReactNode;
+  requiredPermission?: PermissionCode;
   children?: NavigationItem[];
 }
 
@@ -97,7 +100,32 @@ export const navigationItems: NavigationItem[] = [
     ],
   },
   { key: '/settings', label: '设置', icon: <SettingOutlined /> },
+  {
+    key: '/settings/employment-approval-flows',
+    label: '任职审批流程',
+    icon: <SettingOutlined />,
+    requiredPermission: 'employment.approval-flow.manage',
+  },
 ];
+
+export function buildNavigationItems(permissions: readonly PermissionCode[]): NavigationItem[] {
+  const allowed = new Set<PermissionCode>(permissions);
+  return navigationItems.flatMap((item) => {
+    if (item.requiredPermission && !allowed.has(item.requiredPermission)) return [];
+    if (!item.children) return [item];
+    const children = item.children.filter((child) => (
+      !child.requiredPermission || allowed.has(child.requiredPermission)
+    ));
+    return [{ ...item, children }];
+  });
+}
+
+export function toMenuItems(items: readonly NavigationItem[]): MenuProps['items'] {
+  return items.map(({ requiredPermission: _requiredPermission, children, ...item }) => ({
+    ...item,
+    ...(children ? { children: toMenuItems(children) } : {}),
+  }));
+}
 
 const implementedRoutes = new Set([
   '/personnel/employees',
@@ -153,7 +181,13 @@ export const placeholderHeadingTabs: Record<string, string[]> = {
   '/analytics/mobility': ['员工流动统计', '各月入离职统计', '各机构入离职统计', '员工流入统计', '员工流出统计', '组织编制统计'],
 };
 
+const auxiliaryRouteLabels: Record<string, string> = {
+  '/employment/approvals': '任职审批',
+  '/settings/employment-approval-flows': '任职审批流程',
+};
+
 export function findNavigationLabel(pathname: string) {
+  if (auxiliaryRouteLabels[pathname]) return auxiliaryRouteLabels[pathname];
   for (const item of navigationItems) {
     if (item.key === pathname) return item.label;
     const child = item.children?.find((candidate) => candidate.key === pathname);

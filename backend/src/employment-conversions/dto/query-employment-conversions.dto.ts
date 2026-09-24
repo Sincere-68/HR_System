@@ -1,9 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EmploymentApplicationStatus, EmploymentConversionType } from '@prisma/client';
-import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class QueryEmploymentConversionsDto {
+  @ApiPropertyOptional({ enum: ['in_progress', 'completed', 'all'], default: 'all' })
+  @IsOptional()
+  @IsIn(['in_progress', 'completed', 'all'])
+  view?: 'in_progress' | 'completed' | 'all';
+
   @ApiPropertyOptional({ enum: EmploymentApplicationStatus })
   @IsOptional()
   @IsEnum(EmploymentApplicationStatus)
@@ -17,6 +22,8 @@ export class QueryEmploymentConversionsDto {
   @ApiPropertyOptional({ description: '员工姓名或工号关键字' })
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   keyword?: string;
 
   @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 100 })

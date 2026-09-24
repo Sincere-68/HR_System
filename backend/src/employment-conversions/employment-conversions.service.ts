@@ -17,6 +17,13 @@ import {
   RecordStatus,
   WorkArrangement,
 } from '@prisma/client';
+import {
+  PERMISSIONS,
+  type EmploymentApprovalStepItem,
+  type EmploymentConversionDetail,
+  type EmploymentConversionListItem,
+  type Paginated,
+} from '@hr-demo/shared';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
 import { AccessControlService } from '../access-control/access-control.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -41,6 +48,27 @@ type ConversionWithSource = Prisma.EmploymentConversionGetPayload<{
       include: {
         employee: true;
         assignments: true;
+      };
+    };
+  };
+}>;
+
+type ConversionReadRow = Prisma.EmploymentConversionGetPayload<{
+  include: {
+    employee: { select: { id: true; employeeNo: true; name: true } };
+    sourceEmploymentPeriod: {
+      include: {
+        assignments: {
+          include: { organization: true; position: true; jobTitle: true };
+        };
+      };
+    };
+    targetOrganization: true;
+    targetPosition: true;
+    targetJobTitle: true;
+    approvalRequest: {
+      include: {
+        steps: { include: { approver: { select: { id: true; displayName: true } } } };
       };
     };
   };
@@ -169,20 +197,34 @@ export class EmploymentConversionsService {
     }
   }
 
-  async findAll(user: AuthenticatedUser, query: QueryEmploymentConversionsDto) {
+  async findAll(
+    user: AuthenticatedUser,
+    query: QueryEmploymentConversionsDto,
+  ): Promise<Paginated<EmploymentConversionListItem>> {
     const hasAllEmployeeData = this.access.hasAllEmployeeData(user);
     const accessibleOrganizationIds = hasAllEmployeeData
       ? undefined
       : ((await this.access.getAccessibleOrganizationIds(user)) ?? []);
+    const viewStatus = query.view === 'in_progress'
+      ? { in: OPEN_CONVERSION_STATUSES }
+      : query.view === 'completed'
+        ? EmploymentApplicationStatus.COMPLETED
+        : undefined;
+    const sourceScope = !hasAllEmployeeData
+      ? {
+          OR: (accessibleOrganizationIds ?? []).map((organizationId) => ({
+            sourceSnapshot: {
+              path: ['assignment', 'organizationId'],
+              equals: organizationId,
+            },
+          })),
+        }
+      : {};
     const where: Prisma.EmploymentConversionWhereInput = {
       archivedAt: null,
-      ...(!hasAllEmployeeData ? {
-        targetOrganizationId: { in: accessibleOrganizationIds },
-        sourceEmploymentPeriod: {
-          assignments: { some: { organizationId: { in: accessibleOrganizationIds } } },
-        },
-      } : {}),
-      ...(query.status ? { status: query.status } : {}),
+      ...(!hasAllEmployeeData ? { targetOrganizationId: { in: accessibleOrganizationIds } } : {}),
+      ...sourceScope,
+      ...(viewStatus ? { status: viewStatus } : query.status ? { status: query.status } : {}),
       ...(query.type ? { type: query.type } : {}),
       ...(query.keyword
         ? {
@@ -197,24 +239,25 @@ export class EmploymentConversionsService {
           }
         : {}),
     };
-    const [data, total] = await Promise.all([
+    const include = this.readInclude();
+    const [rows, total] = await this.prisma.$transaction([
       this.prisma.employmentConversion.findMany({
         where,
         orderBy: [{ plannedEffectiveDate: 'desc' }, { id: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
-        include: {
-          employee: { select: { id: true, employeeNo: true, name: true } },
-          sourceEmploymentPeriod: {
-            select: { id: true, employmentRelationship: true, sequenceNo: true },
-          },
-          targetOrganization: { select: { id: true, code: true, name: true } },
-        },
+        include,
       }),
       this.prisma.employmentConversion.count({ where }),
     ]);
+    const readRows = rows as unknown as ConversionReadRow[];
+    const visibleEmployees = await this.visibleEmployeeIds(user, readRows);
     return {
-      data,
+      data: readRows.map((row) => this.presentConversion(
+        user,
+        row,
+        visibleEmployees.has(row.employeeId),
+      )),
       meta: {
         page: query.page,
         pageSize: query.pageSize,
@@ -224,24 +267,18 @@ export class EmploymentConversionsService {
     };
   }
 
-  async findOne(user: AuthenticatedUser, id: string) {
+  async findOne(user: AuthenticatedUser, id: string): Promise<EmploymentConversionDetail> {
     const conversion = await this.prisma.employmentConversion.findUnique({
       where: { id },
-      include: {
-        employee: { select: { id: true, employeeNo: true, name: true } },
-        sourceEmploymentPeriod: {
-          include: {
-            assignments: { orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }] },
-          },
-        },
-        targetOrganization: { select: { id: true, code: true, name: true } },
-        targetPosition: { select: { id: true, name: true } },
-        targetJobTitle: { select: { id: true, code: true, name: true } },
-      },
-    });
+      include: this.readInclude(),
+    }) as unknown as ConversionReadRow | null;
     if (!conversion || conversion.archivedAt) throw new NotFoundException('任职转换申请不存在');
     await this.assertConversionScope(user, conversion);
-    return conversion;
+    const canViewEmployeeDetail = (await this.visibleEmployeeIds(user, [conversion])).has(conversion.employeeId);
+    return {
+      ...this.presentConversion(user, conversion, canViewEmployeeDetail),
+      approvalSteps: this.presentApprovalSteps(conversion),
+    };
   }
 
   async activate(user: AuthenticatedUser, id: string) {
@@ -412,10 +449,13 @@ export class EmploymentConversionsService {
   private async assertConversionScope(user: AuthenticatedUser, conversion: {
     employeeId: string;
     targetOrganizationId: string;
+    sourceSnapshot?: Prisma.JsonValue;
     sourceEmploymentPeriod?: { assignments?: Array<{ organizationId: string }> };
   }) {
     if (this.access.hasAllEmployeeData(user)) return;
-    const sourceOrganizationId = conversion.sourceEmploymentPeriod?.assignments?.[0]?.organizationId;
+    const sourceOrganizationId = conversion.sourceSnapshot !== undefined
+      ? this.readSnapshotOrganizationId(conversion.sourceSnapshot)
+      : conversion.sourceEmploymentPeriod?.assignments?.[0]?.organizationId;
     if (!sourceOrganizationId) throw new ForbiddenException('无法确认源任职组织数据范围');
     const [sourceAllowed, targetAllowed] = await Promise.all([
       this.access.canAccessOrganizationInScope(user, sourceOrganizationId),
@@ -424,6 +464,130 @@ export class EmploymentConversionsService {
     if (!sourceAllowed || !targetAllowed) {
       throw new ForbiddenException('源任职或目标组织不在当前账号的数据范围内');
     }
+  }
+
+  private readSnapshotOrganizationId(snapshot: Prisma.JsonValue | undefined) {
+    if (!snapshot || Array.isArray(snapshot) || typeof snapshot !== 'object') return null;
+    const assignment = snapshot.assignment;
+    if (!assignment || Array.isArray(assignment) || typeof assignment !== 'object') return null;
+    const organizationId = assignment.organizationId;
+    return typeof organizationId === 'string' ? organizationId : null;
+  }
+
+  private readTargetSnapshotOrganizationId(snapshot: Prisma.JsonValue | undefined) {
+    if (!snapshot || Array.isArray(snapshot) || typeof snapshot !== 'object') return null;
+    const organization = snapshot.organization;
+    if (!organization || Array.isArray(organization) || typeof organization !== 'object') return null;
+    const organizationId = organization.id;
+    return typeof organizationId === 'string' ? organizationId : null;
+  }
+
+  private async visibleEmployeeIds(user: AuthenticatedUser, rows: ConversionReadRow[]) {
+    if (this.access.hasAllEmployeeData(user)) return new Set(rows.map((row) => row.employeeId));
+    if (!rows.length) return new Set<string>();
+    const where = await this.access.getEmployeeWhere(user);
+    const visible = await this.prisma.employee.findMany({
+      where: { AND: [{ id: { in: [...new Set(rows.map((row) => row.employeeId))] } }, where] },
+      select: { id: true },
+    });
+    return new Set(visible.map(({ id }) => id));
+  }
+
+  private readInclude(): Prisma.EmploymentConversionInclude {
+    return {
+      employee: { select: { id: true, employeeNo: true, name: true } },
+      sourceEmploymentPeriod: {
+        include: {
+          assignments: {
+            include: { organization: true, position: true, jobTitle: true },
+            orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { id: 'asc' }],
+          },
+        },
+      },
+      targetOrganization: true,
+      targetPosition: true,
+      targetJobTitle: true,
+      approvalRequest: {
+        include: {
+          steps: {
+            orderBy: [{ stepOrder: 'asc' }, { id: 'asc' }],
+            include: { approver: { select: { id: true, displayName: true } } },
+          },
+        },
+      },
+    };
+  }
+
+  private presentApprovalSteps(row: ConversionReadRow): EmploymentApprovalStepItem[] {
+    return (row.approvalRequest?.steps ?? []).map((step) => ({
+      id: step.id,
+      stepOrder: step.stepOrder,
+      approver: step.approver,
+      decision: step.decision,
+      comment: step.comment,
+      operatedAt: step.operatedAt?.toISOString() ?? null,
+    }));
+  }
+
+  private presentConversion(
+    user: AuthenticatedUser,
+    row: ConversionReadRow,
+    canViewEmployeeDetail: boolean,
+  ): EmploymentConversionListItem {
+    const sourceAssignment = row.sourceEmploymentPeriod.assignments.find(({ isPrimary }) => isPrimary)
+      ?? row.sourceEmploymentPeriod.assignments[0];
+    const approval = row.approvalRequest;
+    const currentStep = approval?.steps.find(({ stepOrder, decision }) => (
+      stepOrder === approval.currentStep && decision === 'PENDING'
+    ));
+    const canActivate = Boolean(
+      this.access.hasPermission(user, PERMISSIONS.EMPLOYEE_UPDATE)
+      && row.status === EmploymentApplicationStatus.PENDING_EFFECTIVE
+      && approval?.status === ProcessStatus.APPROVED
+      && approval.employmentStatus === EmploymentApplicationStatus.PENDING_EFFECTIVE
+      && row.plannedEffectiveDate <= this.shanghaiBusinessDate(),
+    );
+    return {
+      id: row.id,
+      type: row.type,
+      status: row.status,
+      plannedEffectiveDate: this.formatSnapshotDate(row.plannedEffectiveDate)!,
+      approvalRequestId: row.approvalRequestId,
+      employee: row.employee,
+      source: {
+        employmentPeriodId: row.sourceEmploymentPeriodId,
+        sequenceNo: row.sourceEmploymentPeriod.sequenceNo,
+        employmentRelationship: row.sourceEmploymentPeriod.employmentRelationship,
+        entryDate: this.formatSnapshotDate(row.sourceEmploymentPeriod.entryDate),
+        organization: sourceAssignment?.organization
+          ? { id: sourceAssignment.organization.id, name: sourceAssignment.organization.name }
+          : null,
+        position: sourceAssignment?.position
+          ? { id: sourceAssignment.position.id, name: sourceAssignment.position.name }
+          : null,
+        jobTitle: sourceAssignment?.jobTitle
+          ? { id: sourceAssignment.jobTitle.id, code: sourceAssignment.jobTitle.code, name: sourceAssignment.jobTitle.name }
+          : null,
+        jobLevel: sourceAssignment?.jobLevel ?? null,
+      },
+      target: {
+        organization: { id: row.targetOrganization?.id ?? this.readTargetSnapshotOrganizationId(row.targetSnapshot) ?? row.targetOrganizationId, code: row.targetOrganization?.code ?? '', name: row.targetOrganization?.name ?? '' },
+        position: row.targetPosition ? { id: row.targetPosition.id, name: row.targetPosition.name } : null,
+        jobTitle: row.targetJobTitle ? { id: row.targetJobTitle.id, code: row.targetJobTitle.code, name: row.targetJobTitle.name } : null,
+        jobLevel: row.targetJobLevel,
+      },
+      approval: approval ? {
+        id: approval.id,
+        status: approval.status,
+        employmentStatus: approval.employmentStatus ?? row.status,
+        currentStep: approval.currentStep,
+        currentApproverName: currentStep?.approver.displayName ?? null,
+        submittedAt: approval.submittedAt?.toISOString() ?? null,
+        completedAt: approval.completedAt?.toISOString() ?? null,
+      } : null,
+      canActivate,
+      canViewEmployeeDetail,
+    };
   }
 
   private async assertOrganizationAccess(user: AuthenticatedUser, organizationId: string) {

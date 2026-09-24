@@ -5,8 +5,11 @@ import {
 } from '@nestjs/common';
 import {
   AssignmentStatus,
+  EmploymentApplicationStatus,
+  EmploymentConversionType,
   EmploymentRelationship,
   EmploymentStatus,
+  PartTimeRecordStatus,
   Prisma,
   ProcessStatus,
   RecordStatus,
@@ -127,11 +130,7 @@ const LABELS: Record<EmploymentViewCountKey, string> = {
 
 const UNSUPPORTED_REASONS: Partial<Record<EmploymentViewCountKey, string>> = {
   'records.history': '统一历史计数口径待 P0 实现',
-  'interns.conversion_pending': '尚未确认实习转换事件来源',
-  'interns.converted': '尚未确认实习转换事件来源',
   'interns.resigned': '尚未确认实习离职历史来源',
-  'labor.conversion_pending': '尚未确认劳务转换事件来源',
-  'labor.converted': '尚未确认劳务转换事件来源',
   'labor.resigned': '尚未确认劳务离职历史来源',
   'movements.active': '异动历史组织授权计数来源待 P0 实现',
   'movements.completed': '异动历史组织授权计数来源待 P0 实现',
@@ -150,10 +149,6 @@ const UNSUPPORTED_REASONS: Partial<Record<EmploymentViewCountKey, string>> = {
   'retirements.completed': '退休历史组织授权计数来源待 P0 实现',
   'retirements.all': '退休历史组织授权计数来源待 P0 实现',
   'retirements.intention_pending': '退休意向申请来源尚未接入',
-  'part-time.expiring': '兼职到期预警窗口尚未确认',
-  'part-time.ended': '兼职历史组织授权计数来源待 P0 实现',
-  'part-time.all': '兼职完整历史计数口径待 P0 实现',
-  'part-time.approval': '尚未确认兼职申请与审批来源',
 };
 
 interface CountContext {
@@ -295,13 +290,39 @@ export class EmploymentViewCountsService {
         ],
       },
     });
-    const partTimeCount = this.prisma.employeeAssignment.count({
-      where: {
-        AND: [
-          currentAssignment,
-          { workArrangement: WorkArrangement.PART_TIME },
-        ],
-      },
+    const openConversionStatuses = [
+      EmploymentApplicationStatus.DRAFT,
+      EmploymentApplicationStatus.PENDING,
+      EmploymentApplicationStatus.APPROVED,
+      EmploymentApplicationStatus.PENDING_EFFECTIVE,
+    ];
+    const conversionWhere = (
+      type: EmploymentConversionType,
+      status: EmploymentApplicationStatus | { in: EmploymentApplicationStatus[] },
+    ): Prisma.EmploymentConversionWhereInput => ({
+      archivedAt: null,
+      type,
+      status,
+      ...(organizationIds
+        ? {
+            targetOrganizationId: { in: organizationIds },
+            OR: organizationIds.map((organizationId) => ({
+              sourceSnapshot: {
+                path: ['assignment', 'organizationId'],
+                equals: organizationId,
+              },
+            })),
+          }
+        : {}),
+    });
+    const partTimeEmployee = organizationIds
+      ? { is: { ...activeEmployee.is, assignments: { some: currentAssignment } } }
+      : activeEmployee;
+    const partTimeWhere = (extra: Prisma.PartTimeRecordWhereInput = {}): Prisma.PartTimeRecordWhereInput => ({
+      archivedAt: null,
+      ...extra,
+      ...(organizationIds ? { organizationId: { in: organizationIds } } : {}),
+      employee: partTimeEmployee,
     });
 
     const inThirtyDays = new Date(businessDay);
@@ -340,30 +361,75 @@ export class EmploymentViewCountsService {
         query: internCount,
       },
       {
+        key: 'interns.conversion_pending',
+        query: this.prisma.employmentConversion.count({
+          where: conversionWhere(EmploymentConversionType.INTERN_TO_EMPLOYEE, { in: openConversionStatuses }),
+        }),
+      },
+      {
+        key: 'interns.converted',
+        query: this.prisma.employmentConversion.count({
+          where: conversionWhere(EmploymentConversionType.INTERN_TO_EMPLOYEE, EmploymentApplicationStatus.COMPLETED),
+        }),
+      },
+      {
         key: 'labor.on_duty',
         query: laborCount,
       },
       {
+        key: 'labor.conversion_pending',
+        query: this.prisma.employmentConversion.count({
+          where: conversionWhere(EmploymentConversionType.LABOR_TO_EMPLOYEE, { in: openConversionStatuses }),
+        }),
+      },
+      {
+        key: 'labor.converted',
+        query: this.prisma.employmentConversion.count({
+          where: conversionWhere(EmploymentConversionType.LABOR_TO_EMPLOYEE, EmploymentApplicationStatus.COMPLETED),
+        }),
+      },
+      {
         key: 'part-time.active',
-        query: partTimeCount,
+        query: this.prisma.partTimeRecord.count({
+          where: partTimeWhere({
+            status: PartTimeRecordStatus.ACTIVE,
+            startDate: { lte: businessDay },
+            OR: [{ endDate: null }, { endDate: { gte: businessDay } }],
+          }),
+        }),
+      },
+      {
+        key: 'part-time.expiring',
+        query: this.prisma.partTimeRecord.count({
+          where: partTimeWhere({
+            status: PartTimeRecordStatus.ACTIVE,
+            endDate: { gte: businessDay, lte: inThirtyDays },
+          }),
+        }),
       },
       {
         key: 'part-time.not_started',
-        query: this.prisma.employeeAssignment.count({
-          where: {
-            AND: [
-              {
-                workArrangement: WorkArrangement.PART_TIME,
-              },
-              {
-                status: AssignmentStatus.ACTIVE,
-              },
-              { archivedAt: null },
-              { startDate: { gt: businessDay } },
-              { employee: activeEmployee },
-              ...(organizationIds ? [{ organizationId: { in: organizationIds } }] : []),
-            ],
-          },
+        query: this.prisma.partTimeRecord.count({
+          where: partTimeWhere({
+            status: PartTimeRecordStatus.PENDING_EFFECTIVE,
+            startDate: { gt: businessDay },
+          }),
+        }),
+      },
+      {
+        key: 'part-time.ended',
+        query: this.prisma.partTimeRecord.count({
+          where: partTimeWhere({ status: PartTimeRecordStatus.ENDED }),
+        }),
+      },
+      {
+        key: 'part-time.all',
+        query: this.prisma.partTimeRecord.count({ where: partTimeWhere() }),
+      },
+      {
+        key: 'part-time.approval',
+        query: this.prisma.partTimeRecord.count({
+          where: partTimeWhere({ status: PartTimeRecordStatus.PENDING }),
         }),
       },
     ];

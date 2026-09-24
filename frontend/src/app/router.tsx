@@ -24,6 +24,7 @@ import { EmployeeListPage } from '../pages/employees/EmployeeListPage';
 import { EmployeeRosterPage } from '../pages/analytics/EmployeeRosterPage';
 import { ContractsPage } from '../pages/contracts/ContractsPage';
 import { EmployeeChangeManagementPage } from '../pages/employment/EmployeeChangeManagementPage';
+import { EmploymentApprovalsPage } from '../pages/employment/EmploymentApprovalsPage';
 import { EmploymentRecordsPage } from '../pages/employment/EmploymentRecordsPage';
 import { InternManagementPage } from '../pages/employment/InternManagementPage';
 import { LaborWorkerManagementPage } from '../pages/employment/LaborWorkerManagementPage';
@@ -52,6 +53,7 @@ import { SkillsPage } from '../pages/subsets/SkillsPage';
 import { TrainingPage } from '../pages/subsets/TrainingPage';
 import { WorkHistoryPage } from '../pages/subsets/WorkHistoryPage';
 import { TransferTypesPage } from '../pages/staffing/TransferTypesPage';
+import { EmploymentApprovalFlowsPage } from '../pages/settings/EmploymentApprovalFlowsPage';
 import { placeholderHeadingTabs, placeholderRoutes } from '../config/navigation';
 
 export function AppRouter() {
@@ -91,6 +93,7 @@ export function AppRouter() {
           <Route path="analytics/roster" element={<EmployeeRosterPage />} />
           <Route path="contracts" element={<ContractsPage />} />
           <Route path="employment/probation" element={<ProbationPage />} />
+          <Route path="employment/approvals" element={<EmploymentApprovalsPage />} />
           <Route path="employment/changes" element={<EmployeeChangeManagementPage />} />
           <Route path="employment/trial-post" element={<TrialPostManagementPage />} />
           <Route path="employment/interns" element={<InternManagementPage />} />
@@ -109,6 +112,7 @@ export function AppRouter() {
           <Route path="onboarding/id-card-reader" element={<IdCardReaderPage />} />
           <Route path="handover" element={<HandoverPage />} />
           <Route path="staffing/transfer-types" element={<TransferTypesPage />} />
+          <Route path="settings/employment-approval-flows" element={<EmploymentApprovalFlowsPage />} />
           <Route path="subsets/education" element={<EducationPage />} />
           <Route path="subsets/work-history" element={<WorkHistoryPage />} />
           <Route path="subsets/family" element={<FamilyPage />} />

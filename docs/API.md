@@ -267,6 +267,8 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 ## 任职管理：审批、转换与独立兼职职责
 
+对应前端路由：`/employment/approvals`（辅助审批工作台，不增加任职侧栏入口）、`/settings/employment-approval-flows`（仅拥有 `employment.approval-flow.manage` 的账号在侧栏显示）、`/employment/interns`、`/employment/labor` 和 `/employment/part-time`。转换与兼职提交成功的提示为“申请已提交”；审批完成和正式生效仍是两个独立步骤。
+
 以下接口仅支持数据库模式，并统一位于 `/api/v1`。完整状态机、日期和事务规则见 [`EMPLOYMENT_BUSINESS_RULES.md`](EMPLOYMENT_BUSINESS_RULES.md)。
 
 ### 任职审批流程管理
@@ -275,6 +277,9 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 | 方法与路径 | 说明 |
 | --- | --- |
+| `GET /employment-approval-flows` | 分页查询流程定义；支持 `keyword`、`businessType`、`status`、`page`、`pageSize`。 |
+| `GET /employment-approval-flows/options` | 返回有效用户、角色和未归档职务目录选项；职务目录节点提交 JobTitle ID。 |
+| `GET /employment-approval-flows/:definitionId` | 查询定义、版本和节点历史；已归档定义仍可读取。 |
 | `POST /employment-approval-flows` | 创建流程定义及首个草稿版本。 |
 | `PATCH /employment-approval-flows/:definitionId` | 修改未发布定义及其草稿节点。 |
 | `POST /employment-approval-flows/:definitionId/versions` | 在未归档定义下创建新草稿版本。 |
@@ -282,7 +287,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 | `POST /employment-approval-flows/versions/:versionId/publish` | 发布版本，并归档同业务类型旧发布定义/版本。 |
 | `POST /employment-approval-flows/:definitionId/archive` | 归档定义及其草稿/发布版本，保留历史。 |
 
-节点必须从 1 开始连续排序。`USER` 节点指定 `assigneeUserId`；`ROLE` 节点指定 `assigneeRoleId`；`DIRECTORY` 当前只支持 `{ "directory": "JOB_TITLE", "value": "<jobTitleId>" }`。当前没有流程查询列表、文件导入或导出接口。
+节点必须从 1 开始连续排序。`USER` 节点指定 `assigneeUserId`；`ROLE` 节点指定 `assigneeRoleId`；`DIRECTORY` 当前只支持 `{ "directory": "JOB_TITLE", "value": "<jobTitleId>" }`。当前没有流程文件导入或导出接口；流程列表、详情和编辑选项可通过以下读取接口获取。
 
 ### 任职审批运行时
 
@@ -307,7 +312,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 
 请求包含员工、源任职周期、目标组织、可选目标职位/职务/职级和 `plannedEffectiveDate`。源关系必须与转换类型匹配，源和目标组织均须在范围内；同一源周期不能存在第二笔开放转换。转换和审批在同一事务中创建，没有已发布流程时整笔回滚。
 
-`GET /employment/conversions` 与 `GET /employment/conversions/:id` 需要 `employee.read`；支持按状态、类型和姓名/工号查询，并强制组织范围。
+`GET /employment/conversions` 与 `GET /employment/conversions/:id` 需要 `employee.read`；支持 `view=in_progress|completed|all`、状态、类型、姓名/工号关键词、分页，并强制源组织快照与目标组织双重范围。转换列表返回源/目标快照、审批摘要和 `canActivate`，不返回原始 JSON 快照。
 
 `POST /employment/conversions/:id/activate` 需要 `employee.update`。只有审批和转换均为 `PENDING_EFFECTIVE` 且计划日期已经到达时才能生效。原周期/任职/状态在生效日前一日结束，新正式周期/任职/状态从生效日开始；业务和审批在同一事务中完成。重复生效返回 `409`。
 
@@ -322,7 +327,7 @@ Offer 创建均需要 `employee.create` 且仅支持 PostgreSQL；Demo 模式返
 | `POST /employment/part-time-records/:id/activate` | `employee.update` | 最终审批通过且开始日已到时生效；重复调用 `ACTIVE` 记录保持幂等。 |
 | `POST /employment/part-time-records/:id/end` | `employee.update` | 结束 `ACTIVE` 记录并保留历史；重复结束保持幂等。 |
 
-该独立写入底座与 P0 页面 `GET /employment/part-time` 的 `EmployeeAssignment` 查询视图暂时并存，前端尚未接入新申请表单。
+兼职六视图页面使用 `PartTimeRecord` 作为权威来源；旧的 `GET /employment/part-time`（基于 `EmployeeAssignment.workArrangement=PART_TIME`）继续保留兼容，不与新记录合并伪造列表。新页面通过 `GET /employment/part-time-records?view=active|expiring|not_started|ended|approval|all` 查询，并通过 `POST /employment/part-time-records` 提交申请。
 
 ## 任职管理：人员页专属子表
 

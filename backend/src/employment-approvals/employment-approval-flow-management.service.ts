@@ -6,7 +6,12 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { PERMISSIONS } from '@hr-demo/shared';
+import {
+  PERMISSIONS,
+  type ApprovalFlowDefinition,
+  type EmploymentApprovalFlowOptions,
+  type Paginated,
+} from '@hr-demo/shared';
 import {
   ApprovalFlowDefinitionStatus,
   ApprovalFlowNodeAssigneeKind,
@@ -24,8 +29,16 @@ import type {
   UpdateEmploymentApprovalFlowDefinitionDto,
   UpdateEmploymentApprovalFlowVersionDto,
 } from './dto/employment-approval-flow.dto';
+import type { QueryEmploymentApprovalFlowsDto } from './dto/query-employment-approval-flows.dto';
 
 type FlowClient = Prisma.TransactionClient;
+type DefinitionWithVersions = Prisma.ApprovalFlowDefinitionGetPayload<{
+  include: {
+    versions: {
+      include: { nodes: true };
+    };
+  };
+}>;
 type NodeInput = {
   stepOrder: number;
   assigneeKind: ApprovalFlowNodeAssigneeKind;
@@ -40,6 +53,83 @@ export class EmploymentApprovalFlowManagementService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  async findAll(
+    user: AuthenticatedUser,
+    query: QueryEmploymentApprovalFlowsDto,
+  ): Promise<Paginated<ApprovalFlowDefinition>> {
+    this.assertPermission(user);
+    const where: Prisma.ApprovalFlowDefinitionWhereInput = {
+      ...(query.keyword ? {
+        OR: [
+          { code: { contains: query.keyword } },
+          { name: { contains: query.keyword } },
+        ],
+      } : {}),
+      ...(query.businessType ? { businessType: query.businessType } : {}),
+      ...(query.status ? { status: query.status } : {}),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.approvalFlowDefinition.findMany({
+        where,
+        include: {
+          versions: {
+            orderBy: [{ versionNumber: 'asc' }, { id: 'asc' }],
+            include: { nodes: { orderBy: [{ stepOrder: 'asc' }, { id: 'asc' }] } },
+          },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.approvalFlowDefinition.count({ where }),
+    ]);
+    return {
+      data: (rows as DefinitionWithVersions[]).map((row) => this.presentDefinition(row)),
+      meta: {
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+        totalPages: Math.ceil(total / query.pageSize),
+      },
+    };
+  }
+
+  async findOne(user: AuthenticatedUser, definitionId: string) {
+    this.assertPermission(user);
+    const definition = await this.prisma.approvalFlowDefinition.findUnique({
+      where: { id: definitionId },
+      include: {
+        versions: {
+          orderBy: [{ versionNumber: 'asc' }, { id: 'asc' }],
+          include: { nodes: { orderBy: [{ stepOrder: 'asc' }, { id: 'asc' }] } },
+        },
+      },
+    }) as DefinitionWithVersions | null;
+    if (!definition) throw new NotFoundException('审批流程定义不存在');
+    return this.presentDefinition(definition);
+  }
+
+  async findOptions(user: AuthenticatedUser): Promise<EmploymentApprovalFlowOptions> {
+    this.assertPermission(user);
+    const [users, roles, jobTitles] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where: { status: 'ACTIVE', archivedAt: null },
+        select: { id: true, username: true, displayName: true },
+        orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.role.findMany({
+        select: { id: true, code: true, name: true },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.jobTitle.findMany({
+        where: { status: 'ACTIVE', archivedAt: null },
+        select: { id: true, code: true, name: true },
+        orderBy: [{ name: 'asc' }, { code: 'asc' }, { id: 'asc' }],
+      }),
+    ]);
+    return { users, roles, jobTitles };
+  }
 
   async createDefinition(user: AuthenticatedUser, dto: CreateEmploymentApprovalFlowDefinitionDto) {
     this.assertPermission(user);
@@ -283,10 +373,50 @@ export class EmploymentApprovalFlowManagementService {
   }
 
   private async readDefinition(tx: FlowClient, definitionId: string) {
-    return tx.approvalFlowDefinition.findUniqueOrThrow({
+    const definition = await tx.approvalFlowDefinition.findUniqueOrThrow({
       where: { id: definitionId },
-      include: { versions: { orderBy: { versionNumber: 'asc' }, include: { nodes: { orderBy: { stepOrder: 'asc' } } } } },
+      include: {
+        versions: {
+          orderBy: [{ versionNumber: 'asc' }, { id: 'asc' }],
+          include: { nodes: { orderBy: [{ stepOrder: 'asc' }, { id: 'asc' }] } },
+        },
+      },
     });
+    return this.presentDefinition(definition as DefinitionWithVersions);
+  }
+
+  private presentDefinition(row: DefinitionWithVersions): ApprovalFlowDefinition {
+    const published = row.versions.find(({ status }) => status === ApprovalFlowVersionStatus.PUBLISHED);
+    return {
+      id: row.id,
+      businessType: row.businessType,
+      code: row.code,
+      name: row.name,
+      status: row.status,
+      currentPublishedVersionId: published?.id ?? null,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      versions: row.versions.map((version) => ({
+        id: version.id,
+        definitionId: version.definitionId,
+        versionNumber: version.versionNumber,
+        status: version.status,
+        publishedAt: version.publishedAt?.toISOString() ?? null,
+        createdAt: version.createdAt.toISOString(),
+        updatedAt: version.updatedAt.toISOString(),
+        nodes: version.nodes.map((node) => ({
+          id: node.id,
+          versionId: node.flowVersionId,
+          stepOrder: node.stepOrder,
+          assigneeKind: node.assigneeKind,
+          assigneeUserId: node.assigneeUserId,
+          assigneeRoleId: node.assigneeRoleId,
+          assigneeRule: node.assigneeRule && !Array.isArray(node.assigneeRule) && typeof node.assigneeRule === 'object'
+            ? node.assigneeRule as Record<string, unknown>
+            : null,
+        })),
+      })),
+    };
   }
 
   private async getDefinitionForWrite(tx: FlowClient, definitionId: string) {

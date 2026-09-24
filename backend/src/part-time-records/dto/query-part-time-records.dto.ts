@@ -1,9 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { PartTimeRecordStatus } from '@prisma/client';
+import { PART_TIME_RECORD_VIEWS, type PartTimeRecordView } from '@hr-demo/shared';
 
 export class QueryPartTimeRecordsDto {
+  @ApiPropertyOptional({ enum: PART_TIME_RECORD_VIEWS, default: 'active' })
+  @IsOptional()
+  @IsIn(PART_TIME_RECORD_VIEWS)
+  view: PartTimeRecordView = 'active';
+
   @ApiPropertyOptional({ enum: PartTimeRecordStatus })
   @IsOptional()
   @IsEnum(PartTimeRecordStatus)

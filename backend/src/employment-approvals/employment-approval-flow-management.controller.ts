@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '@hr-demo/shared';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -11,12 +11,40 @@ import {
   UpdateEmploymentApprovalFlowVersionDto,
 } from './dto/employment-approval-flow.dto';
 import { EmploymentApprovalFlowManagementService } from './employment-approval-flow-management.service';
+import { QueryEmploymentApprovalFlowsDto } from './dto/query-employment-approval-flows.dto';
 
 @ApiTags('任职审批流程管理')
 @ApiBearerAuth()
 @Controller('employment-approval-flows')
 export class EmploymentApprovalFlowManagementController {
   constructor(private readonly service: EmploymentApprovalFlowManagementService) {}
+
+  @Get()
+  @RequirePermissions(PERMISSIONS.EMPLOYMENT_APPROVAL_FLOW_MANAGE)
+  @ApiOperation({ summary: '分页查询任职审批流程定义' })
+  findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: QueryEmploymentApprovalFlowsDto,
+  ) {
+    return this.service.findAll(user, query);
+  }
+
+  @Get('options')
+  @RequirePermissions(PERMISSIONS.EMPLOYMENT_APPROVAL_FLOW_MANAGE)
+  @ApiOperation({ summary: '查询任职审批流程配置选项' })
+  findOptions(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.findOptions(user);
+  }
+
+  @Get(':definitionId')
+  @RequirePermissions(PERMISSIONS.EMPLOYMENT_APPROVAL_FLOW_MANAGE)
+  @ApiOperation({ summary: '查询任职审批流程定义及版本' })
+  findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('definitionId') definitionId: string,
+  ) {
+    return this.service.findOne(user, definitionId);
+  }
 
   @Post()
   @RequirePermissions(PERMISSIONS.EMPLOYMENT_APPROVAL_FLOW_MANAGE)

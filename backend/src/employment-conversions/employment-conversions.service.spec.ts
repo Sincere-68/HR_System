@@ -47,6 +47,9 @@ const sourceAssignment = {
   endDate: null,
   status: AssignmentStatus.ACTIVE,
   archivedAt: null,
+  organization: { id: 'org-source', code: 'SOURCE', name: '来源组织' },
+  position: { id: 'position-source', name: '来源职位' },
+  jobTitle: { id: 'job-title-source', code: 'SOURCE-TITLE', name: '来源职务' },
 };
 
 const sourcePeriod = {
@@ -123,9 +126,31 @@ function createHarness(options: {
     plannedEffectiveDate: new Date('2099-01-01T00:00:00.000Z'),
     approvalRequestId: 'approval-1',
     status: EmploymentApplicationStatus.PENDING,
-    sourceSnapshot: {},
+    sourceSnapshot: {
+      assignment: { organizationId: 'org-source' },
+    },
     targetSnapshot: {},
     archivedAt: null,
+    employee: { id: 'employee-1', employeeNo: 'E-001', name: '虚构员工' },
+    targetOrganization,
+    targetPosition,
+    targetJobTitle,
+    approvalRequest: {
+      id: 'approval-1',
+      status: 'PENDING',
+      employmentStatus: EmploymentApplicationStatus.PENDING,
+      currentStep: 1,
+      submittedAt: new Date('2026-09-20T00:00:00.000Z'),
+      completedAt: null,
+      steps: [{
+        id: 'step-1',
+        stepOrder: 1,
+        decision: 'PENDING',
+        comment: null,
+        operatedAt: null,
+        approver: { id: 'approver-1', displayName: '虚构审批人' },
+      }],
+    },
   };
   if (!conversion.sourceEmploymentPeriod) conversion.sourceEmploymentPeriod = period;
   conversions.push(conversion);
@@ -199,6 +224,7 @@ function createHarness(options: {
       create: jest.fn().mockResolvedValue({ id: 'record-target' }),
     },
     employee: {
+      findMany: jest.fn().mockResolvedValue([{ id: 'employee-1' }]),
       update: jest.fn().mockResolvedValue({ id: 'employee-1' }),
     },
     employeeFieldChangeLog: {
@@ -215,6 +241,8 @@ function createHarness(options: {
     hasAllEmployeeData: jest.fn().mockReturnValue(options.allData ?? false),
     canAccessOrganizationInScope: jest.fn().mockResolvedValue(options.accessible ?? true),
     getAccessibleOrganizationIds: jest.fn().mockResolvedValue(['org-source', 'org-target']),
+    getEmployeeWhere: jest.fn().mockResolvedValue({ id: { in: ['employee-1'] } }),
+    hasPermission: jest.fn((_user: AuthenticatedUser, permission: string) => user.permissions.includes(permission as never)),
   };
   const runtime = {
     createRequest: jest.fn().mockResolvedValue({
@@ -364,20 +392,95 @@ describe('EmploymentConversionsService', () => {
       })).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('filters list results to conversions with both source and target organizations in scope', async () => {
+    it('filters in-progress and completed views before pagination', async () => {
+      const { service, tx } = createHarness();
+
+      await service.findAll(user, { view: 'in_progress', page: 1, pageSize: 10 });
+      expect(tx.employmentConversion.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: [
+            EmploymentApplicationStatus.DRAFT,
+            EmploymentApplicationStatus.PENDING,
+            EmploymentApplicationStatus.APPROVED,
+            EmploymentApplicationStatus.PENDING_EFFECTIVE,
+          ] },
+        }),
+      }));
+
+      await service.findAll(user, { view: 'completed', page: 1, pageSize: 10 });
+      expect(tx.employmentConversion.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ status: EmploymentApplicationStatus.COMPLETED }),
+      }));
+    });
+
+    it('filters scoped conversions by immutable source snapshot and target organization', async () => {
       const { service, tx, access } = createHarness();
 
-      await service.findAll(user, { page: 1, pageSize: 10 });
+      await service.findAll(user, { view: 'all', page: 1, pageSize: 10 });
 
       expect(access.getAccessibleOrganizationIds).toHaveBeenCalledWith(user);
       expect(tx.employmentConversion.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
           targetOrganizationId: { in: ['org-source', 'org-target'] },
-          sourceEmploymentPeriod: {
-            assignments: { some: { organizationId: { in: ['org-source', 'org-target'] } } },
-          },
+          OR: [
+            { sourceSnapshot: { path: ['assignment', 'organizationId'], equals: 'org-source' } },
+            { sourceSnapshot: { path: ['assignment', 'organizationId'], equals: 'org-target' } },
+          ],
         }),
       }));
+    });
+
+    it('presents date-only source/target snapshots and approval without leaking raw JSON', async () => {
+      const { service } = createHarness();
+
+      const result = await service.findAll(user, { view: 'all', page: 1, pageSize: 10 });
+
+      expect(result.data[0]).toEqual(expect.objectContaining({
+        id: 'conversion-1',
+        plannedEffectiveDate: '2099-01-01',
+        employee: { id: 'employee-1', employeeNo: 'E-001', name: '虚构员工' },
+        source: expect.objectContaining({
+          employmentPeriodId: 'period-source',
+          sequenceNo: 1,
+          employmentRelationship: EmploymentRelationship.INTERN,
+          entryDate: '2026-01-01',
+          organization: { id: 'org-source', name: '来源组织' },
+          position: { id: 'position-source', name: '来源职位' },
+          jobTitle: { id: 'job-title-source', code: 'SOURCE-TITLE', name: '来源职务' },
+        }),
+        target: expect.objectContaining({
+          organization: { id: 'org-target', code: 'TARGET', name: '目标组织' },
+          position: { id: 'position-target', name: '目标职位' },
+          jobTitle: { id: 'job-title-target', code: 'TARGET-TITLE', name: '目标职务' },
+        }),
+        approval: expect.objectContaining({
+          id: 'approval-1',
+          employmentStatus: EmploymentApplicationStatus.PENDING,
+          currentApproverName: '虚构审批人',
+          submittedAt: '2026-09-20T00:00:00.000Z',
+        }),
+        canActivate: false,
+        canViewEmployeeDetail: true,
+      }));
+      expect(result.data[0]).not.toHaveProperty('sourceSnapshot');
+      expect(result.data[0]).not.toHaveProperty('targetSnapshot');
+      expect(result.data[0]).not.toHaveProperty('sourceEmploymentPeriod');
+    });
+
+    it('denies detail when the immutable source snapshot organization is missing or out of scope', async () => {
+      const missing = createHarness({
+        conversion: { ...createHarness().conversions[0], sourceSnapshot: {} },
+      });
+      await expect(missing.service.findOne(user, 'conversion-1')).rejects.toBeInstanceOf(ForbiddenException);
+
+      const outside = createHarness({
+        conversion: {
+          ...createHarness().conversions[0],
+          sourceSnapshot: { assignment: { organizationId: 'org-outside' } },
+        },
+        accessible: false,
+      });
+      await expect(outside.service.findOne(user, 'conversion-1')).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 

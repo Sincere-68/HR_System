@@ -244,6 +244,7 @@ export class EmployeesService {
       return {
         positions: [],
         managers: [],
+        jobTitles: [],
         employingCompanies: [],
         movementTypes: [],
       };
@@ -259,6 +260,7 @@ export class EmployeesService {
     const [
       positions,
       managers,
+      jobTitles,
       employingCompanies,
       movementTypes,
     ] = await this.prisma.$transaction([
@@ -279,6 +281,11 @@ export class EmployeesService {
         select: { id: true, name: true, employeeNo: true },
         orderBy: [{ employeeNo: 'asc' }, { id: 'asc' }],
       }),
+      this.prisma.jobTitle.findMany({
+        where: { status: RecordStatus.ACTIVE, archivedAt: null },
+        select: { id: true, code: true, name: true },
+        orderBy: [{ name: 'asc' }, { code: 'asc' }, { id: 'asc' }],
+      }),
       this.prisma.employingCompany.findMany({
         where: {
           status: RecordStatus.ACTIVE,
@@ -297,6 +304,7 @@ export class EmployeesService {
     return {
       positions,
       managers: managers.map(({ id, name, employeeNo }) => ({ id, name: displayEmployeeName(name), employeeNo })),
+      jobTitles,
       employingCompanies,
       movementTypes,
     };

@@ -281,6 +281,7 @@ function createHarness(options: {
       }),
     },
     employmentConversion: {
+      findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn().mockImplementation(({ where, data }: {
         where: Record<string, unknown>;
@@ -290,6 +291,7 @@ function createHarness(options: {
       create: jest.fn(),
     },
     partTimeRecord: {
+      findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn().mockImplementation(({ where, data }: {
         where: Record<string, unknown>;
@@ -774,6 +776,74 @@ describe('EmploymentApprovalRuntimeService', () => {
         }),
         orderBy: [{ submittedAt: 'desc' }, { id: 'asc' }],
       }));
+    });
+
+    it('returns a sanitized conversion business summary for authorized detail readers', async () => {
+      const harness = createHarness({ businessType: 'INTERN_TO_EMPLOYEE' });
+      const request = await createBusinessRequest(harness, 'INTERN_TO_EMPLOYEE', 'conversion-1');
+      harness.tx.employmentConversion.findUnique = jest.fn().mockResolvedValue({
+        id: 'conversion-1',
+        employeeId: 'employee-1',
+        status: EmploymentApplicationStatus.PENDING,
+        plannedEffectiveDate: new Date('2026-09-23T00:00:00.000Z'),
+        targetOrganization: { id: 'org-target', name: '目标组织' },
+        sourceSnapshot: { assignment: { organizationId: 'org-source' } },
+        employee: { id: 'employee-1', employeeNo: 'E-001', name: '虚构员工' },
+      });
+      harness.tx.approvalRequest.findUnique.mockResolvedValue({
+        ...harness.requests[0],
+        applicant: { id: applicant.id, displayName: applicant.displayName },
+        flowVersion: { id: 'flow-version-1', versionNumber: 1, definition: { id: 'flow-definition-1', code: 'FLOW', name: '虚构流程' } },
+        steps: harness.steps,
+      });
+
+      const result = await harness.service.findDetail(applicant, request.id);
+
+      expect(result.businessSummary).toEqual({
+        kind: 'CONVERSION',
+        conversionId: 'conversion-1',
+        employee: { id: 'employee-1', employeeNo: 'E-001', name: '虚构员工' },
+        sourceOrganizationName: null,
+        targetOrganizationName: '目标组织',
+        plannedEffectiveDate: '2026-09-23',
+        status: EmploymentApplicationStatus.PENDING,
+      });
+      expect(result).not.toHaveProperty('sourceSnapshot');
+    });
+
+    it('returns a sanitized part-time business summary for authorized detail readers', async () => {
+      const harness = createHarness({ businessType: 'PART_TIME_RECORD' });
+      const request = await createBusinessRequest(harness, 'PART_TIME_RECORD', 'part-time-1');
+      harness.tx.partTimeRecord.findUnique = jest.fn().mockResolvedValue({
+        id: 'part-time-1',
+        employee: { id: 'employee-1', employeeNo: 'E-001', name: '虚构员工' },
+        organization: { id: 'org-source', name: '职责部门' },
+        type: '项目顾问',
+        institution: null,
+        startDate: new Date('2026-09-23T00:00:00.000Z'),
+        endDate: null,
+        status: PartTimeRecordStatus.PENDING,
+      });
+      harness.tx.approvalRequest.findUnique.mockResolvedValue({
+        ...harness.requests[0],
+        applicant: { id: applicant.id, displayName: applicant.displayName },
+        flowVersion: { id: 'flow-version-1', versionNumber: 1, definition: { id: 'flow-definition-1', code: 'FLOW', name: '虚构流程' } },
+        steps: harness.steps,
+      });
+
+      const result = await harness.service.findDetail(applicant, request.id);
+
+      expect(result.businessSummary).toEqual({
+        kind: 'PART_TIME',
+        partTimeRecordId: 'part-time-1',
+        employee: { id: 'employee-1', employeeNo: 'E-001', name: '虚构员工' },
+        organizationName: '职责部门',
+        type: '项目顾问',
+        institution: null,
+        startDate: '2026-09-23',
+        endDate: null,
+        status: PartTimeRecordStatus.PENDING,
+      });
     });
 
     it('allows detail to participants or HR with global employee data access', async () => {

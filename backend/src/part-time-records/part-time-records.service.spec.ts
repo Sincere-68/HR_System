@@ -7,6 +7,7 @@ import {
 import { PartTimeRecordStatus, ProcessStatus } from '@prisma/client';
 import { PERMISSIONS } from '@hr-demo/shared';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
+import { QueryPartTimeRecordsDto } from './dto/query-part-time-records.dto';
 import { PartTimeRecordsService } from './part-time-records.service';
 
 const user: AuthenticatedUser = {
@@ -127,6 +128,7 @@ function createHarness(options: {
       : operation(tx)),
   };
   const access = {
+    hasPermission: jest.fn(() => true),
     hasAllEmployeeData: jest.fn().mockReturnValue(false),
     getEmployeeWhere: jest.fn().mockResolvedValue(options.employeeScope ?? {
       assignments: { some: { organizationId: { in: ['org-scope'] } } },
@@ -372,6 +374,131 @@ describe('PartTimeRecordsService', () => {
         expect.objectContaining({ id: 'part-time-1', status: PartTimeRecordStatus.ACTIVE }),
       );
       expect(active.runtime.completeEffectiveInTransaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll views and presenter', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('defaults to the active view and supports the six public view names', () => {
+      const dto = new QueryPartTimeRecordsDto() as QueryPartTimeRecordsDto & { view?: string };
+
+      expect(dto.view).toBe('active');
+      expect(['active', 'expiring', 'not_started', 'ended', 'approval', 'all']).toHaveLength(6);
+    });
+
+    it.each([
+      ['active', {
+        status: PartTimeRecordStatus.ACTIVE,
+        startDate: { lte: new Date(`${today}T00:00:00.000Z`) },
+        OR: [
+          { endDate: null },
+          { endDate: { gte: new Date(`${today}T00:00:00.000Z`) } },
+        ],
+      }],
+      ['expiring', {
+        status: PartTimeRecordStatus.ACTIVE,
+        startDate: { lte: new Date(`${today}T00:00:00.000Z`) },
+        endDate: {
+          gte: new Date(`${today}T00:00:00.000Z`),
+          lte: new Date(`${shiftDate(today, 30)}T00:00:00.000Z`),
+        },
+      }],
+      ['not_started', { status: PartTimeRecordStatus.PENDING_EFFECTIVE }],
+      ['ended', { status: PartTimeRecordStatus.ENDED }],
+      ['approval', { status: PartTimeRecordStatus.PENDING }],
+      ['all', {}],
+    ])('builds the %s record predicate', async (view, expected) => {
+      jest.useFakeTimers().setSystemTime(new Date(`${today}T04:00:00.000Z`));
+      const harness = createHarness({ records: [activeRecord()] });
+      harness.access.hasAllEmployeeData.mockReturnValue(true);
+
+      await harness.service.findAll(user, { view, page: 1, pageSize: 10 } as never);
+
+      expect(harness.prisma.partTimeRecord.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining(expected),
+      }));
+    });
+
+    it('uses the same stable presenter for detail reads', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-23T04:00:00.000Z'));
+      const harness = createHarness({ records: [activeRecord({
+        startDate: new Date('2026-09-20T00:00:00.000Z'),
+        endDate: null,
+        approvalRequest: {
+          id: 'approval-1',
+          status: ProcessStatus.COMPLETED,
+          employmentStatus: 'COMPLETED',
+          currentStep: 1,
+          submittedAt: new Date('2026-09-19T00:00:00.000Z'),
+          completedAt: new Date('2026-09-20T00:00:00.000Z'),
+          steps: [],
+        },
+      })] });
+      harness.access.hasAllEmployeeData.mockReturnValue(true);
+
+      const result = await harness.service.findOne(user, 'part-time-1');
+
+      expect(result).toEqual(expect.objectContaining({
+        id: 'part-time-1',
+        startDate: '2026-09-20',
+        endDate: null,
+        employee: targetEmployee,
+        organization: { id: 'org-target', name: '虚构部门' },
+        approval: expect.objectContaining({ employmentStatus: 'COMPLETED' }),
+        canActivate: false,
+        canEnd: true,
+      }));
+      expect(result).not.toHaveProperty('approvalRequest');
+      expect(result.startDate).not.toBeInstanceOf(Date);
+    });
+
+    it('presents stable nested summaries with date-only fields and action flags', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-23T04:00:00.000Z'));
+      const harness = createHarness({ records: [activeRecord({
+        startDate: new Date('2026-09-20T00:00:00.000Z'),
+        endDate: new Date('2026-09-30T00:00:00.000Z'),
+        jobTitle: { id: 'job-title-1', code: 'JT-1', name: '虚构职务' },
+        managerEmployee: { id: 'manager-1', employeeNo: 'M-001', name: '虚构经理' },
+        approvalRequest: {
+          id: 'approval-1',
+          status: ProcessStatus.COMPLETED,
+          employmentStatus: 'COMPLETED',
+          currentStep: 1,
+          submittedAt: new Date('2026-09-19T00:00:00.000Z'),
+          completedAt: new Date('2026-09-20T00:00:00.000Z'),
+          steps: [],
+        },
+      })] });
+      harness.access.hasAllEmployeeData.mockReturnValue(true);
+
+      const result = await harness.service.findAll(user, { view: 'expiring', page: 1, pageSize: 10 } as never);
+
+      expect(result.data[0]).toEqual({
+        id: 'part-time-1',
+        employee: targetEmployee,
+        type: '顾问',
+        institution: null,
+        organization: { id: 'org-target', name: '虚构部门' },
+        jobTitle: { id: 'job-title-1', code: 'JT-1', name: '虚构职务' },
+        managerEmployee: { id: 'manager-1', employeeNo: 'M-001', name: '虚构经理' },
+        startDate: '2026-09-20',
+        endDate: '2026-09-30',
+        status: PartTimeRecordStatus.ACTIVE,
+        approval: {
+          id: 'approval-1',
+          status: ProcessStatus.COMPLETED,
+          employmentStatus: 'COMPLETED',
+          currentStep: 1,
+          currentApproverName: null,
+          submittedAt: '2026-09-19T00:00:00.000Z',
+          completedAt: '2026-09-20T00:00:00.000Z',
+        },
+        canActivate: false,
+        canEnd: true,
+      });
     });
   });
 

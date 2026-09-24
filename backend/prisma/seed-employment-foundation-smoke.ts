@@ -87,18 +87,36 @@ async function removePreviousFixtures(tx: Prisma.TransactionClient) {
   const employeeIds = priorEmployees.map(({ id }) => id);
   const definitionIds = priorDefinitions.map(({ id }) => id);
   const versionIds = priorDefinitions.flatMap(({ versions }) => versions.map(({ id }) => id));
-  const priorConversions = employeeIds.length
+  const fixtureApprovalRequests = await tx.approvalRequest.findMany({
+    where: {
+      OR: [
+        ...(userIds.length ? [{ applicantUserId: { in: userIds } }] : []),
+        ...(versionIds.length ? [{ flowVersionId: { in: versionIds } }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  const fixtureApprovalIds = fixtureApprovalRequests.map(({ id }) => id);
+  const priorConversions = employeeIds.length || fixtureApprovalIds.length
     ? await tx.employmentConversion.findMany({
-        where: { employeeId: { in: employeeIds } },
+        where: {
+          OR: [
+            ...(employeeIds.length ? [{ employeeId: { in: employeeIds } }] : []),
+            ...(fixtureApprovalIds.length ? [{ approvalRequestId: { in: fixtureApprovalIds } }] : []),
+          ],
+        },
         select: { id: true, approvalRequestId: true },
       })
     : [];
-  const priorPartTimeRecords = employeeIds.length
+  const priorPartTimeRecords = employeeIds.length || fixtureApprovalIds.length
     ? await tx.partTimeRecord.findMany({
         where: {
           OR: [
-            { employeeId: { in: employeeIds } },
-            { managerEmployeeId: { in: employeeIds } },
+            ...(employeeIds.length ? [
+              { employeeId: { in: employeeIds } },
+              { managerEmployeeId: { in: employeeIds } },
+            ] : []),
+            ...(fixtureApprovalIds.length ? [{ approvalRequestId: { in: fixtureApprovalIds } }] : []),
           ],
         },
         select: { id: true, approvalRequestId: true },
@@ -109,9 +127,10 @@ async function removePreviousFixtures(tx: Prisma.TransactionClient) {
     ...priorPartTimeRecords.map(({ id }) => id),
   ];
   const approvalRequestIds = [
+    ...fixtureApprovalIds,
     ...priorConversions.map(({ approvalRequestId }) => approvalRequestId),
     ...priorPartTimeRecords.map(({ approvalRequestId }) => approvalRequestId),
-  ].filter((id): id is string => Boolean(id));
+  ].filter((id, index, ids): id is string => Boolean(id) && ids.indexOf(id) === index);
 
   if (userIds.length || businessIds.length || approvalRequestIds.length || definitionIds.length || versionIds.length) {
     await tx.auditLog.deleteMany({
@@ -125,16 +144,15 @@ async function removePreviousFixtures(tx: Prisma.TransactionClient) {
       },
     });
   }
-  if (employeeIds.length) {
+  if (priorPartTimeRecords.length) {
     await tx.partTimeRecord.deleteMany({
-      where: {
-        OR: [
-          { employeeId: { in: employeeIds } },
-          { managerEmployeeId: { in: employeeIds } },
-        ],
-      },
+      where: { id: { in: priorPartTimeRecords.map(({ id }) => id) } },
     });
-    await tx.employmentConversion.deleteMany({ where: { employeeId: { in: employeeIds } } });
+  }
+  if (priorConversions.length) {
+    await tx.employmentConversion.deleteMany({
+      where: { id: { in: priorConversions.map(({ id }) => id) } },
+    });
   }
   if (approvalRequestIds.length || userIds.length || versionIds.length) {
     await tx.approvalRequest.deleteMany({

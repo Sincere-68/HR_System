@@ -13,7 +13,13 @@ import {
   ProcessStatus,
   RecordStatus,
 } from '@prisma/client';
-import { PERMISSIONS } from '@hr-demo/shared';
+import {
+  PERMISSIONS,
+  type EmployeeDirectoryOption,
+  type EmployeeFormOption,
+  type EmploymentApprovalSummary,
+  type PartTimeRecordItem,
+} from '@hr-demo/shared';
 import { AccessControlService } from '../access-control/access-control.service';
 import { AuditService } from '../audit/audit.service';
 import type { AuthenticatedUser } from '../common/types/authenticated-user';
@@ -37,7 +43,13 @@ type PartTimeRow = Prisma.PartTimeRecordGetPayload<{
     organization: { select: { id: true; name: true } };
     jobTitle: { select: { id: true; code: true; name: true } };
     managerEmployee: { select: { id: true; employeeNo: true; name: true } };
-    approvalRequest: { select: { id: true; status: true; employmentStatus: true } };
+    approvalRequest: {
+      include: {
+        steps: {
+          include: { approver: { select: { id: true; displayName: true } } };
+        };
+      };
+    };
   };
 }>;
 
@@ -159,7 +171,10 @@ export class PartTimeRecordsService {
     });
   }
 
-  async findAll(user: AuthenticatedUser, query: QueryPartTimeRecordsDto) {
+  async findAll(user: AuthenticatedUser, query: QueryPartTimeRecordsDto): Promise<{
+    data: PartTimeRecordItem[];
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  }> {
     this.assertPermission(user, PERMISSIONS.EMPLOYEE_READ);
     const employeeScope = this.access.hasAllEmployeeData(user)
       ? {}
@@ -168,8 +183,10 @@ export class PartTimeRecordsService {
     const organizationScope = query.organizationId
       ? { organizationId: query.organizationId }
       : await this.getTargetOrganizationScope(user);
+    const viewWhere = this.partTimeViewWhere(query.view, shanghaiBusinessDate());
     const where: Prisma.PartTimeRecordWhereInput = {
       archivedAt: null,
+      ...viewWhere,
       ...(query.status ? { status: query.status } : {}),
       ...organizationScope,
       ...(query.employeeId ? { employeeId: query.employeeId } : {}),
@@ -193,7 +210,7 @@ export class PartTimeRecordsService {
     ]);
     const visibleData = await this.sanitizeManagerEmployees(user, data as PartTimeRow[], employeeScope);
     return {
-      data: visibleData,
+      data: visibleData.map((row) => this.presentRecord(user, row)),
       meta: {
         page: query.page,
         pageSize: query.pageSize,
@@ -219,7 +236,7 @@ export class PartTimeRecordsService {
     });
     if (!row) throw new NotFoundException('兼职记录不存在或不在当前数据范围内');
     const [visibleRow] = await this.sanitizeManagerEmployees(user, [row as PartTimeRow], employeeScope);
-    return visibleRow!;
+    return this.presentRecord(user, visibleRow!);
   }
 
   async activate(user: AuthenticatedUser, id: string) {
@@ -297,6 +314,73 @@ export class PartTimeRecordsService {
       );
       return { ...row, endDate, status: PartTimeRecordStatus.ENDED };
     });
+  }
+
+  private partTimeViewWhere(
+    view: QueryPartTimeRecordsDto['view'],
+    businessDate: Date,
+  ): Prisma.PartTimeRecordWhereInput {
+    const inThirtyDays = new Date(businessDate);
+    inThirtyDays.setUTCDate(inThirtyDays.getUTCDate() + 30);
+    switch (view ?? 'active') {
+      case 'active':
+        return {
+          status: PartTimeRecordStatus.ACTIVE,
+          startDate: { lte: businessDate },
+          OR: [{ endDate: null }, { endDate: { gte: businessDate } }],
+        };
+      case 'expiring':
+        return {
+          status: PartTimeRecordStatus.ACTIVE,
+          startDate: { lte: businessDate },
+          endDate: { gte: businessDate, lte: inThirtyDays },
+        };
+      case 'not_started':
+        return { status: PartTimeRecordStatus.PENDING_EFFECTIVE };
+      case 'ended':
+        return { status: PartTimeRecordStatus.ENDED };
+      case 'approval':
+        return { status: PartTimeRecordStatus.PENDING };
+      case 'all':
+        return {};
+    }
+  }
+
+  private presentRecord(user: AuthenticatedUser, row: PartTimeRow): PartTimeRecordItem {
+    const approval = row.approvalRequest?.archivedAt ? null : row.approvalRequest;
+    const currentStep = approval?.steps?.find((step) => (
+      step.stepOrder === approval.currentStep && step.decision === 'PENDING'
+    ));
+    const canActivate = this.access.hasPermission(user, PERMISSIONS.EMPLOYEE_UPDATE)
+      && row.status === PartTimeRecordStatus.PENDING_EFFECTIVE
+      && approval?.status === ProcessStatus.APPROVED
+      && approval.employmentStatus === EmploymentApplicationStatus.PENDING_EFFECTIVE
+      && row.startDate <= shanghaiBusinessDate();
+    const canEnd = this.access.hasPermission(user, PERMISSIONS.EMPLOYEE_UPDATE)
+      && row.status === PartTimeRecordStatus.ACTIVE;
+    return {
+      id: row.id,
+      employee: row.employee,
+      type: row.type,
+      institution: row.institution,
+      organization: row.organization as EmployeeFormOption,
+      jobTitle: row.jobTitle as EmployeeDirectoryOption | null,
+      managerEmployee: row.managerEmployee,
+      startDate: formatDate(row.startDate)!,
+      endDate: formatDate(row.endDate),
+      status: row.status,
+      approval: approval ? {
+        id: approval.id,
+        status: approval.status,
+        employmentStatus: approval.employmentStatus ?? row.status as never,
+        currentStep: approval.currentStep,
+        currentApproverName: currentStep?.approver.displayName ?? null,
+        submittedAt: approval.submittedAt?.toISOString() ?? null,
+        completedAt: approval.completedAt?.toISOString() ?? null,
+      } as EmploymentApprovalSummary : null,
+      canActivate,
+      canEnd,
+    };
   }
 
   private async sanitizeManagerEmployees(
@@ -406,14 +490,22 @@ export class PartTimeRecordsService {
     return { organizationId: { in: await this.access.getAccessibleOrganizationIds(user) ?? [] } };
   }
 
-  private recordInclude() {
+  private recordInclude(): Prisma.PartTimeRecordInclude {
     return {
       employee: { select: { id: true, employeeNo: true, name: true } },
       organization: { select: { id: true, name: true } },
       jobTitle: { select: { id: true, code: true, name: true } },
       managerEmployee: { select: { id: true, employeeNo: true, name: true } },
-      approvalRequest: { select: { id: true, status: true, employmentStatus: true } },
-    } as const;
+      approvalRequest: {
+        include: {
+          steps: {
+            where: { decision: 'PENDING' },
+            orderBy: { stepOrder: 'asc' },
+            include: { approver: { select: { id: true, displayName: true } } },
+          },
+        },
+      },
+    };
   }
 }
 
@@ -426,6 +518,10 @@ interface NormalizedCreateInput {
   managerEmployeeId: string | null;
   startDate: string;
   endDate: string | null;
+}
+
+function formatDate(value: Date | null) {
+  return value ? value.toISOString().slice(0, 10) : null;
 }
 
 function parseDateOnly(value: string) {

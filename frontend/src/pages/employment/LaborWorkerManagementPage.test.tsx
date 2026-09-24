@@ -4,8 +4,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LaborWorkerManagementPage } from './LaborWorkerManagementPage';
 
 const useLaborWorkers = vi.fn();
+const useEmploymentConversions = vi.fn();
+const useEmploymentConversion = vi.fn();
+const useEmploymentViewCounts = vi.fn();
+const createConversion = vi.fn();
+const useOrganizations = vi.fn();
+const useEmployeeFormOptions = vi.fn();
+const activateConversion = vi.fn();
 vi.mock('../../features/employment/api', () => ({
   useLaborWorkers: (query: unknown) => useLaborWorkers(query),
+}));
+vi.mock('../../features/employment-foundation/api', () => ({
+  useEmploymentConversions: (query: unknown) => useEmploymentConversions(query),
+  useEmploymentConversion: (id: string, enabled?: boolean) => useEmploymentConversion(id, enabled),
+  useEmploymentViewCounts: (query: unknown) => useEmploymentViewCounts(query),
+  useCreateEmploymentConversion: () => ({ mutateAsync: createConversion, isPending: false }),
+  useActivateEmploymentConversion: () => ({ mutateAsync: activateConversion, isPending: false }),
+}));
+vi.mock('../../features/employees/api', () => ({
+  useOrganizations: () => useOrganizations(),
+  useEmployeeFormOptions: (excludeEmployeeId?: string, enabled?: boolean) => useEmployeeFormOptions(excludeEmployeeId, enabled),
 }));
 
 const row = {
@@ -33,12 +51,24 @@ describe('LaborWorkerManagementPage', () => {
   beforeEach(() => {
     cleanup();
     useLaborWorkers.mockReset();
+    useEmploymentConversions.mockReset();
+    useEmploymentConversion.mockReset();
+    useEmploymentViewCounts.mockReset();
+    createConversion.mockReset();
+    activateConversion.mockReset();
+    useOrganizations.mockReset();
+    useEmployeeFormOptions.mockReset();
     useLaborWorkers.mockReturnValue({
       data: { data: [row], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
     });
+    useEmploymentConversions.mockReturnValue({ data: { data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } }, isLoading: false, isError: false, refetch: vi.fn() });
+    useEmploymentConversion.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    useEmploymentViewCounts.mockReturnValue({ data: { items: [] }, isLoading: false, isError: false, refetch: vi.fn() });
+    useOrganizations.mockReturnValue({ data: [{ id: 'org-1', code: 'ORG-1', name: '目标组织', parentId: null }], isLoading: false, isError: false, refetch: vi.fn() });
+    useEmployeeFormOptions.mockReturnValue({ data: { positions: [{ id: 'position-1', name: '目标岗位' }], managers: [], jobTitles: [{ id: 'title-1', name: '目标职务', code: 'TITLE-1' }] }, isLoading: false, isError: false });
   });
 
   it('keeps the exact required column order and renders the company email', () => {
@@ -60,7 +90,7 @@ describe('LaborWorkerManagementPage', () => {
     expect(screen.getByRole('button', { name: /查看/ }).closest('a')).toHaveAttribute('href', '/personnel/employees/employee-labor-1');
   });
 
-  it('renders the Beisen dashboard, compact filters, and unavailable management actions', () => {
+  it('renders the Beisen dashboard, compact filters, and conversion management actions', () => {
     renderPage();
 
     expect(screen.getByText('在岗劳务人员')).toBeInTheDocument();
@@ -70,21 +100,29 @@ describe('LaborWorkerManagementPage', () => {
     expect(screen.getByRole('searchbox', { name: '筛选人员' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: '筛选电子邮箱' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: '筛选部门' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /新增劳务人员/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /申请劳务转正式/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /导入/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /导出/ })).toBeDisabled();
   });
 
-  it('shows unsupported labor views without reusing the current collection', () => {
-    renderPage();
-    const callsBeforeSwitch = useLaborWorkers.mock.calls.length;
+  it('loads conversion rows with the authoritative in-progress view and exact type', () => {
+    useEmploymentConversions.mockReturnValue({
+      data: { data: [{ id: 'conversion-1', type: 'LABOR_TO_EMPLOYEE', status: 'PENDING', plannedEffectiveDate: '2026-10-01', employee: { id: 'employee-labor-1', employeeNo: 'L-001', name: '待转正式劳务人员' }, source: { employmentPeriodId: 'period-labor-1', sequenceNo: 1, employmentRelationship: 'LABOR_WORKER', entryDate: '2026-08-01', organization: { id: 'org-source', name: '劳务部门' }, position: null, jobTitle: { id: 'title-source', name: '劳务职务', code: 'TITLE-SOURCE' }, jobLevel: null }, target: { organization: { id: 'org-target', name: '正式部门', code: 'ORG-TARGET' }, position: null, jobTitle: null, jobLevel: null }, approval: null, canActivate: false, canViewEmployeeDetail: true }], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } }, isLoading: false, isError: false, refetch: vi.fn() });
+    renderPage('/employment/labor?view=conversion-pending');
 
-    fireEvent.click(screen.getByRole('button', { name: '转正式中' }));
+    expect(useEmploymentConversions).toHaveBeenCalledWith(expect.objectContaining({ view: 'in_progress', type: 'LABOR_TO_EMPLOYEE' }));
+    expect(screen.getByText('待转正式劳务人员')).toBeInTheDocument();
+    expect(screen.queryByText('该视图暂不可用')).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByText('该视图暂不可用')).toBeInTheDocument();
-    expect(screen.getByText(/劳务转换事件来源待确认/)).toBeInTheDocument();
-    expect(screen.queryByText('虚构劳务人员')).not.toBeInTheDocument();
-    expect(useLaborWorkers).toHaveBeenCalledTimes(callsBeforeSwitch);
+  it('shows conversion detail and the canActivate confirmation action', () => {
+    const conversion = { id: 'conversion-1', type: 'LABOR_TO_EMPLOYEE', status: 'PENDING_EFFECTIVE', plannedEffectiveDate: '2026-09-01', employee: { id: 'employee-labor-1', employeeNo: 'L-001', name: '待生效劳务人员' }, source: { employmentPeriodId: 'period-labor-1', sequenceNo: 1, employmentRelationship: 'LABOR_WORKER', entryDate: '2026-08-01', organization: { id: 'org-source', name: '劳务部门' }, position: null, jobTitle: null, jobLevel: null }, target: { organization: { id: 'org-target', name: '正式部门', code: 'ORG-TARGET' }, position: null, jobTitle: null, jobLevel: null }, approval: null, canActivate: true, canViewEmployeeDetail: true, approvalSteps: [] };
+    useEmploymentConversions.mockReturnValue({ data: { data: [conversion], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } }, isLoading: false, isError: false, refetch: vi.fn() });
+    useEmploymentConversion.mockReturnValue({ data: conversion, isLoading: false, isError: false });
+    renderPage('/employment/labor?view=conversion-pending');
+    fireEvent.click(screen.getByRole('button', { name: /查看转换申请/ }));
+    expect(screen.getByRole('dialog', { name: '转换申请详情' })).toHaveTextContent('待生效劳务人员');
+    expect(screen.getByRole('button', { name: /确认生效/ })).toBeInTheDocument();
   });
 
   it('queries the authoritative resigned view for terminated labor workers', () => {
@@ -105,8 +143,8 @@ describe('LaborWorkerManagementPage', () => {
   it('does not show an unsupported count as zero', () => {
     renderPage();
 
-    expect(screen.getByRole('button', { name: /转正式中/ })).toHaveTextContent('--');
-    expect(screen.getByRole('button', { name: /已转正式/ })).toHaveTextContent('--');
+    expect(screen.getByRole('button', { name: /转正式中/ })).toHaveTextContent('—');
+    expect(screen.getByRole('button', { name: /已转正式/ })).toHaveTextContent('—');
     expect(screen.getByRole('button', { name: /已离职/ })).toHaveTextContent('—');
   });
 
