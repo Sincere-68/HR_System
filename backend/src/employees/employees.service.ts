@@ -330,7 +330,11 @@ export class EmployeesService {
     }
 
     if (query.organizationId) {
-      if (!(await this.access.canAccessOrganizationInScope(user, query.organizationId))) {
+      const selectedOrganizationIds = await this.access.getOrganizationSubtreeIds(
+        query.organizationId,
+        this.access.hasAllEmployeeData(user) ? undefined : visibleOrganizationIds,
+      );
+      if (selectedOrganizationIds.length === 0) {
         conditions.push({ id: { in: [] } });
       } else {
         conditions.push({
@@ -339,13 +343,13 @@ export class EmployeesService {
               assignments: {
                 some: {
                   ...currentAssignmentWhere,
-                  organizationId: query.organizationId,
+                  organizationId: { in: selectedOrganizationIds },
                 },
               },
             },
             {
               assignments: { none: {} },
-              organizationId: query.organizationId,
+              organizationId: { in: selectedOrganizationIds },
             },
           ],
         });
@@ -773,7 +777,9 @@ export class EmployeesService {
     const visibleOrganizationIds = this.access.hasAllEmployeeData(user)
       ? undefined
       : (await this.access.getAccessibleOrganizationIds(user)) ?? [];
-    return presentEmployeeDetail(employee, new Date(), visibleOrganizationIds);
+    const detail = presentEmployeeDetail(employee, new Date(), visibleOrganizationIds);
+    const currentPerformanceActivity = await this.findCurrentPerformanceActivity(employee.id, visibleOrganizationIds);
+    return { ...detail, currentPerformanceActivity };
   }
 
   async create(user: AuthenticatedUser, dto: CreateEmployeeDto, auditContext: AuditContext) {
@@ -2956,15 +2962,60 @@ export class EmployeesService {
     return { data: [], meta: { page, pageSize, total: 0, totalPages: 0 } };
   }
 
+  private async findCurrentPerformanceActivity(
+    employeeId: string,
+    visibleOrganizationIds?: readonly string[],
+  ) {
+    const instance = await this.prisma.performanceInstance.findFirst({
+      where: {
+        employeeId,
+        status: ProcessStatus.IN_PROGRESS,
+        ...(visibleOrganizationIds ? { organizationId: { in: [...visibleOrganizationIds] } } : {}),
+      },
+      include: {
+        cycle: { select: { id: true, name: true } },
+        tasks: {
+          where: { status: 'IN_PROGRESS' },
+          orderBy: { moduleOrder: 'asc' },
+          include: { assignees: { orderBy: { createdAt: 'asc' }, select: { displayNameSnapshot: true } } },
+          take: 1,
+        },
+        workflowTasks: {
+          where: { status: 'IN_PROGRESS' },
+          orderBy: [{ stepOrder: 'asc' }, { attemptNo: 'desc' }],
+          include: { assignees: { orderBy: { createdAt: 'asc' }, select: { displayNameSnapshot: true } } },
+          take: 1,
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    });
+    if (!instance) return null;
+    const workflowTask = instance.workflowTasks[0] ?? null;
+    const assessmentTask = instance.tasks[0] ?? null;
+    const currentTask = workflowTask ?? assessmentTask;
+    const executorNames = currentTask?.assignees.map((assignee) => assignee.displayNameSnapshot).filter(Boolean) ?? [];
+    return {
+      cycleId: instance.cycle.id,
+      cycleName: instance.cycle.name,
+      currentStepName: workflowTask?.stepName ?? assessmentTask?.moduleName ?? null,
+      currentStepKind: workflowTask ? 'WORKFLOW' as const : assessmentTask ? 'ASSESSMENT' as const : null,
+      currentExecutorName: executorNames.length > 0 ? executorNames.join('、') : currentTask?.executorNameSnapshot ?? null,
+      status: instance.status,
+    };
+  }
+
   private findAllInDemo(
     user: AuthenticatedUser,
     query: QueryEmployeesDto,
   ): Paginated<EmployeeListItem> {
-    let employees = this.demo.getEmployees().filter(
-      (employee) => this.access.canAccessOrganization(user, employee.organizationId),
-    );
+    const selfScoped = this.access.hasSelfEmployeeDataScope(user);
+    let employees = this.demo.getEmployees().filter((employee) => (
+      selfScoped
+        ? employee.id === user.employeeId
+        : this.access.canAccessOrganization(user, employee.organizationId)
+    ));
     if (query.organizationId) {
-      employees = this.access.canAccessOrganization(user, query.organizationId)
+      employees = !selfScoped && this.access.canAccessOrganization(user, query.organizationId)
         ? employees.filter((employee) => employee.organizationId === query.organizationId)
         : [];
     }
@@ -3001,7 +3052,10 @@ export class EmployeesService {
 
   private findAccessibleDemoEmployee(user: AuthenticatedUser, id: string) {
     const employee = this.demo.getEmployee(id);
-    if (!employee || !this.access.canAccessOrganization(user, employee.organizationId)) {
+    const isAccessible = employee && (this.access.hasSelfEmployeeDataScope(user)
+      ? employee.id === user.employeeId
+      : this.access.canAccessOrganization(user, employee.organizationId));
+    if (!isAccessible) {
       throw new NotFoundException('员工不存在或不在当前数据范围内');
     }
     return employee;

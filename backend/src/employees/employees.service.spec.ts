@@ -31,18 +31,23 @@ describe('EmployeesService in demo mode', () => {
     const resigned = await employees.findAll(departmentAdmin, query({ status: EmploymentStatus.RESIGNED }));
     const byKeyword = await employees.findAll(departmentAdmin, query({ keyword: 'DEMO-2001' }));
 
-    expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 4, totalPages: 2 });
+    expect(firstPage.meta).toEqual({ page: 1, pageSize: 2, total: 5, totalPages: 3 });
     expect(firstPage.data[0]?.mobile).toBe('13800001001');
     expect(resigned.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
     expect(byKeyword.data.map((employee) => employee.employeeNo)).toEqual(['DEMO-2001']);
   });
 
-  it('does not expose departments or employees outside the user scope', async () => {
+  it('limits an ordinary employee to their own demo employee record', async () => {
     const { demo, access, employees } = createServices();
     const viewer = demo.getUser('demo-user-viewer')!;
 
+    const own = await employees.findAll(viewer, query());
     const result = await employees.findAll(viewer, query({ organizationId: 'demo-org-ceo_second_tmall_supermarket' }));
+    expect(own.data.map((employee) => employee.id)).toEqual(['demo-employee-3001']);
     expect(result.data).toEqual([]);
+    await expect(
+      employees.findOne(viewer, 'demo-employee-3001', auditContext),
+    ).resolves.toMatchObject({ id: 'demo-employee-3001' });
     await expect(
       employees.findOne(viewer, 'demo-employee-1001', auditContext),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -87,10 +92,29 @@ describe('EmployeesService in demo mode', () => {
     expect(result.assignmentId).toBeNull();
     expect(result.documentType).toBe('NATIONAL_ID');
     expect(result.workEmail).toBeNull();
+    expect(result.currentPerformanceActivity).toBeNull();
   });
 });
 
 describe('EmployeesService personnel population filters', () => {
+  it('expands a selected organization to its current and descendant employees', async () => {
+    const findMany = jest.fn().mockReturnValue({ query: 'employees' });
+    const count = jest.fn().mockReturnValue({ query: 'count' });
+    const prisma = { employee: { findMany, count }, $transaction: jest.fn().mockResolvedValue([[], 0]) };
+    const access = {
+      hasAllEmployeeData: jest.fn().mockReturnValue(true),
+      getAccessibleOrganizationIds: jest.fn(),
+      getOrganizationSubtreeIds: jest.fn().mockResolvedValue(['org-parent', 'org-child']),
+    };
+    const service = new EmployeesService(prisma as never, access as never, { create: jest.fn() } as never, { enabled: false } as never);
+    const user = { id: 'admin', username: 'admin', displayName: '管理员', role: 'ADMIN' as const, roleName: '管理员', permissions: [PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_DATA_ALL], organizationIds: [] };
+
+    await service.findAll(user, { organizationId: 'org-parent', page: 1, pageSize: 10 } as never);
+
+    expect(access.getOrganizationSubtreeIds).toHaveBeenCalledWith('org-parent', undefined);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ AND: expect.arrayContaining([expect.objectContaining({ OR: expect.arrayContaining([expect.objectContaining({ assignments: { some: expect.objectContaining({ organizationId: { in: ['org-parent', 'org-child'] } }) } })]) })]) }) }));
+  });
+
   it('filters the full employee population by name and current employment relationship', async () => {
     const findMany = jest.fn().mockReturnValue({ query: 'employees' });
     const count = jest.fn().mockReturnValue({ query: 'count' });

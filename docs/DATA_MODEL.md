@@ -253,11 +253,12 @@ erDiagram
 
 继续使用 `users`、`roles`、`permissions`、`role_permissions`、`user_data_scopes` 和 `audit_logs`。新增：
 
-- `users.employee_id`：登录账号可选择关联员工档案。
+- `users.employee_id`：普通员工登录账号必须关联员工档案；后端将 `VIEWER` 的人员查询强制限定为该员工 ID，空值不返回人员数据。`ADMIN` 只保留一个系统管理员；`DEPT_ADMIN` 显示为 HR管理员，当前与系统管理员共享 HR 数据范围。
 - `approval_flow_definitions` / `approval_flow_versions` / `approval_flow_nodes`：保存按业务类型版本化的审批配置；同一业务类型最多一个已发布定义，同一定义最多一个已发布版本。节点连续串行，支持指定用户、角色和唯一职务目录解析。
 - `approval_requests` / `approval_steps`：承载不可变审批实例。中间节点通过保持 `PENDING`；最终通过进入 `PENDING_EFFECTIVE`；驳回、撤回、退回分别同步关联业务记录为 `REJECTED`、`WITHDRAWN`、`DRAFT`；显式业务生效后审批进入 `COMPLETED`。原步骤和决定永久保留。
 - `employment_conversions`：保存实习/劳务转正式的源/目标快照、计划生效日和审批引用。生效时在一个事务中以前一日结束源周期/任职/状态，并从生效日创建正式周期/任职/状态。
 - `part_time_records`：保存独立兼职职责及审批历史；状态为 `DRAFT/PENDING/REJECTED/WITHDRAWN/PENDING_EFFECTIVE/ACTIVE/ENDED/CANCELLED`，不替代主要部门任职。
+
 - `dictionary_types` / `dictionary_items`：学历、民族、婚姻、离职原因等可配置选项。
 - `RecordStatus` 与归档字段：停用或归档，不物理删除。
 

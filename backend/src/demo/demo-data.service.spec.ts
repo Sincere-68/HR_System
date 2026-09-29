@@ -19,21 +19,22 @@ describe('DemoDataService', () => {
     expect(service.getUser('demo-user-admin')?.username).toBe('admin');
   });
 
-  it('keeps the three role scopes and operation permissions separate', () => {
+  it('gives HR the same full data scope as the administrator and binds an ordinary employee', () => {
     const service = createService();
-    const departmentAdmin = service.authenticate('deptadmin', 'Demo@123');
-    const viewer = service.authenticate('viewer', 'Demo@123');
+    const hr = service.authenticate('deptadmin', 'Demo@123');
+    const employee = service.authenticate('viewer', 'Demo@123');
 
-    expect(departmentAdmin?.organizationIds).toEqual(['demo-org-ceo_chen_rui']);
+    expect(hr?.organizationIds).toEqual([]);
     expect(service.getOrganizations()).toHaveLength(44);
     expect(service.getOrganizations().filter(({ parentId }) => parentId === 'demo-org-company_shanghai_yixin')).toHaveLength(2);
     expect(service.getOrganizations().filter(({ parentId }) => parentId === 'demo-org-ceo_chen_rui')).toHaveLength(9);
     expect(service.getOrganizations().filter(({ parentId }) => parentId === 'demo-org-chairman_chen_gang')).toHaveLength(12);
     expect(service.getOrganizations().find(({ name }) => name === '上海宜信电子商务有限公司')?.parentId).toBeNull();
     expect(service.getOrganizations().find(({ name }) => name === '二部天猫超市组')?.parentId).toBe('demo-org-ceo_second_department');
-    expect(departmentAdmin?.permissions).toContain(PERMISSIONS.EMPLOYEE_UPDATE);
-    expect(viewer?.organizationIds).toEqual(['demo-org-chairman_chen_gang']);
-    expect(viewer?.permissions).toEqual([]);
+    expect(hr?.permissions).toContain(PERMISSIONS.EMPLOYEE_DATA_ALL);
+    expect(employee?.organizationIds).toEqual([]);
+    expect(employee?.employeeId).toBe('demo-employee-3001');
+    expect(employee?.permissions).toEqual([PERMISSIONS.EMPLOYEE_READ]);
   });
 
   it('creates and updates in-memory employees', () => {

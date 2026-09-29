@@ -4,6 +4,16 @@
 >
 > 本文用于新对话接续，记录当前代码已经实现的页面、接口、字段来源、查询口径、验证结果和已知限制。若本文与当前代码不一致，以 [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma)、shared 契约和实际前后端代码为准；本文不替代业务约束、Prisma Migration 或 API 源码。
 
+## 绩效模块近期变更（待迁移部署）
+
+- 绩效模板已将**考核表**与**流程推进**拆分：评分、权重、业务字段、安全规则、模块执行人和结果计算只属于考核表。
+- 审批设置中的“本人确认”固定由当前活动实例的被考核员工执行；模板只显示该系统绑定规则，不能选择或修改执行人。活动打开确认步骤时将该 `PerformanceInstance.employee` 快照为唯一执行人，内部 User 账号可为空。
+- 流程只读映射已启用的人工评估和结果调整模块；业务指标模块在活动启动时自动计算，不作为流程步骤。
+- 流程可在考核完成后新增审核、本人确认、审批和 HR 归档等不评分步骤；后续步骤不会改写、重算或影响考核表与金额快照。
+- 本人确认固定由被考核员工处理；审核/审批支持结束、退回上一步或退回指定前序后续步骤。归档后结果仍可按既有审计规则修订。
+- 新增迁移 `20260916120000_add_performance_workflow_tasks`，包含后续流程任务、执行人、动作审计、考核/流程状态和飞书卡片防重放字段。**尚未执行迁移。** 不要在未备份、未检查迁移状态且未经明确授权时执行。
+- 飞书交互卡片需要在服务端设置 `FEISHU_VERIFICATION_TOKEN`，建议同时设置 `FEISHU_ENCRYPT_KEY`，并在飞书开放平台配置卡片回调地址；所有凭据只能保留在服务器环境变量，禁止写入代码、测试、文档、前端环境或 Git。
+
 ## 一、项目概况
 
 - 前端：React 19、TypeScript、Vite、Ant Design、React Router、TanStack Query。
@@ -32,7 +42,8 @@
 - 禁止用编码、创建时间或其他相似字段冒充缺失字段。
 - 普通列表“邮箱/电子邮箱”默认读取 `Employee.workEmail`（`employees.work_email`）。
 - “个人邮箱”读取 `Employee.personalEmail`；“直线经理邮箱”读取主要经理的 `Employee.workEmail`；Offer 候选人个人邮箱读取 `Candidate.email`。
-- 本系统仅供 HR 使用，不设置独立的字段级敏感权限；有可靠来源的字段按正常值返回，仍受员工读取权限和组织数据范围约束。当前普通账户可登录但不开放业务信息访问，管理员和已授权的部门管理员按各自权限访问。
+- 本系统仅供 HR 使用，不设置独立的字段级敏感权限；有可靠来源的字段按正常值返回，仍受员工读取权限和组织数据范围约束。数据库初始化只保留一个 `admin` 系统管理员；`DEPT_ADMIN` 显示为 HR管理员并拥有与管理员相同的 HR 数据范围；`VIEWER` 显示为普通员工，后端仅允许其读取 `users.employee_id` 绑定的本人档案，未绑定时不返回人员数据。
+- 已有数据库如只需更新此账号策略，使用 `npm run db:sync-access-policy`；该脚本只改 `roles`、`permissions` 和角色权限关联，不创建/删除用户、不改密码、不改 `users.employee_id` 或 `user_data_scopes`。
 
 ## 三、核心数据模型口径
 
@@ -221,7 +232,7 @@
 | 发起时间 | `submittedAt` | `ApprovalRequest.submittedAt`。 |
 | 信息采集状态 | `status` | 优先 `ApprovalRequest.status`，否则使用变更请求状态。 |
 | 当前审批人 | `currentApproverName` | 当前待处理 `ApprovalStep.approver.displayName`。 |
-| 操作 | — | 符合条件时可查看人员详情；处于待审批/处理中时，可调用 `POST /employee-info-approvals/:id/reminders` 向当前审批人发送飞书提醒。服务端按审批人关联人员的工作邮箱、手机号精确查询飞书账号；不会接受前端传入的 `open_id`。 |
+| 操作 | — | 符合条件时可查看人员详情；处于待审批/处理中时，可调用 `POST /employee-info-approvals/:id/reminders` 向当前审批人发送飞书提醒。服务端直接以审批人关联人员的企业邮箱作为飞书收件人；不会接受前端传入的邮箱或 `open_id`。 |
 
 ### 5.4 录用入职
 
@@ -614,6 +625,20 @@
 | 2026-09-23 Prisma 与 diff | schema validate 通过，隔离库 migration status 为最新；`git diff --check` 无错误，仅有 Windows LF/CRLF 提示。 |
 
 2026-09-23 的数据库验证只连接本机 Docker `hr_personnel_demo_test`，使用 `MOCK-HR-STAGE2-*` 虚构数据；主库 `hr_personnel_demo` 未应用 Foundation migration，也未写入该命名空间。
+
+### 飞书卡片审批与长连接（2026-09-17，未运行 migration）
+
+- 绩效 `EVALUATION` 人工评价继续使用已有数据库分数、评语、任务状态和权重计算；飞书个人卡片仅作为录入入口，后端 token、当前任务、企业邮箱解析身份和分数范围校验均强制执行。成功提交后尝试将原卡片更新为“已提交”；更新失败不回滚正式评分。
+- 员工信息审批提醒现使用审批人绑定员工的 `workEmail` 解析唯一飞书个人身份后发送通过/驳回卡片，不接受前端传入邮箱或 `open_id`。普通审批不增加评分。当前通用审批正式的通过、驳回、下一节点和最终业务写入规则仍待 HR 确认，卡片不会擅自改写 `ApprovalStep` 状态。
+- 已安装 `@larksuiteoapi/node-sdk@1.74.0`。设置 `FEISHU_LONG_CONNECTION_ENABLED=true` 时，后端在飞书应用长连接中接收 `card.action.trigger`；HTTP 回调路径仍兼容。长连接需要飞书应用后台配置，凭据只保留在服务器环境变量。
+- 绩效待办提醒正在按“活动 + 执行人”聚合为飞书个人卡片；卡片只显示活动名称和待处理数量，并通过网页授权进入项目内嵌待办页。`PerformanceFeishuTaskSession` 只保存哈希 state、员工/活动绑定和完成/撤销状态；只要该活动仍有待办，卡片会话不按时间失效。专用待办 token 不等同于项目 User，不授予后台权限。无内部 User 但有 Employee 企业联系方式且能唯一匹配飞书账号的执行人可通过专用接口提交评价和审核。新增待应用 migration `20260920110000_add_feishu_task_inbox_sessions`，尚未执行；需要在飞书开放平台登记与 `FEISHU_OAUTH_REDIRECT_URI` 完全一致的网页授权回调地址。
+
+### 绩效活动流程信息（2026-09-17，未运行 migration）
+
+- 活动详情 `/performance/activities/:activityId` 的“被考核人”表保留员工、部门、模板、指标模板、当前步骤、当前执行人、考核组、状态、总分、总等级、人员状态、最终系数；当前执行人可打开右侧流程信息面板而不离开详情页。
+- `GET /performance/cycles/:cycleId/participants/:instanceId/workflow` 按同一活动与实例查询真实的人工评估/调整和后续流程任务历史（含退回 attempt），后端强制组织范围并记录详情查看审计。无可靠统一达标阈值时“是否达标”返回 `null/--`。
+- 新增待应用 migration `20260917110000_add_performance_notification_deliveries`：评估与后续流程分别保存独立飞书个人卡片投递历史，包含状态、送达时间与失败原因；不写入审计日志替代业务记录。仅飞书确认发送成功后才写送达时间与卡片发放时间；未启用、身份未匹配或发送失败保持未送达并留下原因，单人投递失败不回滚绩效流程。
+- 活动创建必须指定已发布模板（不配置独立绩效等级）；活动开始日从所属组织及下级组织自动生成被考核人实例。草稿活动内可单独调整尚未处理人员的模板；启动前必须至少有一名被考核人且每名被考核人已有发布模板。
 
 ## 十、已知限制与后续事项
 

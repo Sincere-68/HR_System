@@ -21,40 +21,12 @@ import {
 } from '@prisma/client';
 import { EMPLOYING_COMPANY_CATALOG, ORGANIZATION_CATALOG, POSITION_CATALOG } from '@hr-demo/shared';
 import * as bcrypt from 'bcrypt';
+import {
+  ACCESS_CONTROL_PERMISSION_DEFINITIONS,
+  ACCESS_CONTROL_ROLE_DEFINITIONS,
+} from './access-policy';
 
 const prisma = new PrismaClient();
-
-const permissionDefinitions = [
-  ['employee.read', '查看员工'],
-  ['employee.create', '新增员工'],
-  ['employee.update', '编辑员工'],
-  ['employee.data.all', '查看全部部门员工'],
-  ['organization.read', '查看组织'],
-  ['performance.read', '查看绩效'],
-  ['performance.template.manage', '管理绩效模板'],
-  ['performance.cycle.manage', '管理绩效周期'],
-  ['performance.task.handle', '处理绩效任务'],
-  ['performance.result.modify', '修改绩效结果'],
-  ['performance.amount-base.manage', '管理绩效金额基数'],
-] as const;
-
-const roleDefinitions = [
-  {
-    code: 'ADMIN',
-    name: '管理员',
-    permissions: permissionDefinitions.map(([code]) => code),
-  },
-  {
-    code: 'DEPT_ADMIN',
-    name: '部门管理员',
-    permissions: ['employee.read', 'employee.create', 'employee.update', 'organization.read', 'performance.read', 'performance.cycle.manage', 'performance.task.handle'],
-  },
-  {
-    code: 'VIEWER',
-    name: '普通账户',
-    permissions: [],
-  },
-] as const;
 
 async function upsertRole(
   code: string,
@@ -95,7 +67,7 @@ async function main() {
     });
   }
 
-  for (const [code, name] of permissionDefinitions) {
+  for (const { code, name } of ACCESS_CONTROL_PERMISSION_DEFINITIONS) {
     await prisma.permission.upsert({
       where: { code },
       update: { name },
@@ -104,8 +76,8 @@ async function main() {
   }
 
   const roles = new Map<string, { id: string }>();
-  for (const role of roleDefinitions) {
-    roles.set(role.code, await upsertRole(role.code, role.name, role.permissions));
+  for (const role of ACCESS_CONTROL_ROLE_DEFINITIONS) {
+    roles.set(role.code, await upsertRole(role.code, role.name, role.permissionCodes));
   }
 
   const organizationsByCode = new Map<string, { id: string }>();
@@ -213,56 +185,30 @@ async function main() {
     }
   }
 
-  const userDefinitions = [
-    {
-      username: 'admin',
-      displayName: '系统管理员',
-      roleCode: 'ADMIN',
-      password: process.env.SEED_ADMIN_PASSWORD ?? 'Demo@123',
-      scopeOrganizationIds: [] as string[],
-    },
-    {
-      username: 'deptadmin',
-      displayName: '部门管理员',
-      roleCode: 'DEPT_ADMIN',
-      password: process.env.SEED_DEPT_ADMIN_PASSWORD ?? 'Demo@123',
-      scopeOrganizationIds: [organization('CEO_CHEN_RUI')],
-    },
-    {
-      username: 'viewer',
-      displayName: '普通账户',
-      roleCode: 'VIEWER',
-      password: process.env.SEED_VIEWER_PASSWORD ?? 'Demo@123',
-      scopeOrganizationIds: [organization('CHAIRMAN_CUSTOMER_SERVICE')],
-    },
-  ];
-
-  for (const definition of userDefinitions) {
-    const user = await prisma.user.upsert({
-      where: { username: definition.username },
-      update: {
-        displayName: definition.displayName,
-        passwordHash: await bcrypt.hash(definition.password, 12),
-        roleId: roles.get(definition.roleCode)!.id,
-      },
-      create: {
-        username: definition.username,
-        displayName: definition.displayName,
-        passwordHash: await bcrypt.hash(definition.password, 12),
-        roleId: roles.get(definition.roleCode)!.id,
-      },
-    });
-
-    await prisma.userDataScope.deleteMany({ where: { userId: user.id } });
-    if (definition.scopeOrganizationIds.length > 0) {
-      await prisma.userDataScope.createMany({
-        data: definition.scopeOrganizationIds.map((organizationId) => ({
-          userId: user.id,
-          organizationId,
-        })),
-      });
-    }
+  // 只引导创建一个系统管理员。HR 和普通员工账号均以 users 表为准，
+  // 后续 seed 不会重置管理员密码，也不会创建额外的固定测试账号。
+  const existingAdmin = await prisma.user.findUnique({
+    where: { username: 'admin' },
+    select: { id: true },
+  });
+  const bootstrapAdminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+  if (!existingAdmin && !bootstrapAdminPassword) {
+    throw new Error('首次初始化必须设置 BOOTSTRAP_ADMIN_PASSWORD；管理员创建后可从环境变量中移除该值');
   }
+  const admin = existingAdmin
+    ? await prisma.user.update({
+        where: { id: existingAdmin.id },
+        data: { displayName: '系统管理员', roleId: roles.get('ADMIN')!.id },
+      })
+    : await prisma.user.create({
+        data: {
+          username: 'admin',
+          displayName: '系统管理员',
+          passwordHash: await bcrypt.hash(bootstrapAdminPassword!, 12),
+          roleId: roles.get('ADMIN')!.id,
+        },
+      });
+  await prisma.userDataScope.deleteMany({ where: { userId: admin.id } });
 
   const employees = [
     {
@@ -494,7 +440,7 @@ async function main() {
     }
   }
 
-  console.log('本地 Demo 数据已写入。账号：admin、deptadmin、viewer。');
+  console.log('本地 Demo 数据已写入。仅初始化系统管理员 admin；HR 和普通员工账号请在 users 表中维护。');
 }
 
 main()

@@ -13,10 +13,15 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({
+    limit: '10mb',
+    verify: (request, _response, buffer) => {
+      (request as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+    },
+  }));
   app.enableCors({
     origin: config.get<string>('FRONTEND_URL', 'http://localhost:5173'),
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     exposedHeaders: ['Content-Disposition'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });

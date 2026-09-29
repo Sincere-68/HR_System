@@ -7,9 +7,10 @@ import { LoginPage } from '../pages/LoginPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { SystemSelectionPage } from '../pages/SystemSelectionPage';
-import { PerformanceAmountBasePage } from '../pages/performance/PerformanceAmountBasePage';
 import { PerformanceActivitiesPage } from '../pages/performance/PerformanceActivitiesPage';
+import { PerformanceActivityDetailPage } from '../pages/performance/PerformanceActivityDetailPage';
 import { PerformanceDashboardPage } from '../pages/performance/PerformanceDashboardPage';
+import { PerformanceFeishuTaskInboxPage } from '../pages/performance/PerformanceFeishuTaskInboxPage';
 import { PerformanceMyTasksPage } from '../pages/performance/PerformanceMyTasksPage';
 import { PerformanceResultsPage } from '../pages/performance/PerformanceResultsPage';
 import { PerformanceTasksPage } from '../pages/performance/PerformanceTasksPage';
@@ -60,19 +61,20 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/performance/feishu-task-inbox" element={<PerformanceFeishuTaskInboxPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AdministratorRoute />}>
         <Route index element={<SystemSelectionPage />} />
         <Route path="performance" element={<PerformanceLayout />}>
           <Route index element={<PerformanceDashboardPage />} />
           <Route path="activities" element={<PerformanceActivitiesPage />} />
+          <Route path="activities/:activityId" element={<PerformanceActivityDetailPage />} />
           <Route path="templates" element={<PerformanceTemplatesPage />} />
           <Route path="templates/new" element={<PerformanceTemplateEditorPage />} />
           <Route path="templates/:templateId" element={<PerformanceTemplateEditorPage />} />
           <Route path="tasks" element={<PerformanceTasksPage />} />
           <Route path="my-tasks" element={<PerformanceMyTasksPage />} />
           <Route path="results" element={<PerformanceResultsPage />} />
-          <Route path="settings/amount-base" element={<PerformanceAmountBasePage />} />
         </Route>
         <Route element={<AppLayout />}>
           <Route path="personnel/employees" element={<EmployeeListPage />} />

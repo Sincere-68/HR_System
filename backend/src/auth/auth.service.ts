@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { AuthUser, LoginResponse, PermissionCode, RoleCode } from '@hr-demo/shared';
+import { PERMISSIONS, type AuthUser, type LoginResponse, type PermissionCode, type RoleCode } from '@hr-demo/shared';
 import * as bcrypt from 'bcrypt';
 import { DemoDataService } from '../demo/demo-data.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +13,7 @@ const authUserSelect = {
   username: true,
   passwordHash: true,
   displayName: true,
+  employeeId: true,
   role: {
     select: {
       code: true,
@@ -73,6 +74,7 @@ export class AuthService {
     id: string;
     username: string;
     displayName: string;
+    employeeId: string | null;
     role: {
       code: string;
       name: string;
@@ -81,11 +83,14 @@ export class AuthService {
     dataScopes: { organizationId: string }[];
   }): AuthUser {
     const role = user.role.code as RoleCode;
-    // 普通账户当前仅能完成登录，尚未开放业务数据访问。这里在每次
-    // JWT 解析时强制收敛权限，避免旧种子数据中的角色权限继续生效。
+    const grantedPermissions = user.role.permissions.map(
+      ({ permission }) => permission.code as PermissionCode,
+    );
+    // 普通员工只保留本人档案只读能力；即使旧数据误配了其他权限，也不会
+    // 在认证结果中放大为 HR 业务权限。
     const permissions = role === 'VIEWER'
-      ? []
-      : user.role.permissions.map(({ permission }) => permission.code as PermissionCode);
+      ? grantedPermissions.filter((permission) => permission === PERMISSIONS.EMPLOYEE_READ)
+      : grantedPermissions;
     return {
       id: user.id,
       username: user.username,
@@ -94,6 +99,7 @@ export class AuthService {
       roleName: user.role.name,
       permissions,
       organizationIds: user.dataScopes.map(({ organizationId }) => organizationId),
+      employeeId: user.employeeId,
     };
   }
 }

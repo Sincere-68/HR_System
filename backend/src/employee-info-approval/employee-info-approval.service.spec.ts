@@ -42,6 +42,7 @@ function createDatabaseService(rows: unknown[] = []) {
   const feishu = {
     enabled: false,
     resolveOpenIdByContact: jest.fn(),
+    sendTextToEmail: jest.fn(),
     sendTextToOpenId: jest.fn(),
   };
   return {
@@ -177,15 +178,39 @@ describe('EmployeeInfoApprovalService', () => {
     expect(JSON.stringify(result.data[0])).not.toContain('范围外主部门');
   });
 
-  it('sends a Feishu reminder only to the current approver and persists a verified contact match', async () => {
+  it('rejects a card reminder when the current approver has no enterprise email', async () => {
+    const findFirst = jest.fn().mockResolvedValue({
+      id: 'change-1',
+      employee: { name: '虚构员工' },
+      changedFields: [],
+      approvalRequest: {
+        id: 'approval-1',
+        title: '虚构员工资料变更',
+        currentStep: 1,
+        steps: [{ id: 'step-1', stepOrder: 1, approver: { id: 'approver-1', displayName: '审批人', employee: { workEmail: null } } }],
+      },
+    });
+    const service = new EmployeeInfoApprovalService(
+      { employeeChangeRequest: { findFirst } } as never,
+      { hasAllEmployeeData: jest.fn(() => true) } as never,
+      { enabled: false } as never,
+      { create: jest.fn() } as never,
+      { enabled: true } as never,
+    );
+
+    await expect(service.sendReminder(scopedUser, 'change-1', { userId: scopedUser.id })).rejects.toThrow('当前审批人未配置企业邮箱');
+  });
+
+  it('sends a Feishu approval card to the current approver enterprise email identity', async () => {
     const currentApprover = {
       id: 'approver-current',
       displayName: '当前审批人',
-      feishuOpenId: null,
-      employee: { workEmail: 'approver@example.com', mobile: null },
+      employee: { workEmail: 'approver@example.com' },
     };
     const findFirst = jest.fn().mockResolvedValue({
       id: 'change-1',
+      employee: { name: '虚构员工' },
+      changedFields: ['workEmail'],
       approvalRequest: {
         id: 'approval-1',
         title: '虚构员工资料变更',
@@ -200,10 +225,8 @@ describe('EmployeeInfoApprovalService', () => {
         ],
       },
     });
-    const update = jest.fn().mockResolvedValue(undefined);
     const prisma = {
       employeeChangeRequest: { findFirst },
-      user: { findFirst: jest.fn().mockResolvedValue(null), update },
     };
     const access = {
       hasAllEmployeeData: jest.fn(() => false),
@@ -213,7 +236,7 @@ describe('EmployeeInfoApprovalService', () => {
     const feishu = {
       enabled: true,
       resolveOpenIdByContact: jest.fn().mockResolvedValue('ou_current'),
-      sendTextToOpenId: jest.fn().mockResolvedValue(true),
+      sendCardToOpenId: jest.fn().mockResolvedValue(true),
     };
     const service = new EmployeeInfoApprovalService(
       prisma as never,
@@ -229,13 +252,8 @@ describe('EmployeeInfoApprovalService', () => {
       sentAt: expect.any(String),
     });
 
-    expect(feishu.resolveOpenIdByContact).toHaveBeenCalledWith(currentApprover.employee);
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'approver-current' },
-      data: expect.objectContaining({ feishuOpenId: 'ou_current', feishuOpenIdSyncedAt: expect.any(Date) }),
-    }));
-    expect(feishu.sendTextToOpenId).toHaveBeenCalledWith('ou_current', expect.stringContaining('虚构员工资料变更'));
-    expect(feishu.sendTextToOpenId).not.toHaveBeenCalledWith('ou_previous', expect.any(String));
+    expect(feishu.resolveOpenIdByContact).toHaveBeenCalledWith({ workEmail: 'approver@example.com' });
+    expect(feishu.sendCardToOpenId).toHaveBeenCalledWith('ou_current', expect.objectContaining({ header: expect.objectContaining({ title: expect.objectContaining({ content: '员工信息审批' }) }) }));
     expect(audit.create).toHaveBeenCalledWith(
       { userId: scopedUser.id },
       'UPDATE',

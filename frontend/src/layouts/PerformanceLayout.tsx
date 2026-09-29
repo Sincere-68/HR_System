@@ -8,7 +8,7 @@ import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Space, Tooltip, Typogra
 import type { MenuProps } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { findPerformanceNavigationLabel, performanceNavigationItems } from '../config/performance-navigation';
+import { findPerformanceNavigationLabel, getPerformanceNavigationKey, performanceNavigationItems } from '../config/performance-navigation';
 import { useAuth } from '../features/auth/auth-context';
 
 const { Header, Sider, Content } = Layout;
@@ -22,6 +22,7 @@ export function PerformanceLayout() {
   const [mobile, setMobile] = useState(() => window.innerWidth < BREAKPOINT);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const menuItems = useMemo(() => performanceNavigationItems as MenuProps['items'], []);
+  const selectedMenuKey = getPerformanceNavigationKey(location.pathname);
 
   useEffect(() => {
     const media = window.matchMedia(`(max-width: ${BREAKPOINT - 1}px)`);
@@ -49,7 +50,7 @@ export function PerformanceLayout() {
       theme="light"
       mode="inline"
       items={menuItems}
-      selectedKeys={[location.pathname]}
+      selectedKeys={selectedMenuKey ? [selectedMenuKey] : []}
       onClick={({ key }) => navigate(key)}
       className="performance-navigation-menu"
     />

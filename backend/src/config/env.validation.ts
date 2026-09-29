@@ -45,6 +45,31 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   FEISHU_APP_SECRET?: string;
+
+  @Transform(({ value }) => ['true', '1', 'yes', 'on'].includes(String(value).toLowerCase()), { toClassOnly: true })
+  @IsBoolean()
+  FEISHU_LONG_CONNECTION_ENABLED = false;
+
+  /** Server-only verification secret configured in the Feishu callback settings. */
+  @IsOptional()
+  @IsString()
+  FEISHU_VERIFICATION_TOKEN?: string;
+
+  /** Server-only Encrypt Key configured in the Feishu callback settings. */
+  @IsOptional()
+  @IsString()
+  FEISHU_ENCRYPT_KEY?: string;
+
+  /** OAuth callback URL registered for the Feishu web login entry. */
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  FEISHU_OAUTH_REDIRECT_URI?: string;
+
+  /** Public frontend URL used by the Feishu task inbox callback page. */
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  FEISHU_TASK_INBOX_URL?: string;
+
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
@@ -61,6 +86,12 @@ export function validateEnvironment(config: Record<string, unknown>) {
   }
   if (validated.FEISHU_ENABLED && (!validated.FEISHU_APP_ID || !validated.FEISHU_APP_SECRET)) {
     throw new Error('启用飞书推送后必须设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET');
+  }
+  if (validated.FEISHU_ENCRYPT_KEY && !validated.FEISHU_VERIFICATION_TOKEN) {
+    throw new Error('配置 FEISHU_ENCRYPT_KEY 时必须同时设置 FEISHU_VERIFICATION_TOKEN');
+  }
+  if (validated.FEISHU_TASK_INBOX_URL && !validated.FEISHU_OAUTH_REDIRECT_URI) {
+    throw new Error('配置 FEISHU_TASK_INBOX_URL 时必须同时设置 FEISHU_OAUTH_REDIRECT_URI');
   }
   return validated;
 }

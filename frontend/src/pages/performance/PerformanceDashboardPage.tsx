@@ -46,7 +46,7 @@ export function PerformanceDashboardPage() {
         <header className="performance-section-heading">
           <h2 id="current-cycle-title">当前绩效周期</h2>
         </header>
-        {cycles.isLoading ? <Skeleton active paragraph={{ rows: 2 }} /> : cycles.data?.data.length ? <div className="performance-cycle-summary">{cycles.data.data.map((cycle) => <div key={cycle.id}><strong>{cycle.name}</strong><span>{cycle.periodStart} 至 {cycle.periodEnd} · {cycle.instanceCount} 人</span></div>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无进行中的绩效周期" />}
+        {cycles.isLoading ? <Skeleton active paragraph={{ rows: 2 }} /> : cycles.data?.data.length ? <div className="performance-cycle-summary">{cycles.data.data.map((cycle) => <div key={cycle.id}><span>{cycle.periodStart} 至 {cycle.periodEnd} · {cycle.instanceCount} 人</span></div>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无进行中的绩效周期" />}
       </section>
     </section>
   );

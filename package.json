@@ -22,6 +22,7 @@
     "db:migrate": "npm run prisma:deploy --workspace=@hr-demo/backend",
     "db:migrate:dev": "npm run prisma:migrate --workspace=@hr-demo/backend",
     "db:seed": "npm run prisma:seed --workspace=@hr-demo/backend",
+    "db:sync-access-policy": "npm run prisma:sync-access-policy --workspace=@hr-demo/backend",
     "db:replace-position-catalog": "npm run prisma:replace-position-catalog --workspace=@hr-demo/backend",
     "db:upsert-position-catalog": "npm run prisma:upsert-position-catalog --workspace=@hr-demo/backend",
     "db:upsert-employing-company-catalog": "npm run prisma:upsert-employing-company-catalog --workspace=@hr-demo/backend",

@@ -15,7 +15,7 @@ import {
   politicalStatusLabels,
   workArrangementLabels,
 } from '../../config/personnel-fields';
-import { Alert, Button, Card, Descriptions, Skeleton, Space, Typography } from 'antd';
+import { Alert, Button, Card, Descriptions, Skeleton, Space, Tag, Typography } from 'antd';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../features/auth/auth-context';
 import { useEmployee } from '../../features/employees/api';
@@ -90,6 +90,26 @@ export function EmployeeDetailPage() {
             <Descriptions.Item label="证件截止日期">{label(data.documentExpiryDate)}</Descriptions.Item>
           </Descriptions>
         </Card>
+
+        {data.currentPerformanceActivity ? (
+          <Card title="当前绩效进度" bordered={false} className="employee-current-performance-card">
+            <Descriptions column={{ xs: 1, sm: 2 }} colon={false} layout="vertical">
+              <Descriptions.Item label="绩效活动"><Link to={`/performance/activities/${data.currentPerformanceActivity.cycleId}`}>{data.currentPerformanceActivity.cycleName}</Link></Descriptions.Item>
+              <Descriptions.Item label="当前状态"><Tag color="processing">进行中</Tag></Descriptions.Item>
+              <Descriptions.Item label="当前步骤">{label(data.currentPerformanceActivity.currentStepName)}</Descriptions.Item>
+              <Descriptions.Item label="步骤类别">{data.currentPerformanceActivity.currentStepKind === 'WORKFLOW' ? '后续流程' : data.currentPerformanceActivity.currentStepKind === 'ASSESSMENT' ? '考核表' : '--'}</Descriptions.Item>
+              <Descriptions.Item label="当前执行人">{label(data.currentPerformanceActivity.currentExecutorName)}</Descriptions.Item>
+            </Descriptions>
+          </Card>
+        ) : (
+          <Card title="当前绩效进度" bordered={false} className="employee-current-performance-card">
+            <Descriptions column={{ xs: 1, sm: 2 }} colon={false} layout="vertical">
+              <Descriptions.Item label="绩效活动">--</Descriptions.Item>
+              <Descriptions.Item label="当前步骤">--</Descriptions.Item>
+              <Descriptions.Item label="当前执行人">--</Descriptions.Item>
+            </Descriptions>
+          </Card>
+        )}
 
         <div className="detail-grid">
           <Card title="任职信息" bordered={false}>

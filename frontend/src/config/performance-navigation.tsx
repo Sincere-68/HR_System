@@ -1,10 +1,8 @@
 import type { ReactNode } from 'react';
 import {
-  AuditOutlined,
   CheckSquareOutlined,
   FileTextOutlined,
   FundOutlined,
-  SettingOutlined,
   TeamOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
@@ -21,10 +19,16 @@ export const performanceNavigationItems: PerformanceNavigationItem[] = [
   { key: '/performance/templates', label: '绩效模板', icon: <FileTextOutlined /> },
   { key: '/performance/tasks', label: '绩效任务', icon: <UnorderedListOutlined /> },
   { key: '/performance/my-tasks', label: '我的待办', icon: <CheckSquareOutlined /> },
-  { key: '/performance/results', label: '结果审批', icon: <AuditOutlined /> },
-  { key: '/performance/settings/amount-base', label: '金额基数', icon: <SettingOutlined /> },
 ];
 
+export function getPerformanceNavigationKey(pathname: string) {
+  return performanceNavigationItems
+    .filter((item) => item.key !== '/performance' && (pathname === item.key || pathname.startsWith(`${item.key}/`)))
+    .sort((left, right) => right.key.length - left.key.length)[0]?.key
+    ?? (pathname === '/performance' ? '/performance' : undefined);
+}
+
 export function findPerformanceNavigationLabel(pathname: string) {
-  return performanceNavigationItems.find((item) => item.key === pathname)?.label ?? '绩效系统';
+  const key = getPerformanceNavigationKey(pathname);
+  return performanceNavigationItems.find((item) => item.key === key)?.label ?? '绩效系统';
 }
