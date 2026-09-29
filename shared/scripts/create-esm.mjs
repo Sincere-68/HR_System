@@ -36,7 +36,10 @@ for (const name of [
   'CONTRACT_TERM_TYPES',
   'AGREEMENT_TYPES',
   'PERSONNEL_FIELDS',
+  'PERSONNEL_TRANSFER_FORMATS',
   'PERSONNEL_FIELD_CONTRACT_VERSION',
+  'PROBATION_IMPORT_FIELDS',
+  'PROBATION_EXPORT_FIELDS',
   'PERMISSIONS',
 ]) {
   const match = typeOnlySource.match(new RegExp(`export const ${name} = ([\\s\\S]*?)(?: as const(?: satisfies [^;]+)?)?;`));

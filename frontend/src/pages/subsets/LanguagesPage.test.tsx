@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { LanguagesPage } from './LanguagesPage';
 
 const useLanguageList = vi.fn();
@@ -32,7 +33,7 @@ describe('LanguagesPage', () => {
 
   it('renders the exact 12-column order without inferring whether the language is native', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '邮箱', '工号', '部门', '语言', '是否母语', '掌握程度', '书写能力', '阅读能力', '口语能力', '审批状态', '操作',
     ]);

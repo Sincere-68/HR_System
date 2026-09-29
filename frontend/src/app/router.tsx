@@ -25,11 +25,13 @@ import { EmployeeListPage } from '../pages/employees/EmployeeListPage';
 import { EmployeeRosterPage } from '../pages/analytics/EmployeeRosterPage';
 import { ContractsPage } from '../pages/contracts/ContractsPage';
 import { EmployeeChangeManagementPage } from '../pages/employment/EmployeeChangeManagementPage';
+import { EmploymentApprovalsPage } from '../pages/employment/EmploymentApprovalsPage';
 import { EmploymentRecordsPage } from '../pages/employment/EmploymentRecordsPage';
 import { InternManagementPage } from '../pages/employment/InternManagementPage';
 import { LaborWorkerManagementPage } from '../pages/employment/LaborWorkerManagementPage';
 import { PartTimeManagementPage } from '../pages/employment/PartTimeManagementPage';
 import { ProbationPage } from '../pages/employment/ProbationPage';
+import { ReportingLinesPage } from '../pages/employment/ReportingLinesPage';
 import { RetirementManagementPage } from '../pages/employment/RetirementManagementPage';
 import { TrialPostManagementPage } from '../pages/employment/TrialPostManagementPage';
 import { TerminationManagementPage } from '../pages/employment/TerminationManagementPage';
@@ -52,6 +54,7 @@ import { SkillsPage } from '../pages/subsets/SkillsPage';
 import { TrainingPage } from '../pages/subsets/TrainingPage';
 import { WorkHistoryPage } from '../pages/subsets/WorkHistoryPage';
 import { TransferTypesPage } from '../pages/staffing/TransferTypesPage';
+import { EmploymentApprovalFlowsPage } from '../pages/settings/EmploymentApprovalFlowsPage';
 import { placeholderHeadingTabs, placeholderRoutes } from '../config/navigation';
 
 export function AppRouter() {
@@ -92,12 +95,14 @@ export function AppRouter() {
           <Route path="analytics/roster" element={<EmployeeRosterPage />} />
           <Route path="contracts" element={<ContractsPage />} />
           <Route path="employment/probation" element={<ProbationPage />} />
+          <Route path="employment/approvals" element={<EmploymentApprovalsPage />} />
           <Route path="employment/changes" element={<EmployeeChangeManagementPage />} />
           <Route path="employment/trial-post" element={<TrialPostManagementPage />} />
           <Route path="employment/interns" element={<InternManagementPage />} />
           <Route path="employment/labor" element={<LaborWorkerManagementPage />} />
           <Route path="employment/part-time" element={<PartTimeManagementPage />} />
           <Route path="employment/records" element={<EmploymentRecordsPage />} />
+          <Route path="employment/reporting-lines" element={<ReportingLinesPage />} />
           <Route path="employment/termination" element={<TerminationManagementPage />} />
           <Route path="employment/retirement" element={<RetirementManagementPage />} />
           <Route path="onboarding/offers" element={<OffersPage />} />
@@ -109,6 +114,7 @@ export function AppRouter() {
           <Route path="onboarding/id-card-reader" element={<IdCardReaderPage />} />
           <Route path="handover" element={<HandoverPage />} />
           <Route path="staffing/transfer-types" element={<TransferTypesPage />} />
+          <Route path="settings/employment-approval-flows" element={<EmploymentApprovalFlowsPage />} />
           <Route path="subsets/education" element={<EducationPage />} />
           <Route path="subsets/work-history" element={<WorkHistoryPage />} />
           <Route path="subsets/family" element={<FamilyPage />} />
@@ -128,7 +134,6 @@ export function AppRouter() {
                   title={route.label}
                   routePath={route.key}
                   headingTabs={placeholderHeadingTabs[route.key]}
-                  pendingFields={route.key === '/employment/reporting-lines'}
                 />
               )}
             />

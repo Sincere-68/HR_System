@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { ProjectsPage } from './ProjectsPage';
 
 const useProjectList = vi.fn();
@@ -32,7 +33,7 @@ describe('ProjectsPage', () => {
 
   it('renders the exact 11-column order, work email, values, and nullable fields', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '邮箱', '工号', '部门', '开始日期', '结束日期', '项目名称', '职务', '描述', '审批状态', '操作',
     ]);

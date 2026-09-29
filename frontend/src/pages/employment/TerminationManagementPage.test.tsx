@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,51 +54,80 @@ describe('TerminationManagementPage', () => {
     });
   });
 
-  it('keeps the required 12-column order, renders placeholders, and links employee detail', () => {
+  it('renders direct reference tabs and changes only the supported view query', async () => {
+    const user = userEvent.setup();
+    renderPage('/employment/termination?view=all&keyword=F-002&status=PENDING&page=4&pageSize=20');
+
+    expect(screen.getByRole('button', { name: '离职中的员工' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '已完成的离职' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '全部离职记录' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '已完成的离职' }));
+
+    expect(Object.fromEntries(new URLSearchParams(screen.getByLabelText('current search').textContent ?? ''))).toEqual({
+      view: 'completed',
+      keyword: 'F-002',
+      status: 'PENDING',
+      page: '1',
+      pageSize: '20',
+    });
+    expect(useTerminations).toHaveBeenLastCalledWith(expect.objectContaining({
+      view: 'completed',
+      keyword: 'F-002',
+      status: 'PENDING',
+      page: 1,
+      pageSize: 20,
+    }));
+  });
+
+  it('keeps the reference column order and uses placeholders instead of fabricated values', () => {
     renderPage();
-    const table = screen.getByRole('table');
-    expect(within(table).getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '工号', '姓名', '离职前部门', '离职前职位', '最后工作日', '离职类型',
       '离职原因', '审批状态', '当前审批人', '离职交接状态', '离职补偿金', '操作',
     ]);
     expect(screen.getByText('虚构员工')).toBeInTheDocument();
     expect(screen.getByText('2026-09-28')).toBeInTheDocument();
-    expect(within(table).getByText(/实际/)).toBeInTheDocument();
     expect(screen.getByText('主动离职')).toBeInTheDocument();
     expect(screen.getByText('虚构离职原因')).toBeInTheDocument();
-    expect(within(table).getAllByText('--').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('button', { name: /查看/ }).closest('a')).toHaveAttribute('href', '/personnel/employees/employee-1');
   });
 
-  it('does not offer employee detail when the API denies current access', () => {
+  it('keeps compensation unavailable even when a row contains an unexpected value', () => {
+    useTerminations.mockReturnValue({
+      data: { data: [{ ...row, compensationAmount: 'unexpected-value' }], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.queryByText('unexpected-value')).not.toBeInTheDocument();
+  });
+
+  it('keeps the employee action permission-aware and exposes no false process action', () => {
     useTerminations.mockReturnValue({
       data: { data: [{ ...row, canViewEmployeeDetail: false }], meta: { page: 1, pageSize: 10, total: 1, totalPages: 1 } },
-      isLoading: false, isError: false, refetch: vi.fn(),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
     });
-    const rendered = renderPage();
-    const page = within(rendered.container);
-    expect(page.queryByRole('link', { name: /查看/ })).not.toBeInTheDocument();
-    expect(page.getByRole('button', { name: '暂无详情' })).toBeDisabled();
+    renderPage();
+
+    expect(screen.queryByRole('link', { name: /查看/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '暂无详情' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '被动离职' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /导入历史离职人员/ })).toBeDisabled();
   });
 
-  it('changes the view tab through the URL and API query', async () => {
+  it('preserves existing filters and clears only the supported filter query keys', async () => {
     const user = userEvent.setup();
-    renderPage('/employment/termination?view=all&keyword=F-002&status=PENDING&page=4&pageSize=20');
+    renderPage('/employment/termination?view=all&keyword=F-002&status=APPROVED&lastWorkingDateFrom=2026-09-01&lastWorkingDateTo=2026-09-30&page=3&pageSize=20');
 
-    await user.click(screen.getByRole('button', { name: '已完成的离职' }));
-
-    expect(screen.getByLabelText('current search')).toHaveTextContent(
-      '?view=completed&keyword=F-002&status=PENDING&page=1&pageSize=20',
-    );
     expect(useTerminations).toHaveBeenLastCalledWith(expect.objectContaining({
-      view: 'completed', keyword: 'F-002', status: 'PENDING', page: 1, pageSize: 20,
-    }));
-  });
-
-  it('preserves URL filters and pagination in the API query', () => {
-    renderPage('/employment/termination?keyword=F-002&status=APPROVED&lastWorkingDateFrom=2026-09-01&lastWorkingDateTo=2026-09-30&page=3&pageSize=20');
-    expect(useTerminations).toHaveBeenLastCalledWith(expect.objectContaining({
-      view: 'active',
+      view: 'all',
       keyword: 'F-002',
       status: 'APPROVED',
       lastWorkingDateFrom: '2026-09-01',
@@ -106,22 +135,23 @@ describe('TerminationManagementPage', () => {
       page: 3,
       pageSize: 20,
     }));
-    expect(screen.getByRole('searchbox', { name: '搜索离职记录' })).toHaveValue('F-002');
-  });
+    expect(screen.getByRole('searchbox', { name: '筛选人员' })).toHaveValue('F-002');
 
-  it('syncs a submitted keyword to the URL and API query', async () => {
-    const user = userEvent.setup();
-    renderPage('/employment/termination?view=all&status=PENDING&page=3');
+    await user.click(screen.getByRole('button', { name: '清空筛选' }));
 
-    const search = screen.getByRole('searchbox', { name: '搜索离职记录' });
-    await user.type(search, '  F-003  {Enter}');
-
-    const nextSearch = new URLSearchParams(screen.getByLabelText('current search').textContent ?? '');
-    expect(Object.fromEntries(nextSearch)).toEqual({
-      view: 'all', status: 'PENDING', page: '1', keyword: 'F-003',
+    expect(Object.fromEntries(new URLSearchParams(screen.getByLabelText('current search').textContent ?? ''))).toEqual({
+      view: 'all',
+      page: '1',
+      pageSize: '20',
     });
     expect(useTerminations).toHaveBeenLastCalledWith(expect.objectContaining({
-      view: 'all', keyword: 'F-003', status: 'PENDING', page: 1,
+      view: 'all',
+      page: 1,
+      pageSize: 20,
+      keyword: undefined,
+      status: undefined,
+      lastWorkingDateFrom: undefined,
+      lastWorkingDateTo: undefined,
     }));
   });
 });

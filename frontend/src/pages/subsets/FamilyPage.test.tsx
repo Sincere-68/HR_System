@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { FamilyPage } from './FamilyPage';
 
 const useFamilyList = vi.fn();
@@ -32,7 +33,7 @@ describe('FamilyPage', () => {
 
   it('renders the exact 10-column order and complete family values', () => {
     renderPage();
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     expect(within(table).getAllByRole('columnheader')
       .map((header) => header.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '邮箱', '工号', '部门', '成员姓名', '与本人关系名称', '性别', '手机号码', '审批状态', '操作',

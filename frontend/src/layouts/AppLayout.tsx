@@ -10,7 +10,7 @@ import type { MenuProps } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/auth-context';
-import { findNavigationLabel, findOpenMenuKeys, navigationItems } from '../config/navigation';
+import { buildNavigationItems, findNavigationLabel, findOpenMenuKeys, toMenuItems } from '../config/navigation';
 
 const { Header, Sider, Content } = Layout;
 const BREAKPOINT = 992;
@@ -38,15 +38,19 @@ export function AppLayout() {
     setActivePrimaryKey(undefined);
   }, [location.pathname]);
 
-  const menuItems = useMemo(() => navigationItems as MenuProps['items'], []);
+  const visibleNavigationItems = useMemo(
+    () => buildNavigationItems(user?.permissions ?? []),
+    [user?.permissions],
+  );
+  const menuItems = useMemo(() => toMenuItems(visibleNavigationItems), [visibleNavigationItems]);
   const selectedKey = location.pathname.startsWith('/personnel/employees')
     ? '/personnel/employees'
     : location.pathname.startsWith('/personnel/blacklist-removals')
       ? '/personnel/blacklist'
       : location.pathname;
   const primaryKeys = useMemo(
-    () => navigationItems.filter((item) => item.children).map((item) => item.key),
-    [],
+    () => visibleNavigationItems.filter((item) => item.children).map((item) => item.key),
+    [visibleNavigationItems],
   );
 
   const handleOpenChange = (keys: string[]) => {

@@ -35,16 +35,13 @@ vi.mock('../pages/performance/PerformanceFeishuTaskInboxPage', () => ({
 vi.mock('../pages/PlaceholderPage', () => ({
   PlaceholderPage: ({
     title,
-    pendingFields,
     headingTabs,
   }: {
     title: string;
-    pendingFields?: boolean;
     headingTabs?: string[];
   }) => (
     <div
       data-testid="placeholder-page"
-      data-pending-fields={pendingFields ? 'true' : 'false'}
       data-heading-tabs={headingTabs?.join('|')}
     >
       {title}
@@ -58,6 +55,18 @@ vi.mock('../pages/analytics/EmployeeRosterPage', () => ({
 
 vi.mock('../pages/contracts/ContractsPage', () => ({
   ContractsPage: () => <h1>合同协议</h1>,
+}));
+
+vi.mock('../pages/employment/ReportingLinesPage', () => ({
+  ReportingLinesPage: () => <h1>汇报关系</h1>,
+}));
+
+vi.mock('../pages/employment/EmploymentApprovalsPage', () => ({
+  EmploymentApprovalsPage: () => <h1>任职审批</h1>,
+}));
+
+vi.mock('../pages/settings/EmploymentApprovalFlowsPage', () => ({
+  EmploymentApprovalFlowsPage: () => <h1>任职审批流程</h1>,
 }));
 
 vi.mock('../pages/staffing/TransferTypesPage', () => ({
@@ -216,11 +225,26 @@ describe('AppRouter onboarding integration', () => {
     expect(placeholderRoutes.map((route) => route.key)).not.toContain('/staffing/transfer-types');
   });
 
-  it('marks reporting relationships as a pending-field placeholder', () => {
+  it('renders the implemented reporting-lines page instead of a placeholder', () => {
     renderRoute('/employment/reporting-lines?view=1&page=3&pageSize=50');
 
-    expect(screen.getByTestId('placeholder-page')).toHaveTextContent('汇报关系');
-    expect(screen.getByTestId('placeholder-page')).toHaveAttribute('data-pending-fields', 'true');
+    expect(screen.getByRole('heading', { name: '汇报关系' })).toBeInTheDocument();
+    expect(screen.queryByTestId('placeholder-page')).not.toBeInTheDocument();
+    expect(placeholderRoutes.map((route) => route.key)).not.toContain('/employment/reporting-lines');
+  });
+
+  it('renders the auxiliary employment approval workbench without adding a placeholder', () => {
+    renderRoute('/employment/approvals?view=current');
+
+    expect(screen.getByRole('heading', { name: '任职审批' })).toBeInTheDocument();
+    expect(screen.queryByTestId('placeholder-page')).not.toBeInTheDocument();
+  });
+
+  it('renders the employment approval flow settings page', () => {
+    renderRoute('/settings/employment-approval-flows');
+
+    expect(screen.getByRole('heading', { name: '任职审批流程' })).toBeInTheDocument();
+    expect(screen.queryByTestId('placeholder-page')).not.toBeInTheDocument();
   });
 });
 

@@ -30,6 +30,7 @@ export interface EmploymentRecordPresentationRow {
 interface EmploymentRecordPresentationOptions {
   isLatestPrimaryRecord: boolean;
   canViewEmployeeDetail: boolean;
+  view?: 'current' | 'history';
 }
 
 export function presentEmploymentRecord(
@@ -55,7 +56,9 @@ export function presentEmploymentRecord(
     positionStartDate: row.startDate?.toISOString().slice(0, 10) ?? null,
     positionEndDate: row.endDate?.toISOString().slice(0, 10) ?? null,
     personnelLocator: null,
-    personnelStatus: personnelRecord?.status
+    personnelStatus: (options.view === 'current'
+      ? row.employee.employmentRecords[0]?.status
+      : personnelRecord?.status)
       ?? (row.employmentPeriodId === null ? row.employee.employmentRecords[0]?.status : undefined)
       ?? null,
     assignmentStatus: row.status,

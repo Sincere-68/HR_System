@@ -1,14 +1,19 @@
-import { EyeOutlined, SwapOutlined } from '@ant-design/icons';
+import { DownOutlined, EyeOutlined, SwapOutlined } from '@ant-design/icons';
 import type {
   EmployeeMovementListItem,
   EmployeeMovementListQuery,
   EmployeeMovementListView,
   ProcessStatus,
 } from '@hr-demo/shared';
-import { Alert, Button, DatePicker, Empty, Input, Select, Table, Tag, Typography } from 'antd';
+import { Alert, Button, DatePicker, Empty, Input, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
-import { useMemo } from 'react';
+
+function isForbiddenError(error: unknown) {
+  return typeof error === 'object' && error !== null && 'status' in error
+    && (error as { status?: number }).status === 403;
+}
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEmployeeMovements } from '../../features/employment/api';
 
@@ -47,7 +52,15 @@ function ApprovalStatusCell({ status }: { status: ProcessStatus | null }) {
 }
 
 export const employeeMovementColumns: ColumnsType<EmployeeMovementListItem> = [
-  { title: '姓名', dataIndex: 'employeeName', width: 120, fixed: 'left', render: displayValue },
+  {
+    title: '姓名',
+    dataIndex: 'employeeName',
+    width: 120,
+    fixed: 'left',
+    render: (value, record) => record.canViewEmployeeDetail ? (
+      <Link to={`/personnel/employees/${record.employeeId}`}>{displayValue(value)}</Link>
+    ) : displayValue(value),
+  },
   { title: '工号', dataIndex: 'employeeNo', width: 120, fixed: 'left', render: displayValue },
   { title: '异动日期', dataIndex: 'effectiveDate', width: 120, render: displayValue },
   { title: '异动类型', dataIndex: 'movementTypeName', width: 130, render: displayValue },
@@ -78,6 +91,7 @@ export const employeeMovementColumns: ColumnsType<EmployeeMovementListItem> = [
 
 export function EmployeeChangeManagementPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [keywordInput, setKeywordInput] = useState('');
   const rawView = searchParams.get('view');
   const movementView: EmployeeMovementListView = rawView === 'completed' || rawView === 'all' ? rawView : 'active';
   const query = useMemo<EmployeeMovementListQuery>(() => ({
@@ -91,6 +105,10 @@ export function EmployeeChangeManagementPage() {
   }), [movementView, searchParams]);
   const movements = useEmployeeMovements(query);
 
+  useEffect(() => {
+    setKeywordInput(query.keyword ?? '');
+  }, [query.keyword]);
+
   const patchSearch = (changes: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(searchParams);
     Object.entries(changes).forEach(([key, value]) => {
@@ -102,50 +120,127 @@ export function EmployeeChangeManagementPage() {
   const handleTableChange = (pagination: TablePaginationConfig) => {
     patchSearch({ page: pagination.current ?? 1, pageSize: pagination.pageSize ?? 10 });
   };
+  const changeView = (view: EmployeeMovementListView) => {
+    patchSearch({ view, page: 1 });
+  };
 
   return (
-    <section className="employee-list-page employee-change-management-page" aria-labelledby="employee-changes-heading">
-      <header className="employee-page-heading">
+    <section
+      className="employee-list-page employee-change-management-page employment-reference-page employment-reference-page--changes"
+      aria-labelledby="employee-changes-heading"
+    >
+      <header className="employee-page-heading employment-reference-heading">
         <div className="employee-title-group blacklist-title-group">
           <span className="employee-title-icon" aria-hidden="true"><SwapOutlined /></span>
-          <nav className="blacklist-heading-tabs" aria-label="异动管理功能">
-            <Link className={`blacklist-heading-tab${movementView === 'active' ? ' is-active' : ''}`} to="/employment/changes?view=active">
+          <nav className="blacklist-heading-tabs employment-reference-tabs" aria-label="异动管理功能">
+            <button
+              className={`blacklist-heading-tab employment-reference-tab${movementView === 'active' ? ' is-active' : ''}`}
+              type="button"
+              onClick={() => changeView('active')}
+            >
               <h1 id="employee-changes-heading">异动中员工</h1>
-            </Link>
-            <Link className={`blacklist-heading-tab${movementView === 'completed' ? ' is-active' : ''}`} to="/employment/changes?view=completed">
+            </button>
+            <button
+              className={`blacklist-heading-tab employment-reference-tab${movementView === 'completed' ? ' is-active' : ''}`}
+              type="button"
+              onClick={() => changeView('completed')}
+            >
               已完成的异动
-            </Link>
-            <Link className={`blacklist-heading-tab${movementView === 'all' ? ' is-active' : ''}`} to="/employment/changes?view=all">
+            </button>
+            <button
+              className={`blacklist-heading-tab employment-reference-tab${movementView === 'all' ? ' is-active' : ''}`}
+              type="button"
+              onClick={() => changeView('all')}
+            >
               全部异动记录
-            </Link>
+            </button>
           </nav>
         </div>
+        <Space className="employee-change-actions employment-reference-actions" size={8}>
+          <Button type="primary" disabled>异动申请</Button>
+          <Button disabled>异动</Button>
+          <Button disabled>批量异动</Button>
+          <Button disabled>批量异动申请 <DownOutlined /></Button>
+          <Button disabled>导出</Button>
+        </Space>
       </header>
 
+      <Alert
+        className="employee-change-reference-notice employment-reference-notice"
+        type="info"
+        showIcon
+        message={(
+          <div>
+            <div>1、可在此列表查看调动中的员工，跟踪员工的调动审批进度，也可以使用【催办】、【转交】或者【撤销】按钮直接对调动流程进行干预。</div>
+            <div>2、员工的部门、汇报线、工作地、职位、职务、职级等任职信息调整，均可通过调动业务实现。</div>
+          </div>
+        )}
+      />
+
       {movements.isError ? (
-        <Alert
-          className="content-alert"
-          type="error"
-          showIcon
-          message="异动管理加载失败"
-          description={movements.error.message}
-          action={<Button size="small" onClick={() => movements.refetch()}>重试</Button>}
-        />
+        isForbiddenError(movements.error) ? (
+          <Alert
+            className="content-alert"
+            type="warning"
+            showIcon
+            message="暂无访问权限"
+            description="当前账号没有查看异动记录的权限。"
+          />
+        ) : (
+          <Alert
+            className="content-alert"
+            type="error"
+            showIcon
+            message="异动管理加载失败"
+            description={movements.error.message}
+            action={<Button size="small" onClick={() => movements.refetch()}>重试</Button>}
+          />
+        )
       ) : null}
 
-      <div className="employee-table-surface">
-        <div className="employee-filter-toolbar employee-change-filter-toolbar">
-          <div className="employee-change-filter-controls">
+      <div className="employee-table-surface employment-reference-surface">
+        <div className="employee-filter-toolbar employee-change-filter-toolbar employment-reference-filter-toolbar">
+          <div className="employee-change-filter-controls employment-reference-filter-controls">
             <Input.Search
-              className="employee-change-keyword-input"
+              className="employee-change-keyword-input employment-reference-person-filter"
               allowClear
-              value={query.keyword ?? ''}
-              aria-label="搜索异动记录"
-              placeholder="搜索姓名或工号"
+              value={keywordInput}
+              aria-label="筛选人员"
+              placeholder="人员"
+              onChange={(event) => {
+                setKeywordInput(event.target.value);
+                if (!event.target.value) patchSearch({ keyword: undefined, page: 1 });
+              }}
               onSearch={(keyword) => patchSearch({ keyword: keyword.trim() || undefined, page: 1 })}
             />
+            <DatePicker.RangePicker
+              className="employee-change-date-filter employment-reference-date-filter"
+              aria-label="筛选调动日期"
+              placeholder={['调动日期开始', '调动日期结束']}
+              value={[
+                query.effectiveDateFrom ? dayjs(query.effectiveDateFrom) : null,
+                query.effectiveDateTo ? dayjs(query.effectiveDateTo) : null,
+              ]}
+              onChange={(_, dates) => patchSearch({
+                effectiveDateFrom: dates[0] || undefined,
+                effectiveDateTo: dates[1] || undefined,
+                page: 1,
+              })}
+            />
             <Select
-              className="employee-change-status-select"
+              className="employee-change-department-filter employment-reference-unavailable-filter"
+              aria-label="筛选调动后部门"
+              placeholder="调动后部门"
+              disabled
+            />
+            <Select
+              className="employee-change-position-filter employment-reference-unavailable-filter"
+              aria-label="筛选调动后职务"
+              placeholder="调动后职务"
+              disabled
+            />
+            <Select
+              className="employee-change-status-select employment-reference-status-filter"
               allowClear
               aria-label="筛选审批状态"
               placeholder="审批状态"
@@ -153,31 +248,22 @@ export function EmployeeChangeManagementPage() {
               value={query.approvalStatus}
               onChange={(approvalStatus) => patchSearch({ approvalStatus, page: 1 })}
             />
-            <DatePicker.RangePicker
-              aria-label="筛选异动日期"
-              value={query.effectiveDateFrom && query.effectiveDateTo
-                ? [dayjs(query.effectiveDateFrom), dayjs(query.effectiveDateTo)]
-                : null}
-              onChange={(_, dates) => patchSearch({
-                effectiveDateFrom: dates[0] || undefined,
-                effectiveDateTo: dates[1] || undefined,
-                page: 1,
-              })}
-            />
+            <Button className="employee-change-advanced-filter" type="link" disabled>高级筛选</Button>
           </div>
-          <Typography.Text type="secondary">共 {movements.data?.meta.total ?? 0} 条</Typography.Text>
         </div>
 
         <Table<EmployeeMovementListItem>
-          className="employee-table employee-change-table"
+          className="employee-table employee-change-table employment-reference-table"
           rowKey="id"
           rowSelection={{ columnWidth: 38 }}
           loading={movements.isLoading}
           columns={employeeMovementColumns}
-          dataSource={movements.data?.data ?? []}
+          dataSource={movements.isError ? [] : (movements.data?.data ?? [])}
           scroll={{ x: 2_450 }}
           sticky={{ offsetHeader: 48, offsetScroll: 0 }}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的异动记录" /> }}
+          locale={{ emptyText: movements.isError
+            ? null
+            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的异动记录" /> }}
           pagination={{
             current: query.page,
             pageSize: query.pageSize,

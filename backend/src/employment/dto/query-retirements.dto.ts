@@ -4,6 +4,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -13,6 +14,11 @@ import {
 } from 'class-validator';
 
 export class QueryRetirementsDto {
+  @ApiPropertyOptional({ enum: ['upcoming', 'in_progress', 'overdue', 'completed', 'all', 'intention_application'] })
+  @IsOptional()
+  @IsIn(['upcoming', 'in_progress', 'overdue', 'completed', 'all', 'intention_application'])
+  view?: 'upcoming' | 'in_progress' | 'overdue' | 'completed' | 'all' | 'intention_application';
+
   @ApiPropertyOptional({ description: '员工姓名或工号关键字' })
   @IsOptional()
   @IsString()

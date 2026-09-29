@@ -1,6 +1,7 @@
 import type { OfferListItem } from '@hr-demo/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../../test/ant-table';
 import { SentOffersTable, type SentOffersTableProps } from './SentOffersTable';
 
 const sentOffer: OfferListItem = {
@@ -64,7 +65,7 @@ describe('SentOffersTable', () => {
   it('renders the required sent Offer columns, real fields, placeholders, gender label, and disabled action', () => {
     renderTable();
 
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     const columnHeaders = within(table).getAllByRole('columnheader');
     expect(columnHeaders.map((heading) => heading.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '录用部门', '应聘职位', '录用职位', '工作地点', '试用期(月)', '拟入职日期', '个人邮箱',

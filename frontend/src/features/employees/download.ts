@@ -9,7 +9,13 @@ function filenameFromDisposition(value: string | null, fallback: string) {
 
 export async function downloadTableExport(
   path: string,
-  input: { format: 'XLSX' | 'CSV'; fields: string[]; employeeIds?: string[]; query?: object },
+  input: {
+    format: 'XLSX' | 'CSV';
+    fields: string[];
+    employeeIds?: string[];
+    probationIds?: string[];
+    query?: object;
+  },
   fallbackName: string,
 ) {
   const token = tokenStorage.get();

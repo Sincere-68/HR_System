@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { OffersPage } from './OffersPage';
 
 const useOffers = vi.fn();
@@ -94,7 +95,7 @@ describe('OffersPage', () => {
 
   it('keeps the existing pending-Offer table columns and renders six live-count cards', () => {
     renderPage('/onboarding/offers?page=2&pageSize=20');
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     const columnHeaders = within(table).getAllByRole('columnheader');
     expect(columnHeaders.map((heading) => heading.textContent?.trim()).filter(Boolean)).toEqual([
       '姓名', '个人邮箱', '性别', '录用部门', '应聘职位', '预计入职日期', '审批状态', '当前审批人', '简历信息', '操作',

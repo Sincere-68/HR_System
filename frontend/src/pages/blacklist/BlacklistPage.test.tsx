@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAntTable } from '../../test/ant-table';
 import { BlacklistPage } from './BlacklistPage';
 
 const useBlacklist = vi.fn();
@@ -44,7 +45,7 @@ describe('BlacklistPage', () => {
   it('keeps the required column order and renders API values as returned', () => {
     renderPage();
 
-    const table = screen.getByRole('table');
+    const table = getAntTable();
     const headings = within(table).getAllByRole('columnheader')
       .map((heading) => heading.textContent?.trim());
     expect(headings.filter(Boolean)).toEqual([
